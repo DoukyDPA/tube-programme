@@ -114,16 +114,18 @@ const EditProgramModal = ({ prog, onClose, onSave }) => {
 const AdminPanel = ({ onClose, isUnlocked, onUnlock }) => {
   const [passInput, setPassInput] = useState('');
   const [channelInput, setChannelInput] = useState('');
-  const [videos, setVideos] = useState([]);
   const [loading, setLoading] = useState(false);
+  const [category, setCategory] = useState('ia');
 
   const checkPass = () => {
     if (passInput === ADMIN_PASS) onUnlock();
     else alert("Code erroné");
   };
 
-  const fetchChannel = async () => {
+  const fetchAndIntegrate = async () => {
     if (!YOUTUBE_API_KEY) return alert("Clé API YouTube manquante.");
+    if (!channelInput.trim()) return alert("Veuillez entrer une chaîne (ex: @MonsieurPhi).");
+    
     setLoading(true);
     try {
       let cid = channelInput.trim();
@@ -137,45 +139,33 @@ const AdminPanel = ({ onClose, isUnlocked, onUnlock }) => {
       const vRes = await fetch(`https://www.googleapis.com/youtube/v3/search?key=${YOUTUBE_API_KEY}&channelId=${cid}&part=snippet,id&order=date&maxResults=5&type=video`);
       const vData = await vRes.json();
       
-      // Initialise chaque vidéo avec la catégorie 'ia' par défaut et un pitch vide
-      setVideos(vData.items?.map(v => ({ ...v, pitch: "", categoryId: 'ia', added: false })) || []);
+      if (!vData.items || vData.items.length === 0) {
+        throw new Error("Aucune vidéo trouvée pour cette chaîne.");
+      }
+
+      // Auto-sauvegarde des 5 vidéos dans Firebase (SANS demander de commentaire)
+      const promises = vData.items.map(v => {
+        const id = crypto.randomUUID();
+        const publishedTimestamp = new Date(v.snippet.publishedAt).getTime();
+
+        return setDoc(doc(db, 'artifacts', FIREBASE_APP_ID, 'public', 'data', 'programs', id), {
+          id, 
+          youtubeId: v.id.videoId, 
+          title: v.snippet.title,
+          creatorName: v.snippet.channelTitle, 
+          categoryId: category,
+          pitch: "", // Totalement optionnel
+          createdAt: Date.now(), 
+          publishedAt: publishedTimestamp,
+          avgScore: 0
+        });
+      });
+
+      await Promise.all(promises);
+      alert(`✅ ${vData.items.length} vidéos ont été ajoutées avec succès à la grille !`);
+      onClose(); // Ferme automatiquement le panneau
     } catch (e) { alert(e.message); }
     finally { setLoading(false); }
-  };
-
-  const updateVideoField = (index, field, value) => {
-    const newVids = [...videos];
-    newVids[index][field] = value;
-    setVideos(newVids);
-  };
-
-  const integrateOne = async (v, idx) => {
-    if (!db) return;
-    try {
-      const id = crypto.randomUUID();
-      const publishedTimestamp = new Date(v.snippet.publishedAt).getTime();
-
-      await setDoc(doc(db, 'artifacts', FIREBASE_APP_ID, 'public', 'data', 'programs', id), {
-        id, 
-        youtubeId: v.id.videoId, 
-        title: v.snippet.title,
-        creatorName: v.snippet.channelTitle, 
-        categoryId: v.categoryId, // Utilise la catégorie choisie spécifiquement pour cette vidéo
-        pitch: v.pitch || "", 
-        createdAt: Date.now(), 
-        publishedAt: publishedTimestamp,
-        avgScore: 0
-      });
-      updateVideoField(idx, 'added', true);
-    } catch (e) { alert("Erreur d'écriture Firebase."); }
-  };
-
-  const integrateAll = async () => {
-    const notAdded = videos.filter(v => !v.added);
-    for (const v of notAdded) {
-      const idx = videos.indexOf(v);
-      await integrateOne(v, idx);
-    }
   };
 
   if (!isUnlocked) {
@@ -193,91 +183,30 @@ const AdminPanel = ({ onClose, isUnlocked, onUnlock }) => {
   }
 
   return (
-    <div className="fixed inset-0 z-[100] bg-slate-950/95 backdrop-blur-xl flex items-center justify-center p-4 lg:p-12">
-      <div className="bg-slate-900 border border-slate-800 w-full max-w-5xl rounded-[3rem] p-8 lg:p-10 shadow-2xl flex flex-col max-h-[95vh]">
-        <div className="flex justify-between items-center mb-8 flex-shrink-0">
-          <h2 className="text-3xl font-black text-white uppercase italic flex items-center gap-4 tracking-tighter">
-            <Settings className="text-indigo-500" /> Curation Master
+    <div className="fixed inset-0 z-[100] bg-slate-950/95 backdrop-blur-xl flex items-center justify-center p-4">
+      <div className="bg-slate-900 border border-slate-800 w-full max-w-lg rounded-[3rem] p-10 shadow-2xl">
+        <div className="flex justify-between items-center mb-8">
+          <h2 className="text-2xl font-black text-white uppercase italic flex items-center gap-3 tracking-tighter">
+            <Settings className="text-indigo-500" size={24} /> Import Rapide
           </h2>
-          <button onClick={onClose} className="p-3 bg-slate-800 rounded-full text-slate-400 hover:text-white"><X /></button>
+          <button onClick={onClose} className="p-2 bg-slate-800 rounded-full text-slate-400 hover:text-white"><X size={16} /></button>
         </div>
 
-        <div className="flex flex-col lg:flex-row gap-8 overflow-hidden">
+        <div className="space-y-6">
+          <div className="space-y-3">
+            <label className="text-[10px] font-black text-slate-500 uppercase tracking-widest block">1. Thématique Cible</label>
+            <select className="w-full bg-slate-800 p-4 rounded-2xl text-sm border-none outline-none text-white focus:ring-2 focus:ring-indigo-500" value={category} onChange={e => setCategory(e.target.value)}>
+              {CATEGORIES.map(c => <option key={c.id} value={c.id}>{c.label}</option>)}
+            </select>
+          </div>
+          <div className="space-y-3">
+            <label className="text-[10px] font-black text-slate-500 uppercase tracking-widest block">2. Handle YouTube</label>
+            <input className="w-full bg-slate-800 p-4 rounded-2xl text-sm outline-none text-white focus:ring-2 focus:ring-indigo-500" placeholder="ex: @MonsieurPhi" value={channelInput} onChange={e => setChannelInput(e.target.value)} />
+          </div>
           
-          {/* Colonne de Recherche */}
-          <div className="lg:w-1/3 flex-shrink-0 space-y-6 bg-slate-950/50 p-6 rounded-[2rem] border border-slate-800/50 h-fit">
-             <div className="space-y-3">
-               <label className="text-[10px] font-black text-slate-500 uppercase tracking-widest block">Handle YouTube</label>
-               <input className="w-full bg-slate-800 p-4 rounded-2xl text-sm outline-none text-white focus:ring-2 focus:ring-indigo-500" placeholder="ex: @MonsieurPhi" value={channelInput} onChange={e => setChannelInput(e.target.value)} />
-             </div>
-             <button onClick={fetchChannel} disabled={loading} className="w-full bg-indigo-600 py-4 rounded-2xl font-black text-xs text-white uppercase tracking-widest hover:bg-indigo-500 disabled:opacity-50 flex justify-center items-center gap-2">
-                <Search size={16} /> {loading ? "Recherche..." : "Scanner les nouveautés"}
-             </button>
-             
-             {videos.length > 0 && videos.some(v => !v.added) && (
-               <div className="pt-6 mt-6 border-t border-slate-800">
-                  <button onClick={integrateAll} className="w-full bg-emerald-600 py-4 rounded-2xl font-black text-xs text-white uppercase tracking-widest hover:bg-emerald-500 flex justify-center items-center gap-2 shadow-[0_0_20px_rgba(16,185,129,0.2)]">
-                    <CheckCircle2 size={16} /> Tout intégrer d'un coup
-                  </button>
-               </div>
-             )}
-          </div>
-
-          {/* Colonne des Résultats */}
-          <div className="flex-1 overflow-y-auto pr-2 space-y-4 no-scrollbar pb-10">
-              {videos.length === 0 && !loading && (
-                  <div className="h-full min-h-[300px] flex items-center justify-center border-2 border-dashed border-slate-800 rounded-[2rem] text-slate-500 text-sm">
-                    Recherchez une chaîne pour voir ses dernières vidéos.
-                  </div>
-              )}
-              
-              {videos.map((v, i) => (
-                <div key={i} className={`p-4 rounded-3xl border transition-all ${v.added ? 'bg-emerald-500/10 border-emerald-500/20 opacity-70' : 'bg-slate-800/40 border-slate-700 hover:border-indigo-500/50'}`}>
-                  <div className="flex flex-col sm:flex-row gap-4">
-                    
-                    {/* Miniature & Titre */}
-                    <div className="flex-1 flex items-start gap-4">
-                      <img src={v.snippet.thumbnails.medium?.url} className="w-32 aspect-video object-cover rounded-xl shadow-lg" alt="Miniature" />
-                      <div>
-                        <h4 className="text-sm font-bold text-white leading-tight mb-2 line-clamp-2">{v.snippet.title}</h4>
-                        <div className="flex items-center gap-2">
-                           <p className="text-[10px] text-slate-500 uppercase font-black">{v.snippet.channelTitle}</p>
-                           <p className="text-[9px] text-indigo-400 bg-indigo-500/10 px-2 py-0.5 rounded-md">{new Date(v.snippet.publishedAt).toLocaleDateString('fr-FR')}</p>
-                        </div>
-                      </div>
-                    </div>
-
-                    {/* Paramètres d'import */}
-                    <div className="sm:w-64 flex flex-col gap-2 shrink-0">
-                      <select 
-                        className="w-full bg-slate-900 p-2.5 rounded-lg text-xs text-slate-300 border border-slate-800 outline-none focus:border-indigo-500" 
-                        value={v.categoryId} 
-                        onChange={e => updateVideoField(i, 'categoryId', e.target.value)}
-                        disabled={v.added}
-                      >
-                        {CATEGORIES.map(c => <option key={c.id} value={c.id}>{c.label}</option>)}
-                      </select>
-                      
-                      <textarea 
-                        className="w-full bg-slate-900 p-2.5 rounded-lg text-xs text-slate-300 border border-slate-800 outline-none focus:border-indigo-500 h-16 resize-none placeholder:text-slate-600" 
-                        placeholder="Pitch (Totalement optionnel)..." 
-                        value={v.pitch} 
-                        onChange={e => updateVideoField(i, 'pitch', e.target.value)}
-                        disabled={v.added}
-                      />
-                      
-                      <button 
-                        onClick={() => integrateOne(v, i)} 
-                        disabled={v.added} 
-                        className={`w-full py-2.5 rounded-lg text-[10px] font-black uppercase tracking-widest transition-all ${v.added ? 'bg-emerald-600 text-white' : 'bg-white text-black hover:bg-indigo-400 active:scale-95'}`}
-                      >
-                        {v.added ? "Vidéo Intégrée ✓" : "Intégrer"}
-                      </button>
-                    </div>
-                  </div>
-                </div>
-              ))}
-          </div>
+          <button onClick={fetchAndIntegrate} disabled={loading} className="w-full mt-4 bg-emerald-600 py-5 rounded-2xl font-black text-xs text-white uppercase tracking-widest hover:bg-emerald-500 disabled:opacity-50 flex justify-center items-center gap-2 shadow-[0_0_20px_rgba(16,185,129,0.2)]">
+            {loading ? "Intégration..." : <><CheckCircle2 size={18} /> Auto-intégrer les 5 dernières</>}
+          </button>
         </div>
       </div>
     </div>
@@ -379,7 +308,7 @@ export default function App() {
 
         <div className="flex gap-10 overflow-x-auto pb-20 no-scrollbar items-start">
           {filtered.map(prog => (
-            <div key={prog.id} className="flex-shrink-0 w-80 lg:w-96 group animate-in fade-in zoom-in-95 duration-500 relative">
+            <div key={prog.id} className="flex-none w-[320px] group animate-in fade-in zoom-in-95 duration-500 relative">
               
               {/* Image & Boutons rapides (Admin) */}
               <div 
