@@ -377,16 +377,21 @@ export default function App() {
           <p className="text-slate-500 font-medium text-xl italic tracking-tight border-l-4 border-indigo-500 pl-6">Le savoir sélectionné pour vous.</p>
         </header>
 
-        <div className="flex gap-10 overflow-x-auto pb-20 no-scrollbar">
+        <div className="flex gap-10 overflow-x-auto pb-20 no-scrollbar items-start">
           {filtered.map(prog => (
-            <div key={prog.id} className="flex-shrink-0 w-84 group animate-in fade-in zoom-in-95 duration-500 relative">
+            <div key={prog.id} className="flex-shrink-0 w-80 lg:w-96 group animate-in fade-in zoom-in-95 duration-500 relative">
               
               {/* Image & Boutons rapides (Admin) */}
               <div 
-                className="relative aspect-video rounded-[2.5rem] overflow-hidden border border-slate-800 group-hover:border-indigo-500 transition-all duration-500 shadow-2xl cursor-pointer"
+                className="relative aspect-video rounded-[2.5rem] overflow-hidden border border-slate-800 group-hover:border-indigo-500 transition-all duration-500 shadow-2xl cursor-pointer bg-slate-900"
                 onClick={() => setSelectedProg(prog)}
               >
-                <img src={`https://img.youtube.com/vi/${prog.youtubeId}/maxresdefault.jpg`} className="w-full h-full object-cover group-hover:scale-110 transition-transform duration-700" alt="Thumbnail" />
+                <img 
+                  src={`https://img.youtube.com/vi/${prog.youtubeId}/maxresdefault.jpg`} 
+                  onError={(e) => { e.target.onerror = null; e.target.src = `https://img.youtube.com/vi/${prog.youtubeId}/hqdefault.jpg`; }}
+                  className="w-full h-full object-cover group-hover:scale-110 transition-transform duration-700" 
+                  alt="Thumbnail" 
+                />
                 <div className="absolute inset-0 bg-gradient-to-t from-slate-950/90 via-transparent to-transparent opacity-80" />
                 
                 {/* Outils d'édition (Visible uniquement si déverrouillé) */}
