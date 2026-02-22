@@ -3,10 +3,12 @@ import { initializeApp } from 'firebase/app';
 import { getAuth, signInAnonymously, onAuthStateChanged } from 'firebase/auth';
 import { getFirestore, collection, doc, setDoc, onSnapshot, deleteDoc } from 'firebase/firestore';
 import { 
-  Star, Cpu, BookOpen, Trophy, Mic2, Home, 
-  Sparkles, X, Trash2, Lock, AlertCircle, Settings 
+  Star, Cpu, BookOpen, Trophy, Mic2, Home, Sparkles, X, Trash2, Lock, AlertCircle, Settings, CheckCircle2, ServerCrash
 } from 'lucide-react';
 
+/**
+ * CONFIGURATION VIA VARIABLES D'ENVIRONNEMENT
+ */
 const getEnv = (key, fallback = "") => {
   try { return import.meta.env[key] || fallback; } 
   catch (e) { return fallback; }
@@ -23,7 +25,7 @@ const firebaseConfig = {
 
 const YOUTUBE_API_KEY = getEnv('VITE_YOUTUBE_API_KEY');
 const ADMIN_PASS = getEnv('VITE_ADMIN_PASS', "1234");
-const FIREBASE_APP_ID = "tube-prog-v1";
+const FIREBASE_APP_ID = "tube-prog-v0";
 
 let db, auth;
 if (firebaseConfig.apiKey) {
@@ -31,7 +33,7 @@ if (firebaseConfig.apiKey) {
     const app = initializeApp(firebaseConfig);
     auth = getAuth(app);
     db = getFirestore(app);
-  } catch (error) { console.error("Firebase init error:", error); }
+  } catch (error) { console.error("Erreur Firebase:", error); }
 }
 
 const CATEGORIES = [
@@ -41,11 +43,12 @@ const CATEGORIES = [
   { id: 'interviews', label: 'Talks / Débats', icon: <Mic2 size={18}/> },
 ];
 
+// --- COMPOSANT : PANNEAU DE CURATION (100% AUTOMATIQUE) ---
+
 const AdminPanel = ({ onClose }) => {
   const [passInput, setPassInput] = useState('');
   const [isUnlocked, setIsUnlocked] = useState(false);
   const [channelInput, setChannelInput] = useState('');
-  const [videos, setVideos] = useState([]);
   const [loading, setLoading] = useState(false);
   const [category, setCategory] = useState('ia');
 
@@ -54,37 +57,60 @@ const AdminPanel = ({ onClose }) => {
     else alert("Code erroné");
   };
 
-  const fetchChannel = async () => {
-    if (!YOUTUBE_API_KEY) return alert("Clé API YouTube manquante.");
+  // Nouvelle fonction : Fait TOUT en 1 seul clic
+  const fetchAndAutoIntegrate = async () => {
+    if (!YOUTUBE_API_KEY) return alert("❌ Clé API YouTube manquante sur Vercel !");
+    if (!channelInput.trim()) return alert("Veuillez entrer une chaîne (ex: @MonsieurPhi).");
+    
     setLoading(true);
     try {
       let cid = channelInput.trim();
+      
+      // 1. Trouver l'ID de la chaîne
       if (cid.startsWith('@')) {
         const res = await fetch(`https://www.googleapis.com/youtube/v3/channels?key=${YOUTUBE_API_KEY}&forHandle=${cid}&part=id`);
         const data = await res.json();
         if (data.items?.length > 0) cid = data.items[0].id;
-        else throw new Error("Chaîne introuvable.");
+        else throw new Error("Chaîne introuvable sur YouTube.");
       }
-      const vRes = await fetch(`https://www.googleapis.com/youtube/v3/search?key=${YOUTUBE_API_KEY}&channelId=${cid}&part=snippet,id&order=date&maxResults=10&type=video`);
+      
+      // 2. Récupérer strictement les 5 dernières vidéos
+      const vRes = await fetch(`https://www.googleapis.com/youtube/v3/search?key=${YOUTUBE_API_KEY}&channelId=${cid}&part=snippet,id&order=date&maxResults=5&type=video`);
       const vData = await vRes.json();
-      setVideos(vData.items?.map(v => ({ ...v, pitch: "", added: false })) || []);
-    } catch (e) { alert(e.message); }
-    finally { setLoading(false); }
-  };
+      
+      if (!vData.items || vData.items.length === 0) {
+        throw new Error("Aucune vidéo trouvée pour cette chaîne.");
+      }
 
-  const integrate = async (v, idx) => {
-    if (!db) return;
-    try {
-      const id = crypto.randomUUID();
-      await setDoc(doc(db, 'artifacts', FIREBASE_APP_ID, 'public', 'data', 'programs', id), {
-        id, youtubeId: v.id.videoId, title: v.snippet.title,
-        creatorName: v.snippet.channelTitle, categoryId: category,
-        pitch: v.pitch || "", createdAt: Date.now(), avgScore: 0
+      // 3. Sauvegarder automatiquement les 5 vidéos dans Firebase
+      if (!db) throw new Error("Base de données non connectée.");
+      
+      const promises = vData.items.map(v => {
+        const id = crypto.randomUUID();
+        const publishedTimestamp = new Date(v.snippet.publishedAt).getTime();
+
+        return setDoc(doc(db, 'artifacts', FIREBASE_APP_ID, 'public', 'data', 'programs', id), {
+          id,
+          youtubeId: v.id.videoId,
+          title: v.snippet.title,
+          creatorName: v.snippet.channelTitle,
+          categoryId: category,
+          pitch: "", // Pas de pitch obligatoire
+          createdAt: Date.now(),
+          publishedAt: publishedTimestamp,
+          avgScore: 0
+        });
       });
-      const newVids = [...videos];
-      newVids[idx].added = true;
-      setVideos(newVids);
-    } catch (e) { alert("Erreur d'écriture Firebase."); }
+
+      await Promise.all(promises); // Attend que les 5 soient enregistrées
+      
+      alert(`✅ Succès ! ${vData.items.length} vidéos ont été ajoutées à la catégorie.`);
+      onClose(); // Ferme le panneau pour voir le résultat immédiatement
+
+    } catch (e) { 
+      alert(`❌ ERREUR :\n${e.message}`); 
+    }
+    finally { setLoading(false); }
   };
 
   if (!isUnlocked) {
@@ -94,7 +120,7 @@ const AdminPanel = ({ onClose }) => {
           <Lock className="mx-auto mb-6 text-indigo-500" size={32} />
           <h2 className="text-xl font-black mb-6 uppercase text-white tracking-tight">Accès Curation</h2>
           <input type="password" placeholder="Code secret" className="w-full bg-slate-800 p-4 rounded-2xl mb-4 text-center text-white outline-none ring-2 ring-transparent focus:ring-indigo-500" value={passInput} onChange={e => setPassInput(e.target.value)} />
-          <button onClick={checkPass} className="w-full py-4 bg-indigo-600 text-white rounded-2xl font-black uppercase text-xs tracking-widest hover:bg-indigo-500">Entrer</button>
+          <button onClick={checkPass} className="w-full py-4 bg-indigo-600 text-white rounded-2xl font-black uppercase text-xs tracking-widest hover:bg-indigo-500">Déverrouiller</button>
           <button onClick={onClose} className="mt-6 text-slate-500 text-xs hover:text-white">Retour au site</button>
         </div>
       </div>
@@ -102,57 +128,30 @@ const AdminPanel = ({ onClose }) => {
   }
 
   return (
-    <div className="fixed inset-0 z-[100] bg-slate-950/95 backdrop-blur-xl flex items-center justify-center p-4 lg:p-12">
-      <div className="bg-slate-900 border border-slate-800 w-full max-w-5xl rounded-[3rem] p-8 lg:p-12 shadow-2xl overflow-y-auto max-h-[90vh]">
-        <div className="flex justify-between items-center mb-10">
-          <h2 className="text-3xl font-black text-white uppercase italic flex items-center gap-4 tracking-tighter">
-            <Settings className="text-indigo-500" /> Curation Master
+    <div className="fixed inset-0 z-[100] bg-slate-950/95 backdrop-blur-xl flex items-center justify-center p-4">
+      <div className="bg-slate-900 border border-slate-800 w-full max-w-lg rounded-[3rem] p-10 shadow-2xl">
+        <div className="flex justify-between items-center mb-8">
+          <h2 className="text-2xl font-black text-white uppercase italic flex items-center gap-3 tracking-tighter">
+            <Settings className="text-indigo-500" size={24} /> Import Rapide
           </h2>
-          <button onClick={onClose} className="p-3 bg-slate-800 rounded-full text-slate-400 hover:text-white"><X /></button>
+          <button onClick={onClose} className="p-2 bg-slate-800 rounded-full text-slate-400 hover:text-white"><X size={16} /></button>
         </div>
-        <div className="grid grid-cols-1 lg:grid-cols-3 gap-10">
-          <div className="lg:col-span-1 space-y-6">
-             <div className="space-y-3">
-               <label className="text-[10px] font-black text-slate-500 uppercase tracking-widest block">Thématique Cible</label>
-               <select className="w-full bg-slate-800 p-4 rounded-2xl text-sm border-none outline-none text-white focus:ring-2 focus:ring-indigo-500" value={category} onChange={e => setCategory(e.target.value)}>
-                 {CATEGORIES.map(c => <option key={c.id} value={c.id}>{c.label}</option>)}
-               </select>
-             </div>
-             <div className="space-y-3">
-               <label className="text-[10px] font-black text-slate-500 uppercase tracking-widest block">Handle YouTube</label>
-               <div className="flex flex-col gap-3">
-                 <input className="w-full bg-slate-800 p-4 rounded-2xl text-sm outline-none text-white focus:ring-2 focus:ring-indigo-500" placeholder="@HenriExplorIA" value={channelInput} onChange={e => setChannelInput(e.target.value)} />
-                 <button onClick={fetchChannel} disabled={loading} className="w-full bg-indigo-600 py-4 rounded-2xl font-black text-xs text-white uppercase tracking-widest hover:bg-indigo-500 disabled:opacity-50">
-                   {loading ? "Chargement..." : "Scanner la chaîne"}
-                 </button>
-               </div>
-             </div>
+
+        <div className="space-y-6">
+          <div className="space-y-3">
+            <label className="text-[10px] font-black text-slate-500 uppercase tracking-widest block">1. Thématique Cible</label>
+            <select className="w-full bg-slate-800 p-4 rounded-2xl text-sm border-none outline-none text-white focus:ring-2 focus:ring-indigo-500" value={category} onChange={e => setCategory(e.target.value)}>
+              {CATEGORIES.map(c => <option key={c.id} value={c.id}>{c.label}</option>)}
+            </select>
           </div>
-          <div className="lg:col-span-2 space-y-4">
-             <label className="text-[10px] font-black text-slate-500 uppercase tracking-widest block">Dernières Publications</label>
-             <div className="grid grid-cols-1 gap-4 overflow-y-auto max-h-[500px] pr-2 no-scrollbar">
-                {videos.map((v, i) => (
-                  <div key={i} className={`p-4 rounded-3xl border transition-all flex flex-col gap-4 ${v.added ? 'bg-emerald-500/10 border-emerald-500/20' : 'bg-slate-800/30 border-slate-800 hover:border-indigo-500/30'}`}>
-                    <div className="flex items-center gap-4">
-                      <img src={v.snippet.thumbnails.medium?.url} className="w-24 aspect-video object-cover rounded-xl" alt="Miniature" />
-                      <div className="flex-1 min-w-0 text-white">
-                        <h4 className="text-xs font-bold truncate mb-1">{v.snippet.title}</h4>
-                        <p className="text-[9px] text-slate-500 uppercase font-black">{v.snippet.channelTitle}</p>
-                      </div>
-                    </div>
-                    <div className="flex gap-3">
-                      <input className="flex-1 bg-slate-950/50 p-3 rounded-xl text-[10px] outline-none italic text-white placeholder:text-slate-700" placeholder="Ajouter un pitch..." value={v.pitch} onChange={e => { const n = [...videos]; n[i].pitch = e.target.value; setVideos(n); }} />
-                      <button onClick={() => integrate(v, i)} disabled={v.added} className={`px-6 py-2 rounded-xl text-[10px] font-black uppercase tracking-widest transition-all ${v.added ? 'bg-emerald-600 text-white' : 'bg-white text-black hover:bg-indigo-400'}`}>
-                        {v.added ? "Intégré" : "Ajouter"}
-                      </button>
-                    </div>
-                  </div>
-                ))}
-                {videos.length === 0 && !loading && (
-                   <div className="p-12 text-center text-slate-600 italic text-sm border-2 border-dashed border-slate-800 rounded-[2rem]">Aucun scan en cours.</div>
-                )}
-             </div>
+          <div className="space-y-3">
+            <label className="text-[10px] font-black text-slate-500 uppercase tracking-widest block">2. Chaîne YouTube</label>
+            <input className="w-full bg-slate-800 p-4 rounded-2xl text-sm outline-none text-white focus:ring-2 focus:ring-indigo-500" placeholder="ex: @MonsieurPhi" value={channelInput} onChange={e => setChannelInput(e.target.value)} />
           </div>
+          
+          <button onClick={fetchAndAutoIntegrate} disabled={loading} className="w-full mt-4 bg-emerald-600 py-5 rounded-2xl font-black text-xs text-white uppercase tracking-widest hover:bg-emerald-500 disabled:opacity-50 flex justify-center items-center gap-2 shadow-[0_0_20px_rgba(16,185,129,0.2)]">
+            {loading ? "Aspiration en cours..." : <><CheckCircle2 size={18} /> Aspirer les 5 dernières</>}
+          </button>
         </div>
       </div>
     </div>
@@ -161,6 +160,7 @@ const AdminPanel = ({ onClose }) => {
 
 export default function App() {
   const [user, setUser] = useState(null);
+  const [authError, setAuthError] = useState(null);
   const [programs, setPrograms] = useState([]);
   const [activeTab, setActiveTab] = useState('accueil');
   const [selectedProg, setSelectedProg] = useState(null);
@@ -168,22 +168,33 @@ export default function App() {
 
   useEffect(() => {
     if (!auth) return;
-    signInAnonymously(auth);
+    signInAnonymously(auth)
+      .catch((error) => setAuthError(error.message));
     return onAuthStateChanged(auth, setUser);
   }, []);
 
   useEffect(() => {
     if (!db || !user) return;
     const q = collection(db, 'artifacts', FIREBASE_APP_ID, 'public', 'data', 'programs');
-    return onSnapshot(q, (snap) => {
+    const unsub = onSnapshot(q, (snap) => {
       const data = snap.docs.map(d => ({ id: d.id, ...d.data() }));
-      setPrograms(data.sort((a,b) => b.createdAt - a.createdAt));
+      setPrograms(data.sort((a,b) => {
+        const timeA = a.publishedAt || a.createdAt || 0;
+        const timeB = b.publishedAt || b.createdAt || 0;
+        return timeB - timeA;
+      }));
+    }, (err) => {
+      console.error("Erreur Snapshot Firebase:", err);
+      setAuthError("Permission Firebase refusée. Vérifiez les règles.");
     });
+    return () => unsub();
   }, [user]);
 
   const removeProgram = async (id) => {
-    if (confirm("Voulez-vous supprimer ce programme de la grille ?")) {
-      await deleteDoc(doc(db, 'artifacts', FIREBASE_APP_ID, 'public', 'data', 'programs', id));
+    if (confirm("Supprimer ce programme ?")) {
+      try {
+        await deleteDoc(doc(db, 'artifacts', FIREBASE_APP_ID, 'public', 'data', 'programs', id));
+      } catch(e) { alert("❌ Erreur suppression : " + e.message); }
     }
   };
 
@@ -196,18 +207,20 @@ export default function App() {
       <div className="min-h-screen bg-slate-950 flex items-center justify-center p-8 text-white">
         <div className="max-w-md bg-slate-900 p-12 rounded-[3rem] border border-indigo-500/20 text-center shadow-2xl">
           <AlertCircle size={48} className="mx-auto mb-6 text-indigo-500" />
-          <h2 className="text-xl font-black mb-4 uppercase italic tracking-tighter">Configuration Requise</h2>
-          <p className="text-slate-400 text-sm leading-relaxed mb-8">Veuillez configurer votre fichier .env avec vos clés Firebase et YouTube.</p>
+          <h2 className="text-xl font-black mb-4 uppercase italic">V0 Non Configurée</h2>
+          <p className="text-slate-400 text-sm">Créez votre fichier .env et relancez.</p>
         </div>
       </div>
     );
   }
 
   return (
-    <div className="min-h-screen bg-[#020617] text-slate-200 flex font-sans selection:bg-indigo-500/30">
+    <div className="min-h-screen bg-[#020617] text-slate-200 flex font-sans selection:bg-indigo-500/30 overflow-hidden">
+      
+      {/* --- SIDEBAR --- */}
       <aside className="w-72 bg-slate-950/80 backdrop-blur-xl border-r border-slate-800/40 fixed h-full flex flex-col z-50">
         <div className="p-10 flex items-center gap-4">
-          <div className="w-10 h-10 bg-indigo-600 rounded-xl flex items-center justify-center shadow-lg shadow-indigo-600/20"><Sparkles size={20} className="text-white" /></div>
+          <div className="w-10 h-10 bg-indigo-600 rounded-xl flex items-center justify-center shadow-lg"><Sparkles size={20} className="text-white" /></div>
           <h1 className="text-xl font-black uppercase italic text-white tracking-tighter">Tube<span className="text-indigo-500">Prog</span></h1>
         </div>
         <nav className="flex-1 px-4 space-y-1">
@@ -220,57 +233,98 @@ export default function App() {
           ))}
         </nav>
         <div className="p-8">
-          <button onClick={() => setIsAdminOpen(true)} className="w-full py-4 bg-slate-900 border border-slate-800 rounded-2xl text-[10px] font-black uppercase tracking-widest text-slate-500 hover:text-indigo-400 transition-all flex items-center justify-center gap-3"><Lock size={14} /> Admin Curation</button>
+          <button onClick={() => setIsAdminOpen(true)} className="w-full py-4 bg-slate-900 border border-slate-800 rounded-2xl text-[10px] font-black uppercase tracking-widest text-slate-500 hover:text-indigo-400 transition-all flex items-center justify-center gap-3">
+            <Lock size={14} /> Admin Curation
+          </button>
         </div>
       </aside>
 
-      <main className="ml-72 flex-1 p-12">
-        <header className="mb-16">
-          <h2 className="text-7xl font-black text-white uppercase italic leading-none mb-4 tracking-tighter">{activeTab === 'accueil' ? "À l'affiche" : CATEGORIES.find(c => c.id === activeTab).label}</h2>
-          <p className="text-slate-500 font-medium text-xl italic tracking-tight border-l-4 border-indigo-500 pl-6">Le savoir sélectionné pour vous.</p>
+      {/* --- MAIN AREA --- */}
+      <main className="ml-72 flex-1 p-12 overflow-x-hidden w-[calc(100vw-18rem)]">
+        <header className="mb-16 flex justify-between items-start">
+          <div>
+            <h2 className="text-7xl font-black text-white uppercase italic leading-none mb-4 tracking-tighter">{activeTab === 'accueil' ? "À l'affiche" : CATEGORIES.find(c => c.id === activeTab).label}</h2>
+            <p className="text-slate-500 font-medium text-xl italic tracking-tight border-l-4 border-indigo-500 pl-6">Le savoir sélectionné pour vous.</p>
+          </div>
+          {/* Indicateur de Statut */}
+          <div className="text-right">
+             <span className="text-[10px] font-black text-slate-600 uppercase tracking-widest block mb-2">Base de données</span>
+             {authError ? (
+               <span className="text-red-500 font-bold flex items-center gap-2 text-xs bg-red-500/10 px-3 py-1.5 rounded-full"><ServerCrash size={14} /> Erreur Permissions</span>
+             ) : user ? (
+               <span className="text-emerald-500 font-bold flex items-center gap-2 text-xs bg-emerald-500/10 px-3 py-1.5 rounded-full"><CheckCircle2 size={14} /> Connecté</span>
+             ) : (
+               <span className="text-amber-500 font-bold flex items-center gap-2 text-xs bg-amber-500/10 px-3 py-1.5 rounded-full">Connexion...</span>
+             )}
+          </div>
         </header>
 
-        <div className="flex gap-10 overflow-x-auto pb-20 no-scrollbar">
+        {/* --- LA GRILLE DE VIGNETTES --- */}
+        <div className="flex gap-8 overflow-x-auto pb-20 no-scrollbar items-start">
           {filtered.map(prog => (
-            <div key={prog.id} onClick={() => setSelectedProg(prog)} className="flex-shrink-0 w-84 group cursor-pointer animate-in fade-in zoom-in-95 duration-500">
-              <div className="relative aspect-video rounded-[2.5rem] overflow-hidden border border-slate-800 group-hover:border-indigo-500 transition-all duration-500 shadow-2xl">
-                <img src={`https://img.youtube.com/vi/${prog.youtubeId}/maxresdefault.jpg`} className="w-full h-full object-cover group-hover:scale-110 transition-transform duration-700" alt="Thumbnail" />
+            /* 🔥 CORRECTION TAILLE : STYLE CSS BRUT INCASSABLE 🔥 */
+            <div 
+              key={prog.id} 
+              className="group animate-in fade-in zoom-in-95 duration-500 relative flex-col shrink-0"
+              style={{ width: '320px', minWidth: '320px', flexShrink: 0 }}
+            >
+              {/* Image Container (Taille Forcée) */}
+              <div 
+                className="relative bg-slate-900 overflow-hidden cursor-pointer shadow-2xl border border-slate-800 group-hover:border-indigo-500 transition-all duration-500"
+                style={{ width: '320px', height: '180px', borderRadius: '24px' }}
+                onClick={() => setSelectedProg(prog)}
+              >
+                <img 
+                  src={`https://img.youtube.com/vi/${prog.youtubeId}/maxresdefault.jpg`} 
+                  onError={(e) => { e.target.onerror = null; e.target.src = `https://img.youtube.com/vi/${prog.youtubeId}/hqdefault.jpg`; }}
+                  className="group-hover:scale-110 transition-transform duration-700" 
+                  style={{ width: '100%', height: '100%', objectFit: 'cover' }}
+                  alt="Thumbnail" 
+                />
                 <div className="absolute inset-0 bg-gradient-to-t from-slate-950/90 via-transparent to-transparent opacity-80" />
-                <button onClick={(e) => { e.stopPropagation(); removeProgram(prog.id); }} className="absolute top-4 right-4 p-3 bg-red-600/80 text-white rounded-full opacity-0 group-hover:opacity-100 transition-all hover:scale-110 shadow-lg"><Trash2 size={14} /></button>
-                <div className="absolute bottom-5 right-5 bg-slate-950/80 backdrop-blur-md border border-white/10 px-3 py-1 rounded-full text-[10px] text-indigo-300 font-bold uppercase tracking-widest shadow-lg">★ {prog.avgScore?.toFixed(1) || "N/A"}</div>
+                
+                <button onClick={(e) => { e.stopPropagation(); removeProgram(prog.id); }} className="absolute top-4 right-4 p-3 bg-red-600/90 text-white rounded-full opacity-0 group-hover:opacity-100 transition-all hover:scale-110 shadow-lg"><Trash2 size={14} /></button>
+                
+                <div className="absolute bottom-4 left-4 bg-indigo-600/90 backdrop-blur-md px-3 py-1 rounded-lg text-[9px] text-white font-bold uppercase tracking-widest shadow-lg">
+                  {new Date(prog.publishedAt || prog.createdAt).toLocaleDateString('fr-FR', {day: 'numeric', month: 'short'})}
+                </div>
               </div>
-              <div className="mt-6 px-2">
-                <span className="text-[10px] font-black text-indigo-500 uppercase tracking-widest block mb-2">{prog.creatorName}</span>
-                <h3 className="text-xl font-bold text-white leading-tight group-hover:text-indigo-400 transition-colors line-clamp-2 italic tracking-tighter">{prog.title}</h3>
-                {prog.pitch && <p className="text-slate-500 text-xs mt-4 line-clamp-2 italic border-l border-slate-800 pl-4 leading-relaxed font-medium">"{prog.pitch}"</p>}
+              
+              {/* Textes en dessous */}
+              <div className="mt-4 px-2 w-full">
+                <span className="text-[10px] font-black text-indigo-500 uppercase tracking-widest block mb-2 truncate">{prog.creatorName}</span>
+                <h3 className="text-xl font-bold text-white leading-tight group-hover:text-indigo-400 transition-colors line-clamp-2 italic tracking-tighter" title={prog.title}>{prog.title}</h3>
+                {prog.pitch && <p className="text-slate-500 text-xs mt-3 line-clamp-2 italic border-l border-slate-800 pl-4 leading-relaxed font-medium">"{prog.pitch}"</p>}
               </div>
             </div>
           ))}
+          
           {filtered.length === 0 && (
             <div className="w-full border-2 border-dashed border-slate-800 rounded-[4rem] p-32 text-center flex flex-col items-center">
-              <p className="text-slate-600 font-black uppercase tracking-widest text-xs mb-8 italic">Grille vide ou thématique sans programme.</p>
+              <p className="text-slate-600 font-black uppercase tracking-widest text-xs mb-8 italic">Grille vide.</p>
               <button onClick={() => setIsAdminOpen(true)} className="text-indigo-400 font-black uppercase italic underline decoration-2 underline-offset-8 hover:text-white transition-all">Accéder à la curation →</button>
             </div>
           )}
         </div>
       </main>
 
+      {/* --- MODAL LECTEUR --- */}
       {selectedProg && (
         <div className="fixed inset-0 z-[60] bg-slate-950/98 backdrop-blur-3xl flex items-center justify-center p-12">
           <button onClick={() => setSelectedProg(null)} className="absolute top-10 right-10 text-slate-500 border border-slate-800 px-8 py-3 rounded-full uppercase text-[10px] font-black tracking-widest hover:text-white transition-all shadow-xl">Fermer [X]</button>
           <div className="max-w-6xl w-full grid grid-cols-1 lg:grid-cols-3 gap-16 items-center">
-            <div className="lg:col-span-2 aspect-video bg-black rounded-[3.5rem] overflow-hidden shadow-2xl border border-white/5 shadow-indigo-500/10">
+            <div className="lg:col-span-2 bg-black rounded-[3.5rem] overflow-hidden shadow-2xl border border-white/5 shadow-indigo-500/10" style={{ height: '600px' }}>
               <iframe width="100%" height="100%" src={`https://www.youtube.com/embed/${selectedProg.youtubeId}?autoplay=1`} frameBorder="0" allowFullScreen title="YouTube"></iframe>
             </div>
             <div className="lg:col-span-1">
               <span className="text-indigo-400 font-black text-[10px] uppercase tracking-widest bg-indigo-500/10 px-4 py-2 rounded-full mb-8 inline-block italic tracking-tighter">{selectedProg.creatorName}</span>
               <h2 className="text-5xl font-black text-white leading-[1.1] mb-8 italic tracking-tighter">{selectedProg.title}</h2>
               {selectedProg.pitch && <p className="text-slate-400 italic text-xl leading-relaxed border-l-4 border-indigo-500/50 pl-8 mb-12">"{selectedProg.pitch}"</p>}
-              <button className="w-full bg-white text-slate-950 py-5 rounded-[1.8rem] font-black text-xs uppercase tracking-widest hover:bg-indigo-400 transition-all flex items-center justify-center gap-3 shadow-xl italic tracking-tighter"><Star size={16} /> Évaluer l'expertise</button>
             </div>
           </div>
         </div>
       )}
+
       {isAdminOpen && <AdminPanel onClose={() => setIsAdminOpen(false)} />}
     </div>
   );
