@@ -3,10 +3,28 @@ import { initializeApp } from 'firebase/app';
 import { getAuth, signInAnonymously, onAuthStateChanged } from 'firebase/auth';
 import { getFirestore, collection, doc, setDoc, onSnapshot, deleteDoc } from 'firebase/firestore';
 import { 
-  Star, Cpu, BookOpen, Trophy, Mic2, Home, 
-  Sparkles, X, Trash2, Lock, AlertCircle, Settings 
+  Play, 
+  Star, 
+  Cpu, 
+  BookOpen, 
+  Trophy, 
+  Mic2, 
+  Home,
+  LayoutGrid,
+  Sparkles,
+  Search,
+  X,
+  Trash2,
+  Send,
+  Lock,
+  PlusCircle,
+  AlertCircle,
+  Settings
 } from 'lucide-react';
 
+/**
+ * CONFIGURATION VIA VARIABLES D'ENVIRONNEMENT
+ */
 const getEnv = (key, fallback = "") => {
   try { return import.meta.env[key] || fallback; } 
   catch (e) { return fallback; }
@@ -41,6 +59,8 @@ const CATEGORIES = [
   { id: 'interviews', label: 'Talks / Débats', icon: <Mic2 size={18}/> },
 ];
 
+// --- COMPOSANT : PANNEAU DE CURATION ---
+
 const AdminPanel = ({ onClose }) => {
   const [passInput, setPassInput] = useState('');
   const [isUnlocked, setIsUnlocked] = useState(false);
@@ -65,7 +85,8 @@ const AdminPanel = ({ onClose }) => {
         if (data.items?.length > 0) cid = data.items[0].id;
         else throw new Error("Chaîne introuvable.");
       }
-      const vRes = await fetch(`https://www.googleapis.com/youtube/v3/search?key=${YOUTUBE_API_KEY}&channelId=${cid}&part=snippet,id&order=date&maxResults=10&type=video`);
+      // Changement ici : maxResults=5 au lieu de 10
+      const vRes = await fetch(`https://www.googleapis.com/youtube/v3/search?key=${YOUTUBE_API_KEY}&channelId=${cid}&part=snippet,id&order=date&maxResults=5&type=video`);
       const vData = await vRes.json();
       setVideos(vData.items?.map(v => ({ ...v, pitch: "", added: false })) || []);
     } catch (e) { alert(e.message); }
@@ -76,10 +97,19 @@ const AdminPanel = ({ onClose }) => {
     if (!db) return;
     try {
       const id = crypto.randomUUID();
+      // On sauvegarde la vraie date de publication YouTube
+      const publishedTimestamp = new Date(v.snippet.publishedAt).getTime();
+
       await setDoc(doc(db, 'artifacts', FIREBASE_APP_ID, 'public', 'data', 'programs', id), {
-        id, youtubeId: v.id.videoId, title: v.snippet.title,
-        creatorName: v.snippet.channelTitle, categoryId: category,
-        pitch: v.pitch || "", createdAt: Date.now(), avgScore: 0
+        id, 
+        youtubeId: v.id.videoId, 
+        title: v.snippet.title,
+        creatorName: v.snippet.channelTitle, 
+        categoryId: category,
+        pitch: v.pitch || "", 
+        createdAt: Date.now(), 
+        publishedAt: publishedTimestamp, // Nouvelle donnée pour le tri
+        avgScore: 0
       });
       const newVids = [...videos];
       newVids[idx].added = true;
@@ -129,7 +159,7 @@ const AdminPanel = ({ onClose }) => {
              </div>
           </div>
           <div className="lg:col-span-2 space-y-4">
-             <label className="text-[10px] font-black text-slate-500 uppercase tracking-widest block">Dernières Publications</label>
+             <label className="text-[10px] font-black text-slate-500 uppercase tracking-widest block">5 Dernières Publications</label>
              <div className="grid grid-cols-1 gap-4 overflow-y-auto max-h-[500px] pr-2 no-scrollbar">
                 {videos.map((v, i) => (
                   <div key={i} className={`p-4 rounded-3xl border transition-all flex flex-col gap-4 ${v.added ? 'bg-emerald-500/10 border-emerald-500/20' : 'bg-slate-800/30 border-slate-800 hover:border-indigo-500/30'}`}>
@@ -137,11 +167,14 @@ const AdminPanel = ({ onClose }) => {
                       <img src={v.snippet.thumbnails.medium?.url} className="w-24 aspect-video object-cover rounded-xl" alt="Miniature" />
                       <div className="flex-1 min-w-0 text-white">
                         <h4 className="text-xs font-bold truncate mb-1">{v.snippet.title}</h4>
-                        <p className="text-[9px] text-slate-500 uppercase font-black">{v.snippet.channelTitle}</p>
+                        <div className="flex items-center gap-2">
+                           <p className="text-[9px] text-slate-500 uppercase font-black">{v.snippet.channelTitle}</p>
+                           <p className="text-[8px] text-indigo-400 bg-indigo-500/10 px-2 py-0.5 rounded-full">{new Date(v.snippet.publishedAt).toLocaleDateString('fr-FR')}</p>
+                        </div>
                       </div>
                     </div>
                     <div className="flex gap-3">
-                      <input className="flex-1 bg-slate-950/50 p-3 rounded-xl text-[10px] outline-none italic text-white placeholder:text-slate-700" placeholder="Ajouter un pitch..." value={v.pitch} onChange={e => { const n = [...videos]; n[i].pitch = e.target.value; setVideos(n); }} />
+                      <input className="flex-1 bg-slate-950/50 p-3 rounded-xl text-[10px] outline-none italic text-white placeholder:text-slate-700" placeholder="Ajouter un pitch (optionnel)..." value={v.pitch} onChange={e => { const n = [...videos]; n[i].pitch = e.target.value; setVideos(n); }} />
                       <button onClick={() => integrate(v, i)} disabled={v.added} className={`px-6 py-2 rounded-xl text-[10px] font-black uppercase tracking-widest transition-all ${v.added ? 'bg-emerald-600 text-white' : 'bg-white text-black hover:bg-indigo-400'}`}>
                         {v.added ? "Intégré" : "Ajouter"}
                       </button>
@@ -177,7 +210,14 @@ export default function App() {
     const q = collection(db, 'artifacts', FIREBASE_APP_ID, 'public', 'data', 'programs');
     return onSnapshot(q, (snap) => {
       const data = snap.docs.map(d => ({ id: d.id, ...d.data() }));
-      setPrograms(data.sort((a,b) => b.createdAt - a.createdAt));
+      
+      // Tri par date de publication réelle (publishedAt) au lieu de date d'ajout (createdAt)
+      setPrograms(data.sort((a,b) => {
+        const timeA = a.publishedAt || a.createdAt || 0;
+        const timeB = b.publishedAt || b.createdAt || 0;
+        return timeB - timeA;
+      }));
+      
     });
   }, [user]);
 
@@ -237,6 +277,9 @@ export default function App() {
                 <img src={`https://img.youtube.com/vi/${prog.youtubeId}/maxresdefault.jpg`} className="w-full h-full object-cover group-hover:scale-110 transition-transform duration-700" alt="Thumbnail" />
                 <div className="absolute inset-0 bg-gradient-to-t from-slate-950/90 via-transparent to-transparent opacity-80" />
                 <button onClick={(e) => { e.stopPropagation(); removeProgram(prog.id); }} className="absolute top-4 right-4 p-3 bg-red-600/80 text-white rounded-full opacity-0 group-hover:opacity-100 transition-all hover:scale-110 shadow-lg"><Trash2 size={14} /></button>
+                <div className="absolute bottom-5 left-5 bg-indigo-600/90 backdrop-blur-md px-3 py-1 rounded-lg text-[9px] text-white font-bold uppercase tracking-widest shadow-lg">
+                  {new Date(prog.publishedAt || prog.createdAt).toLocaleDateString('fr-FR', {day: 'numeric', month: 'short'})}
+                </div>
                 <div className="absolute bottom-5 right-5 bg-slate-950/80 backdrop-blur-md border border-white/10 px-3 py-1 rounded-full text-[10px] text-indigo-300 font-bold uppercase tracking-widest shadow-lg">★ {prog.avgScore?.toFixed(1) || "N/A"}</div>
               </div>
               <div className="mt-6 px-2">
