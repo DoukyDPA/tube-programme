@@ -44,7 +44,7 @@ const firebaseConfig = {
 
 const YOUTUBE_API_KEY = getEnv('VITE_YOUTUBE_API_KEY');
 const ADMIN_PASS = getEnv('VITE_ADMIN_PASS', "1234");
-const FIREBASE_APP_ID = "tube-prog-v1";
+const FIREBASE_APP_ID = "tube-prog-v0";
 
 let db, auth;
 if (firebaseConfig.apiKey) {
@@ -240,6 +240,8 @@ export default function App() {
         const timeB = b.publishedAt || b.createdAt || 0;
         return timeB - timeA;
       }));
+    }, (err) => {
+      console.error("Erreur Firebase : Vérifiez vos règles de sécurité Firestore.", err);
     });
   }, [user]);
 
@@ -308,7 +310,7 @@ export default function App() {
 
         <div className="flex gap-10 overflow-x-auto pb-20 no-scrollbar items-start">
           {filtered.map(prog => (
-            <div key={prog.id} className="flex-none w-[320px] group animate-in fade-in zoom-in-95 duration-500 relative">
+            <div key={prog.id} className="shrink-0 group animate-in fade-in zoom-in-95 duration-500 relative" style={{ width: '320px' }}>
               
               {/* Image & Boutons rapides (Admin) */}
               <div 
