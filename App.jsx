@@ -25,10 +25,23 @@ import {
 } from 'lucide-react';
 
 /**
- * CONFIGURATION FIREBASE
- * Les clés sont injectées par l'environnement au moment de l'exécution.
+ * 🛠 CONFIGURATION FIREBASE
+ * -------------------------------------------------------------------------
+ * POUR VOTRE PRODUCTION : Remplacez la ligne 'const firebaseConfig = ...' 
+ * par l'objet JSON que vous trouverez dans votre console Firebase.
+ * -------------------------------------------------------------------------
  */
-const firebaseConfig = JSON.parse(__firebase_config);
+const firebaseConfig = typeof __firebase_config !== 'undefined' 
+  ? JSON.parse(__firebase_config) 
+  : {
+      apiKey: "VOTRE_API_KEY_ICI",
+      authDomain: "votre-projet.firebaseapp.com",
+      projectId: "votre-projet",
+      storageBucket: "votre-projet.appspot.com",
+      messagingSenderId: "VOTRE_ID",
+      appId: "VOTRE_APP_ID"
+    };
+
 const app = initializeApp(firebaseConfig);
 const auth = getAuth(app);
 const db = getFirestore(app);
