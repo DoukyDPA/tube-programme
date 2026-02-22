@@ -3,7 +3,7 @@ import { initializeApp } from 'firebase/app';
 import { getAuth, signInAnonymously, onAuthStateChanged } from 'firebase/auth';
 import { getFirestore, collection, doc, setDoc, onSnapshot, deleteDoc } from 'firebase/firestore';
 import { 
-  Star, Cpu, BookOpen, Trophy, Mic2, Home, Sparkles, X, Trash2, Lock, AlertCircle, Settings, CheckCircle2, ServerCrash
+  Star, Cpu, BookOpen, Trophy, Mic2, Home, Sparkles, X, Trash2, Lock, AlertCircle, Settings, CheckCircle2, ServerCrash, Loader2
 } from 'lucide-react';
 
 /**
@@ -57,7 +57,6 @@ const AdminPanel = ({ onClose }) => {
     else alert("Code erroné");
   };
 
-  // Nouvelle fonction : Fait TOUT en 1 seul clic
   const fetchAndAutoIntegrate = async () => {
     if (!YOUTUBE_API_KEY) return alert("❌ Clé API YouTube manquante sur Vercel !");
     if (!channelInput.trim()) return alert("Veuillez entrer une chaîne (ex: @MonsieurPhi).");
@@ -86,29 +85,31 @@ const AdminPanel = ({ onClose }) => {
       if (!db) throw new Error("Base de données non connectée.");
       
       const promises = vData.items.map(v => {
-        const id = crypto.randomUUID();
+        // GÉNÉRATION D'ID SÉCURISÉE (Firebase Native) pour éviter les crashs de navigateurs
+        const newDocRef = doc(collection(db, 'artifacts', FIREBASE_APP_ID, 'public', 'data', 'programs'));
+        const id = newDocRef.id;
         const publishedTimestamp = new Date(v.snippet.publishedAt).getTime();
 
-        return setDoc(doc(db, 'artifacts', FIREBASE_APP_ID, 'public', 'data', 'programs', id), {
+        return setDoc(newDocRef, {
           id,
           youtubeId: v.id.videoId,
           title: v.snippet.title,
           creatorName: v.snippet.channelTitle,
           categoryId: category,
-          pitch: "", // Pas de pitch obligatoire
+          pitch: "", 
           createdAt: Date.now(),
           publishedAt: publishedTimestamp,
           avgScore: 0
         });
       });
 
-      await Promise.all(promises); // Attend que les 5 soient enregistrées
+      await Promise.all(promises); 
       
-      alert(`✅ Succès ! ${vData.items.length} vidéos ont été ajoutées à la catégorie.`);
-      onClose(); // Ferme le panneau pour voir le résultat immédiatement
+      alert(`✅ Succès ! ${vData.items.length} vidéos ont été ajoutées. Mettez la page à jour pour vérifier.`);
+      onClose(); 
 
     } catch (e) { 
-      alert(`❌ ERREUR :\n${e.message}`); 
+      alert(`❌ ERREUR REJETÉE PAR FIREBASE :\n${e.message}\n\nVérifiez vos règles de sécurité Firestore !`); 
     }
     finally { setLoading(false); }
   };
@@ -161,6 +162,7 @@ const AdminPanel = ({ onClose }) => {
 export default function App() {
   const [user, setUser] = useState(null);
   const [authError, setAuthError] = useState(null);
+  const [isFetching, setIsFetching] = useState(true); // Gère l'état de chargement
   const [programs, setPrograms] = useState([]);
   const [activeTab, setActiveTab] = useState('accueil');
   const [selectedProg, setSelectedProg] = useState(null);
@@ -175,6 +177,7 @@ export default function App() {
 
   useEffect(() => {
     if (!db || !user) return;
+    setIsFetching(true); // Début du chargement serveur
     const q = collection(db, 'artifacts', FIREBASE_APP_ID, 'public', 'data', 'programs');
     const unsub = onSnapshot(q, (snap) => {
       const data = snap.docs.map(d => ({ id: d.id, ...d.data() }));
@@ -183,9 +186,11 @@ export default function App() {
         const timeB = b.publishedAt || b.createdAt || 0;
         return timeB - timeA;
       }));
+      setIsFetching(false); // Chargement terminé
     }, (err) => {
       console.error("Erreur Snapshot Firebase:", err);
       setAuthError("Permission Firebase refusée. Vérifiez les règles.");
+      setIsFetching(false);
     });
     return () => unsub();
   }, [user]);
@@ -246,29 +251,35 @@ export default function App() {
             <h2 className="text-7xl font-black text-white uppercase italic leading-none mb-4 tracking-tighter">{activeTab === 'accueil' ? "À l'affiche" : CATEGORIES.find(c => c.id === activeTab).label}</h2>
             <p className="text-slate-500 font-medium text-xl italic tracking-tight border-l-4 border-indigo-500 pl-6">Le savoir sélectionné pour vous.</p>
           </div>
-          {/* Indicateur de Statut */}
           <div className="text-right">
              <span className="text-[10px] font-black text-slate-600 uppercase tracking-widest block mb-2">Base de données</span>
              {authError ? (
                <span className="text-red-500 font-bold flex items-center gap-2 text-xs bg-red-500/10 px-3 py-1.5 rounded-full"><ServerCrash size={14} /> Erreur Permissions</span>
+             ) : isFetching ? (
+               <span className="text-indigo-400 font-bold flex items-center gap-2 text-xs bg-indigo-500/10 px-3 py-1.5 rounded-full"><Loader2 size={14} className="animate-spin"/> Synchronisation...</span>
              ) : user ? (
-               <span className="text-emerald-500 font-bold flex items-center gap-2 text-xs bg-emerald-500/10 px-3 py-1.5 rounded-full"><CheckCircle2 size={14} /> Connecté</span>
-             ) : (
-               <span className="text-amber-500 font-bold flex items-center gap-2 text-xs bg-amber-500/10 px-3 py-1.5 rounded-full">Connexion...</span>
-             )}
+               <span className="text-emerald-500 font-bold flex items-center gap-2 text-xs bg-emerald-500/10 px-3 py-1.5 rounded-full"><CheckCircle2 size={14} /> En ligne</span>
+             ) : null}
           </div>
         </header>
 
         {/* --- LA GRILLE DE VIGNETTES --- */}
         <div className="flex gap-8 overflow-x-auto pb-20 no-scrollbar items-start">
-          {filtered.map(prog => (
-            /* 🔥 CORRECTION TAILLE : STYLE CSS BRUT INCASSABLE 🔥 */
+          
+          {/* Écran de chargement */}
+          {filtered.length === 0 && isFetching && (
+            <div className="w-full flex justify-center items-center py-20 text-indigo-500/50">
+              <Loader2 size={40} className="animate-spin" />
+            </div>
+          )}
+
+          {/* Cartes */}
+          {!isFetching && filtered.map(prog => (
             <div 
               key={prog.id} 
               className="group animate-in fade-in zoom-in-95 duration-500 relative flex-col shrink-0"
               style={{ width: '320px', minWidth: '320px', flexShrink: 0 }}
             >
-              {/* Image Container (Taille Forcée) */}
               <div 
                 className="relative bg-slate-900 overflow-hidden cursor-pointer shadow-2xl border border-slate-800 group-hover:border-indigo-500 transition-all duration-500"
                 style={{ width: '320px', height: '180px', borderRadius: '24px' }}
@@ -290,7 +301,6 @@ export default function App() {
                 </div>
               </div>
               
-              {/* Textes en dessous */}
               <div className="mt-4 px-2 w-full">
                 <span className="text-[10px] font-black text-indigo-500 uppercase tracking-widest block mb-2 truncate">{prog.creatorName}</span>
                 <h3 className="text-xl font-bold text-white leading-tight group-hover:text-indigo-400 transition-colors line-clamp-2 italic tracking-tighter" title={prog.title}>{prog.title}</h3>
@@ -299,7 +309,7 @@ export default function App() {
             </div>
           ))}
           
-          {filtered.length === 0 && (
+          {filtered.length === 0 && !isFetching && (
             <div className="w-full border-2 border-dashed border-slate-800 rounded-[4rem] p-32 text-center flex flex-col items-center">
               <p className="text-slate-600 font-black uppercase tracking-widest text-xs mb-8 italic">Grille vide.</p>
               <button onClick={() => setIsAdminOpen(true)} className="text-indigo-400 font-black uppercase italic underline decoration-2 underline-offset-8 hover:text-white transition-all">Accéder à la curation →</button>
