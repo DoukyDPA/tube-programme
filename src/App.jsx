@@ -44,7 +44,7 @@ export default function App() {
   const [userData, setUserData] = useState(null);
   const [loading, setLoading] = useState(true);
   const [programs, setPrograms] = useState([]);
-  const [customThemes, setCustomThemes] = useState([]); // NOUVEAU: Stocker les thèmes de l'utilisateur
+  const [customThemes, setCustomThemes] = useState([]);
   const [activeTab, setActiveTab] = useState('accueil');
   const [isAdminOpen, setIsAdminOpen] = useState(false);
   const [selectedProg, setSelectedProg] = useState(null);
@@ -68,7 +68,6 @@ export default function App() {
     });
   }, []);
 
-  // Sync des programmes globaux
   useEffect(() => {
     if (!user) return;
     const q = collection(db, 'artifacts', FIREBASE_APP_ID, 'public', 'data', 'programs');
@@ -78,7 +77,6 @@ export default function App() {
     });
   }, [user]);
 
-  // Sync des thématiques utilisateur
   useEffect(() => {
     if (!user) return;
     const q = collection(db, 'users', user.uid, 'themes');
@@ -128,10 +126,10 @@ export default function App() {
         const detailsData = await detailsRes.json();
 
         const promises = [];
-        let channelAddedVideos = 0; // COMPTEUR PAR CHAÎNE
+        let channelAddedVideos = 0;
 
         for (const v of vData.items) {
-          if (channelAddedVideos >= 5) break; // <-- LIMITE STRICTE À 5 MAX LORS DE L'ACTUALISATION
+          if (channelAddedVideos >= 5) break; 
           
           if (existingVideoIds.has(v.id.videoId)) continue; 
 
@@ -169,7 +167,6 @@ export default function App() {
     }
   };
 
-  // Fusionner les catégories globales et persos pour l'affichage du titre
   const allCategories = [
     ...CATEGORIES, 
     ...customThemes.map(ct => ({ id: ct.id, label: ct.name }))
@@ -179,35 +176,38 @@ export default function App() {
   if (!user) return <Auth />;
 
   return (
-    <div className="min-h-screen bg-[#0a0f1c] text-slate-200 flex flex-col md:flex-row font-sans overflow-hidden">
+    <div className="min-h-screen md:h-screen bg-[#0a0f1c] text-slate-200 flex flex-col md:flex-row font-sans overflow-hidden">
       
-      {/* SIDEBAR */}
-      <aside className="w-full md:w-[260px] bg-slate-950/95 border-r border-slate-800/50 flex flex-col z-50 overflow-y-auto">
+      {/* SIDEBAR RESPONSIVE : Barre latérale sur PC / Barre horizontale en bas sur Mobile */}
+      <aside className="w-full md:w-[260px] bg-slate-950/95 border-t md:border-t-0 md:border-r border-slate-800/50 fixed bottom-0 md:relative flex flex-row md:flex-col z-50 overflow-x-auto md:overflow-y-auto no-scrollbar items-center md:items-stretch shadow-[0_-10px_40px_rgba(0,0,0,0.5)] md:shadow-none">
+        
         <div className="hidden md:flex p-8 items-center gap-3">
           <div className="w-8 h-8 bg-indigo-600 rounded-lg flex items-center justify-center"><Sparkles size={16} className="text-white" /></div>
           <h1 className="text-xl font-black text-white tracking-tight">Tube<span className="text-indigo-500">mag</span></h1>
         </div>
         
-        <nav className="flex-1 px-4 py-4 space-y-1">
-          <button onClick={() => setActiveTab('accueil')} className={`w-full flex items-center gap-3 px-4 py-3 rounded-xl transition-all ${activeTab === 'accueil' ? 'bg-indigo-600/10 text-indigo-400 font-bold' : 'text-slate-400 hover:text-white hover:bg-slate-800/50'}`}>
-            <Home size={18} /> Accueil
+        <nav className="flex-1 px-2 md:px-4 py-3 md:py-4 flex flex-row md:flex-col gap-2 md:gap-1 items-center md:items-stretch m-auto md:m-0">
+          
+          <button onClick={() => setActiveTab('accueil')} className={`flex-shrink-0 flex items-center gap-2 md:gap-3 px-4 py-2.5 md:py-3 rounded-xl transition-all ${activeTab === 'accueil' ? 'bg-indigo-600/10 text-indigo-400 font-bold' : 'text-slate-400 hover:text-white hover:bg-slate-800/50'}`}>
+            <Home size={18} /> <span className="text-sm">Accueil</span>
           </button>
           
-          <div className="hidden md:block mt-8 mb-3 px-4 text-[10px] font-bold text-slate-600 uppercase tracking-widest">Catégories TubeMag</div>
+          <div className="hidden md:block mt-8 mb-3 px-4 text-[10px] font-bold text-slate-600 uppercase tracking-widest">Catégories</div>
           
           {CATEGORIES.map(cat => (
-            <button key={cat.id} onClick={() => setActiveTab(cat.id)} className={`w-full flex items-center gap-3 px-4 py-3 rounded-xl transition-all ${activeTab === cat.id ? 'bg-indigo-600/10 text-indigo-400 font-bold' : 'text-slate-400 hover:text-white hover:bg-slate-800/50'}`}>
+            <button key={cat.id} onClick={() => setActiveTab(cat.id)} className={`flex-shrink-0 flex items-center gap-2 md:gap-3 px-4 py-2.5 md:py-3 rounded-xl transition-all ${activeTab === cat.id ? 'bg-indigo-600/10 text-indigo-400 font-bold' : 'text-slate-400 hover:text-white hover:bg-slate-800/50'}`}>
               <span className={activeTab === cat.id ? 'text-indigo-400' : 'text-slate-500'}>{cat.icon}</span>
               <span className="text-sm whitespace-nowrap">{cat.label}</span>
             </button>
           ))}
 
-          {/* Affichage des Catégories Personnalisées */}
           {customThemes.length > 0 && (
             <>
               <div className="hidden md:block mt-8 mb-3 px-4 text-[10px] font-bold text-slate-600 uppercase tracking-widest">Mes Thématiques</div>
+              <div className="w-px h-6 bg-slate-800 md:hidden mx-1 flex-shrink-0"></div>
+
               {customThemes.map(cat => (
-                <button key={cat.id} onClick={() => setActiveTab(cat.id)} className={`w-full flex items-center gap-3 px-4 py-3 rounded-xl transition-all ${activeTab === cat.id ? 'bg-emerald-600/10 text-emerald-400 font-bold' : 'text-slate-400 hover:text-white hover:bg-slate-800/50'}`}>
+                <button key={cat.id} onClick={() => setActiveTab(cat.id)} className={`flex-shrink-0 flex items-center gap-2 md:gap-3 px-4 py-2.5 md:py-3 rounded-xl transition-all ${activeTab === cat.id ? 'bg-emerald-600/10 text-emerald-400 font-bold' : 'text-slate-400 hover:text-white hover:bg-slate-800/50'}`}>
                   <span className={activeTab === cat.id ? 'text-emerald-400' : 'text-slate-500'}>{getIconForCustomTheme(cat.icon)}</span>
                   <span className="text-sm whitespace-nowrap">{cat.name}</span>
                 </button>
@@ -215,21 +215,29 @@ export default function App() {
             </>
           )}
           
-          <button onClick={() => setIsAdminOpen(true)} className="w-full flex items-center gap-3 px-4 py-3 rounded-xl text-slate-400 hover:text-white hover:bg-slate-800/50 transition-all mt-4">
-            <Settings size={18} /> Configurer
+          {/* Boutons actions (Configurer & Déconnexion mobile) */}
+          <div className="w-px h-6 bg-slate-800 md:hidden mx-1 flex-shrink-0"></div>
+          
+          <button onClick={() => setIsAdminOpen(true)} className="flex-shrink-0 flex items-center gap-2 md:gap-3 px-4 py-2.5 md:py-3 rounded-xl text-slate-400 hover:text-white hover:bg-slate-800/50 transition-all md:mt-4">
+            <Settings size={18} /> <span className="hidden md:inline text-sm">Configurer</span>
+          </button>
+
+          <button onClick={() => signOut(auth)} className="md:hidden flex-shrink-0 flex items-center gap-2 px-4 py-2.5 rounded-xl text-slate-500 hover:text-red-400 transition-colors">
+            <LogOut size={18} />
           </button>
         </nav>
 
-        <div className="p-6 mt-auto border-t border-slate-800/50">
-          <button onClick={() => signOut(auth)} className="flex items-center gap-2 text-slate-500 hover:text-red-400 transition-colors text-sm font-semibold">
+        {/* Déconnexion PC */}
+        <div className="hidden md:block p-6 mt-auto border-t border-slate-800/50 w-full">
+          <button onClick={() => signOut(auth)} className="w-full flex items-center gap-2 text-slate-500 hover:text-red-400 transition-colors text-sm font-semibold">
             <LogOut size={16} /> Déconnexion
           </button>
         </div>
       </aside>
       
       {/* MAIN CONTENT */}
-      <main className="flex-1 p-4 md:p-10 overflow-y-auto h-screen">
-        <header className="flex justify-between items-center mb-8">
+      <main className="flex-1 p-4 md:p-10 overflow-y-auto h-screen pb-24 md:pb-10">
+        <header className="flex justify-between items-center mb-8 pt-4 md:pt-0">
           <h2 className="text-2xl md:text-3xl font-bold text-white tracking-tight">
              {activeTab === 'accueil' ? 'À la Une' : allCategories.find(c => c.id === activeTab)?.label}
           </h2>
@@ -251,7 +259,6 @@ export default function App() {
               onSelect={setSelectedProg} 
               onRemove={removeProgram} 
             />
-            {/* Afficher les rangées pour les catégories TubeMag et Custom combinées */}
             {allCategories.map(cat => {
               const catProgs = programs.filter(p => p.categoryId === cat.id);
               if (catProgs.length === 0) return null;
@@ -259,7 +266,7 @@ export default function App() {
             })}
           </>
         ) : (
-          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-6">
+          <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-6">
             {programs.filter(p => p.categoryId === activeTab).map(prog => (
                <div key={prog.id} onClick={() => setSelectedProg(prog)} className="group cursor-pointer">
                  <div className="relative bg-slate-900 rounded-xl overflow-hidden aspect-video mb-3 border border-slate-800 group-hover:border-slate-500">
