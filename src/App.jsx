@@ -1,9 +1,9 @@
-import React, { useState, useEffect, useMemo, useRef } from 'react';
+import React, { useState, useEffect, useRef } from 'react';
 import { initializeApp } from 'firebase/app';
 import { getAuth, signInAnonymously, onAuthStateChanged } from 'firebase/auth';
 import { getFirestore, collection, doc, setDoc, onSnapshot, deleteDoc } from 'firebase/firestore';
 import { 
-  Star, Cpu, BookOpen, Trophy, Mic2, Home, Sparkles, X, Trash2, Lock, AlertCircle, Settings, CheckCircle2, ServerCrash, Loader2, ChevronLeft, ChevronRight, Play
+  Cpu, BookOpen, Trophy, Mic2, Home, Sparkles, X, Trash2, Lock, AlertCircle, Settings, CheckCircle2, ServerCrash, Loader2, ChevronLeft, ChevronRight, Play
 } from 'lucide-react';
 
 /**
@@ -43,8 +43,14 @@ const CATEGORIES = [
   { id: 'interviews', label: 'Talks & Débats', icon: <Mic2 size={18}/> },
 ];
 
+// --- UTILITAIRE : NETTOYEUR DE TEXTE (Enlève les &#39; et &quot;) ---
+const decodeHTML = (html) => {
+  const txt = document.createElement("textarea");
+  txt.innerHTML = html;
+  return txt.value;
+};
+
 // --- UTILITAIRE : CONVERSION DURÉE YOUTUBE ---
-// Convertit le format "PT5M33S" en secondes
 const parseDuration = (duration) => {
   const match = duration.match(/PT(?:(\d+)H)?(?:(\d+)M)?(?:(\d+)S)?/);
   if (!match) return 0;
@@ -84,8 +90,8 @@ const AdminPanel = ({ onClose }) => {
         else throw new Error("Chaîne introuvable sur YouTube.");
       }
       
-      // 2. Récupérer 15 vidéos pour avoir de la marge si on supprime les shorts
-      const vRes = await fetch(`https://www.googleapis.com/youtube/v3/search?key=${YOUTUBE_API_KEY}&channelId=${cid}&part=snippet,id&order=date&maxResults=15&type=video`);
+      // 2. Récupérer 30 vidéos (pour contrer les chaînes qui spamment les shorts)
+      const vRes = await fetch(`https://www.googleapis.com/youtube/v3/search?key=${YOUTUBE_API_KEY}&channelId=${cid}&part=snippet,id&order=date&maxResults=30&type=video`);
       const vData = await vRes.json();
       
       if (!vData.items || vData.items.length === 0) {
@@ -101,12 +107,12 @@ const AdminPanel = ({ onClose }) => {
       const longVideos = vData.items.filter(v => {
         const detail = detailsData.items?.find(d => d.id === v.id.videoId);
         if (!detail) return false;
-        return parseDuration(detail.contentDetails.duration) >= 120; // Au moins 2 minutes
-      }).slice(0, 5);
+        return parseDuration(detail.contentDetails.duration) >= 120;
+      }).slice(0, 5); // On garde les 5 plus récentes parmi les longues
 
       if (longVideos.length === 0) throw new Error("Aucune vidéo de plus de 2 minutes trouvée.");
 
-      // 3. Sauvegarder automatiquement
+      // 3. Sauvegarder automatiquement (avec nettoyage du texte)
       if (!db) throw new Error("Base de données non connectée.");
       
       const promises = longVideos.map(v => {
@@ -117,8 +123,8 @@ const AdminPanel = ({ onClose }) => {
         return setDoc(newDocRef, {
           id,
           youtubeId: v.id.videoId,
-          title: v.snippet.title,
-          creatorName: v.snippet.channelTitle,
+          title: decodeHTML(v.snippet.title), // Nettoyage du titre
+          creatorName: decodeHTML(v.snippet.channelTitle), // Nettoyage de la chaîne
           categoryId: category,
           pitch: "", 
           createdAt: Date.now(),
@@ -199,7 +205,7 @@ const ProgramCard = ({ prog, large, onSelect, onRemove }) => {
           alt={prog.title} 
         />
         
-        {/* Overlay Dégradé (plus sombre en bas) */}
+        {/* Overlay Dégradé */}
         <div className="absolute inset-0 bg-gradient-to-t from-slate-950/90 via-slate-950/20 to-transparent opacity-90" />
         
         {/* Bouton Play au survol */}
@@ -241,7 +247,7 @@ const ProgramRow = ({ title, programs, large = false, onSelect, onRemove }) => {
     <div className="mb-10 relative group">
       {title && <h2 className="text-xl md:text-2xl font-bold text-white mb-4 pl-2 md:pl-0 tracking-tight">{title}</h2>}
       
-      {/* Flèche Gauche (Cachée sur mobile, visible au survol sur PC) */}
+      {/* Flèche Gauche */}
       <button onClick={() => scroll('left')} className="hidden md:flex absolute left-0 top-1/2 -translate-y-1/2 -ml-6 z-10 bg-slate-800 hover:bg-indigo-600 text-white p-3 rounded-full opacity-0 group-hover:opacity-100 transition-all shadow-2xl border border-slate-700">
         <ChevronLeft size={24} />
       </button>
@@ -320,7 +326,7 @@ export default function App() {
   return (
     <div className="min-h-screen bg-[#0a0f1c] text-slate-200 flex flex-col md:flex-row font-sans selection:bg-indigo-500/30 overflow-hidden">
       
-      {/* --- SIDEBAR DEVENUE BOTTOM-BAR SUR MOBILE --- */}
+      {/* --- SIDEBAR --- */}
       <aside className="w-full md:w-[260px] bg-slate-950/95 border-t md:border-t-0 md:border-r border-slate-800/50 fixed bottom-0 md:top-0 md:h-full flex flex-row md:flex-col z-50 overflow-x-auto no-scrollbar md:overflow-hidden items-center md:items-stretch pb-safe">
         
         <div className="hidden md:flex p-8 items-center gap-3">
@@ -354,7 +360,7 @@ export default function App() {
       {/* --- ZONE PRINCIPALE --- */}
       <main className="md:ml-[260px] flex-1 p-0 md:p-10 mb-20 md:mb-0 w-full overflow-x-hidden overflow-y-auto bg-[#0a0f1c]">
         
-        {/* Header (Statut BD) */}
+        {/* Header */}
         <header className="px-6 md:px-0 pt-8 pb-4 flex justify-between items-center">
           <h2 className="text-2xl md:text-3xl font-bold text-white tracking-tight">
             {activeTab === 'accueil' ? 'En ce moment' : CATEGORIES.find(c => c.id === activeTab)?.label}
@@ -375,13 +381,13 @@ export default function App() {
            </div>
         ) : (
           <div className="pb-10 pt-4">
-            {/* VUE ACCUEIL (Mode Molotov : Toutes les lignes) */}
+            {/* VUE ACCUEIL */}
             {activeTab === 'accueil' && (
               <>
-                {/* Ligne 1 : À la une (Grand format, 5 dernières vidéos) */}
+                {/* Ligne 1 : À la une */}
                 <ProgramRow programs={programs.slice(0, 5)} large={true} onSelect={setSelectedProg} onRemove={removeProgram} />
                 
-                {/* Lignes Suivantes : Par catégorie (Format normal) */}
+                {/* Lignes Suivantes : Par catégorie */}
                 {CATEGORIES.map(cat => {
                   const catProgs = programs.filter(p => p.categoryId === cat.id);
                   return catProgs.length > 0 ? (
@@ -391,11 +397,10 @@ export default function App() {
               </>
             )}
 
-            {/* VUE CATÉGORIE SPÉCIFIQUE (Grille ou lignes) */}
+            {/* VUE CATÉGORIE SPÉCIFIQUE */}
             {activeTab !== 'accueil' && (
               <div className="grid grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-4 px-4 md:px-0">
                 {programs.filter(p => p.categoryId === activeTab).map(prog => (
-                   // On utilise le composant carte directement en ajustant ses classes pour la grille
                    <div key={prog.id} onClick={() => setSelectedProg(prog)} className="group cursor-pointer">
                       <div className="relative bg-slate-900 rounded-xl overflow-hidden aspect-video mb-3 border border-slate-800 group-hover:border-slate-500">
                         <img src={`https://img.youtube.com/vi/${prog.youtubeId}/maxresdefault.jpg`} onError={(e) => { e.target.src = `https://img.youtube.com/vi/${prog.youtubeId}/hqdefault.jpg`; }} className="w-full h-full object-cover transition-transform duration-500 group-hover:scale-105" alt="thumb"/>
