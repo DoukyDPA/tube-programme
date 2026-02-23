@@ -73,19 +73,32 @@ const AdminPanel = ({ onClose }) => {
         else throw new Error("Chaîne introuvable sur YouTube.");
       }
       
-      // 2. Récupérer strictement les 5 dernières vidéos
-      const vRes = await fetch(`https://www.googleapis.com/youtube/v3/search?key=${YOUTUBE_API_KEY}&channelId=${cid}&part=snippet,id&order=date&maxResults=5&type=video`);
+      // 2. Récupérer 15 vidéos pour avoir de la marge si on supprime les shorts
+      const vRes = await fetch(`https://www.googleapis.com/youtube/v3/search?key=${YOUTUBE_API_KEY}&channelId=${cid}&part=snippet,id&order=date&maxResults=15&type=video`);
       const vData = await vRes.json();
       
       if (!vData.items || vData.items.length === 0) {
         throw new Error("Aucune vidéo trouvée pour cette chaîne.");
       }
 
-      // 3. Sauvegarder automatiquement les 5 vidéos dans Firebase
+      // 2.bis Extraire les IDs pour demander la durée exacte (Filtre anti-shorts)
+      const videoIds = vData.items.map(v => v.id.videoId).join(',');
+      const detailsRes = await fetch(`https://www.googleapis.com/youtube/v3/videos?key=${YOUTUBE_API_KEY}&id=${videoIds}&part=contentDetails`);
+      const detailsData = await detailsRes.json();
+
+      // 2.ter Filtrer pour enlever les shorts (< 60s) et ne garder que les 5 plus récentes
+      const longVideos = vData.items.filter(v => {
+        const detail = detailsData.items?.find(d => d.id === v.id.videoId);
+        // S'il y a un 'M' (Minutes) ou 'H' (Heures) dans la durée, ce n'est PAS un short.
+        return detail && (detail.contentDetails.duration.includes('M') || detail.contentDetails.duration.includes('H'));
+      }).slice(0, 5);
+
+      if (longVideos.length === 0) throw new Error("Aucune vidéo de format long trouvée.");
+
+      // 3. Sauvegarder automatiquement les 5 vidéos filtrées dans Firebase
       if (!db) throw new Error("Base de données non connectée.");
       
-      const promises = vData.items.map(v => {
-        // GÉNÉRATION D'ID SÉCURISÉE (Firebase Native) pour éviter les crashs de navigateurs
+      const promises = longVideos.map(v => {
         const newDocRef = doc(collection(db, 'artifacts', FIREBASE_APP_ID, 'public', 'data', 'programs'));
         const id = newDocRef.id;
         const publishedTimestamp = new Date(v.snippet.publishedAt).getTime();
@@ -105,11 +118,11 @@ const AdminPanel = ({ onClose }) => {
 
       await Promise.all(promises); 
       
-      alert(`✅ Succès ! ${vData.items.length} vidéos ont été ajoutées. Mettez la page à jour pour vérifier.`);
+      alert(`✅ Succès ! ${longVideos.length} vidéos longues ont été ajoutées. Mettez la page à jour pour vérifier.`);
       onClose(); 
 
     } catch (e) { 
-      alert(`❌ ERREUR REJETÉE PAR FIREBASE :\n${e.message}\n\nVérifiez vos règles de sécurité Firestore !`); 
+      alert(`❌ ERREUR REJETÉE PAR L'API :\n${e.message}\n\nVérifiez que l'API YouTube Data v3 est activée sur Google Cloud !`); 
     }
     finally { setLoading(false); }
   };
@@ -151,7 +164,7 @@ const AdminPanel = ({ onClose }) => {
           </div>
           
           <button onClick={fetchAndAutoIntegrate} disabled={loading} className="w-full mt-4 bg-emerald-600 py-5 rounded-2xl font-black text-xs text-white uppercase tracking-widest hover:bg-emerald-500 disabled:opacity-50 flex justify-center items-center gap-2 shadow-[0_0_20px_rgba(16,185,129,0.2)]">
-            {loading ? "Aspiration en cours..." : <><CheckCircle2 size={18} /> Aspirer les 5 dernières</>}
+            {loading ? "Aspiration en cours..." : <><CheckCircle2 size={18} /> Aspirer (Sans Shorts)</>}
           </button>
         </div>
       </div>
@@ -162,7 +175,7 @@ const AdminPanel = ({ onClose }) => {
 export default function App() {
   const [user, setUser] = useState(null);
   const [authError, setAuthError] = useState(null);
-  const [isFetching, setIsFetching] = useState(true); // Gère l'état de chargement
+  const [isFetching, setIsFetching] = useState(true);
   const [programs, setPrograms] = useState([]);
   const [activeTab, setActiveTab] = useState('accueil');
   const [selectedProg, setSelectedProg] = useState(null);
@@ -177,7 +190,7 @@ export default function App() {
 
   useEffect(() => {
     if (!db || !user) return;
-    setIsFetching(true); // Début du chargement serveur
+    setIsFetching(true); 
     const q = collection(db, 'artifacts', FIREBASE_APP_ID, 'public', 'data', 'programs');
     const unsub = onSnapshot(q, (snap) => {
       const data = snap.docs.map(d => ({ id: d.id, ...d.data() }));
@@ -186,7 +199,7 @@ export default function App() {
         const timeB = b.publishedAt || b.createdAt || 0;
         return timeB - timeA;
       }));
-      setIsFetching(false); // Chargement terminé
+      setIsFetching(false);
     }, (err) => {
       console.error("Erreur Snapshot Firebase:", err);
       setAuthError("Permission Firebase refusée. Vérifiez les règles.");
@@ -220,39 +233,50 @@ export default function App() {
   }
 
   return (
-    <div className="min-h-screen bg-[#020617] text-slate-200 flex font-sans selection:bg-indigo-500/30 overflow-hidden">
+    // CONTENEUR PRINCIPAL MIS A JOUR POUR LE MOBILE (flex-col sur mobile, flex-row sur bureau)
+    <div className="min-h-screen bg-[#020617] text-slate-200 flex flex-col md:flex-row font-sans selection:bg-indigo-500/30 overflow-hidden">
       
-      {/* --- SIDEBAR --- */}
-      <aside className="w-72 bg-slate-950/80 backdrop-blur-xl border-r border-slate-800/40 fixed h-full flex flex-col z-50">
-        <div className="p-10 flex items-center gap-4">
+      {/* --- SIDEBAR DEVENUE BOTTOM-BAR SUR MOBILE --- */}
+      <aside className="w-full md:w-72 bg-slate-950/90 md:bg-slate-950/80 backdrop-blur-xl border-t md:border-t-0 md:border-r border-slate-800/40 fixed bottom-0 md:top-0 md:h-full flex flex-row md:flex-col z-50 overflow-x-auto no-scrollbar md:overflow-hidden items-center md:items-stretch shadow-[0_-10px_40px_rgba(0,0,0,0.5)] md:shadow-none pb-safe">
+        
+        <div className="hidden md:flex p-10 items-center gap-4">
           <div className="w-10 h-10 bg-indigo-600 rounded-xl flex items-center justify-center shadow-lg"><Sparkles size={20} className="text-white" /></div>
           <h1 className="text-xl font-black uppercase italic text-white tracking-tighter">Tube<span className="text-indigo-500">Prog</span></h1>
         </div>
-        <nav className="flex-1 px-4 space-y-1">
-          <button onClick={() => setActiveTab('accueil')} className={`w-full flex items-center gap-4 px-6 py-4 rounded-2xl transition-all ${activeTab === 'accueil' ? 'bg-indigo-600/20 text-indigo-400 font-bold' : 'text-slate-400 hover:bg-slate-800/30'}`}><Home size={18} /> <span className="text-sm">La Grille Hebdo</span></button>
-          <div className="mt-10 mb-4 px-6 text-[10px] font-black text-slate-600 uppercase tracking-widest">Thématiques</div>
+        
+        <nav className="flex-1 px-4 py-3 md:py-0 flex flex-row md:flex-col gap-2 md:gap-0 md:space-y-1 overflow-x-auto no-scrollbar items-center md:items-stretch">
+          <button onClick={() => setActiveTab('accueil')} className={`flex-shrink-0 md:w-full flex items-center gap-2 md:gap-4 px-4 md:px-6 py-3 md:py-4 rounded-2xl transition-all ${activeTab === 'accueil' ? 'bg-indigo-600/20 text-indigo-400 font-bold' : 'text-slate-400 hover:bg-slate-800/30'}`}>
+            <Home size={18} /> <span className="text-sm">La Grille</span>
+          </button>
+          
+          <div className="hidden md:block mt-10 mb-4 px-6 text-[10px] font-black text-slate-600 uppercase tracking-widest">Thématiques</div>
+          <div className="w-px h-6 bg-slate-800 md:hidden mx-2"></div>
+
           {CATEGORIES.map(cat => (
-            <button key={cat.id} onClick={() => setActiveTab(cat.id)} className={`w-full flex items-center gap-4 px-6 py-4 rounded-2xl transition-all ${activeTab === cat.id ? 'bg-indigo-600/20 text-indigo-400 font-bold' : 'text-slate-400 hover:bg-slate-800/30'}`}>
-              <span className={activeTab === cat.id ? 'text-indigo-400' : 'text-slate-500'}>{cat.icon}</span><span className="text-sm">{cat.label}</span>
+            <button key={cat.id} onClick={() => setActiveTab(cat.id)} className={`flex-shrink-0 md:w-full flex items-center gap-2 md:gap-4 px-4 md:px-6 py-3 md:py-4 rounded-2xl transition-all ${activeTab === cat.id ? 'bg-indigo-600/20 text-indigo-400 font-bold' : 'text-slate-400 hover:bg-slate-800/30'}`}>
+              <span className={activeTab === cat.id ? 'text-indigo-400' : 'text-slate-500'}>{cat.icon}</span>
+              <span className="text-sm whitespace-nowrap">{cat.label}</span>
             </button>
           ))}
         </nav>
-        <div className="p-8">
-          <button onClick={() => setIsAdminOpen(true)} className="w-full py-4 bg-slate-900 border border-slate-800 rounded-2xl text-[10px] font-black uppercase tracking-widest text-slate-500 hover:text-indigo-400 transition-all flex items-center justify-center gap-3">
-            <Lock size={14} /> Admin Curation
+
+        <div className="p-3 md:p-8 flex-shrink-0">
+          <button onClick={() => setIsAdminOpen(true)} className="md:w-full p-3 md:py-4 bg-slate-900 border border-slate-800 rounded-2xl text-[10px] md:font-black uppercase tracking-widest text-slate-500 hover:text-indigo-400 transition-all flex items-center justify-center gap-0 md:gap-3">
+            <Lock size={16} className="md:w-[14px] md:h-[14px]" /> 
+            <span className="hidden md:inline">Admin Curation</span>
           </button>
         </div>
       </aside>
 
-      {/* --- MAIN AREA --- */}
-      <main className="ml-72 flex-1 p-12 overflow-x-hidden w-[calc(100vw-18rem)]">
-        <header className="mb-16 flex justify-between items-start">
+      {/* --- MAIN AREA ADAPTÉE POUR MOBILE --- */}
+      <main className="md:ml-72 flex-1 p-6 md:p-12 mb-20 md:mb-0 w-full md:w-[calc(100vw-18rem)] overflow-x-hidden">
+        <header className="mb-10 md:mb-16 flex flex-col md:flex-row justify-between items-start gap-6 md:gap-0 mt-4 md:mt-0">
           <div>
-            <h2 className="text-7xl font-black text-white uppercase italic leading-none mb-4 tracking-tighter">{activeTab === 'accueil' ? "À l'affiche" : CATEGORIES.find(c => c.id === activeTab).label}</h2>
-            <p className="text-slate-500 font-medium text-xl italic tracking-tight border-l-4 border-indigo-500 pl-6">Le savoir sélectionné pour vous.</p>
+            <h2 className="text-4xl md:text-7xl font-black text-white uppercase italic leading-none mb-4 tracking-tighter">{activeTab === 'accueil' ? "À l'affiche" : CATEGORIES.find(c => c.id === activeTab).label}</h2>
+            <p className="text-slate-500 font-medium text-sm md:text-xl italic tracking-tight border-l-4 border-indigo-500 pl-4 md:pl-6">Le savoir sélectionné pour vous.</p>
           </div>
-          <div className="text-right">
-             <span className="text-[10px] font-black text-slate-600 uppercase tracking-widest block mb-2">Base de données</span>
+          <div className="text-left md:text-right w-full md:w-auto flex flex-row md:flex-col justify-between items-center md:items-end">
+             <span className="text-[10px] font-black text-slate-600 uppercase tracking-widest block md:mb-2 hidden md:block">Base de données</span>
              {authError ? (
                <span className="text-red-500 font-bold flex items-center gap-2 text-xs bg-red-500/10 px-3 py-1.5 rounded-full"><ServerCrash size={14} /> Erreur Permissions</span>
              ) : isFetching ? (
@@ -264,37 +288,32 @@ export default function App() {
         </header>
 
         {/* --- LA GRILLE DE VIGNETTES --- */}
-        <div className="flex gap-8 overflow-x-auto pb-20 no-scrollbar items-start">
+        <div className="flex gap-6 md:gap-8 overflow-x-auto pb-10 md:pb-20 no-scrollbar items-start snap-x snap-mandatory">
           
-          {/* Écran de chargement */}
           {filtered.length === 0 && isFetching && (
             <div className="w-full flex justify-center items-center py-20 text-indigo-500/50">
               <Loader2 size={40} className="animate-spin" />
             </div>
           )}
 
-          {/* Cartes */}
           {!isFetching && filtered.map(prog => (
             <div 
               key={prog.id} 
-              className="group animate-in fade-in zoom-in-95 duration-500 relative flex-col shrink-0"
-              style={{ width: '320px', minWidth: '320px', flexShrink: 0 }}
+              className="group animate-in fade-in zoom-in-95 duration-500 relative flex-col shrink-0 w-[280px] md:w-[320px] snap-center"
             >
               <div 
-                className="relative bg-slate-900 overflow-hidden cursor-pointer shadow-2xl border border-slate-800 group-hover:border-indigo-500 transition-all duration-500"
-                style={{ width: '320px', height: '180px', borderRadius: '24px' }}
+                className="relative bg-slate-900 overflow-hidden cursor-pointer shadow-2xl border border-slate-800 group-hover:border-indigo-500 transition-all duration-500 w-full h-[160px] md:h-[180px] rounded-[24px]"
                 onClick={() => setSelectedProg(prog)}
               >
                 <img 
                   src={`https://img.youtube.com/vi/${prog.youtubeId}/maxresdefault.jpg`} 
                   onError={(e) => { e.target.onerror = null; e.target.src = `https://img.youtube.com/vi/${prog.youtubeId}/hqdefault.jpg`; }}
-                  className="group-hover:scale-110 transition-transform duration-700" 
-                  style={{ width: '100%', height: '100%', objectFit: 'cover' }}
+                  className="group-hover:scale-110 transition-transform duration-700 w-full h-full object-cover" 
                   alt="Thumbnail" 
                 />
                 <div className="absolute inset-0 bg-gradient-to-t from-slate-950/90 via-transparent to-transparent opacity-80" />
                 
-                <button onClick={(e) => { e.stopPropagation(); removeProgram(prog.id); }} className="absolute top-4 right-4 p-3 bg-red-600/90 text-white rounded-full opacity-0 group-hover:opacity-100 transition-all hover:scale-110 shadow-lg"><Trash2 size={14} /></button>
+                <button onClick={(e) => { e.stopPropagation(); removeProgram(prog.id); }} className="absolute top-4 right-4 p-3 bg-red-600/90 text-white rounded-full opacity-100 md:opacity-0 group-hover:opacity-100 transition-all hover:scale-110 shadow-lg"><Trash2 size={14} /></button>
                 
                 <div className="absolute bottom-4 left-4 bg-indigo-600/90 backdrop-blur-md px-3 py-1 rounded-lg text-[9px] text-white font-bold uppercase tracking-widest shadow-lg">
                   {new Date(prog.publishedAt || prog.createdAt).toLocaleDateString('fr-FR', {day: 'numeric', month: 'short'})}
@@ -303,16 +322,16 @@ export default function App() {
               
               <div className="mt-4 px-2 w-full">
                 <span className="text-[10px] font-black text-indigo-500 uppercase tracking-widest block mb-2 truncate">{prog.creatorName}</span>
-                <h3 className="text-xl font-bold text-white leading-tight group-hover:text-indigo-400 transition-colors line-clamp-2 italic tracking-tighter" title={prog.title}>{prog.title}</h3>
+                <h3 className="text-lg md:text-xl font-bold text-white leading-tight group-hover:text-indigo-400 transition-colors line-clamp-2 italic tracking-tighter" title={prog.title}>{prog.title}</h3>
                 {prog.pitch && <p className="text-slate-500 text-xs mt-3 line-clamp-2 italic border-l border-slate-800 pl-4 leading-relaxed font-medium">"{prog.pitch}"</p>}
               </div>
             </div>
           ))}
           
           {filtered.length === 0 && !isFetching && (
-            <div className="w-full border-2 border-dashed border-slate-800 rounded-[4rem] p-32 text-center flex flex-col items-center">
+            <div className="w-full border-2 border-dashed border-slate-800 rounded-[2rem] md:rounded-[4rem] p-16 md:p-32 text-center flex flex-col items-center">
               <p className="text-slate-600 font-black uppercase tracking-widest text-xs mb-8 italic">Grille vide.</p>
-              <button onClick={() => setIsAdminOpen(true)} className="text-indigo-400 font-black uppercase italic underline decoration-2 underline-offset-8 hover:text-white transition-all">Accéder à la curation →</button>
+              <button onClick={() => setIsAdminOpen(true)} className="text-indigo-400 font-black uppercase italic underline decoration-2 underline-offset-8 hover:text-white transition-all text-sm md:text-base">Accéder à la curation →</button>
             </div>
           )}
         </div>
@@ -320,16 +339,17 @@ export default function App() {
 
       {/* --- MODAL LECTEUR --- */}
       {selectedProg && (
-        <div className="fixed inset-0 z-[60] bg-slate-950/98 backdrop-blur-3xl flex items-center justify-center p-12">
-          <button onClick={() => setSelectedProg(null)} className="absolute top-10 right-10 text-slate-500 border border-slate-800 px-8 py-3 rounded-full uppercase text-[10px] font-black tracking-widest hover:text-white transition-all shadow-xl">Fermer [X]</button>
-          <div className="max-w-6xl w-full grid grid-cols-1 lg:grid-cols-3 gap-16 items-center">
-            <div className="lg:col-span-2 bg-black rounded-[3.5rem] overflow-hidden shadow-2xl border border-white/5 shadow-indigo-500/10" style={{ height: '600px' }}>
+        <div className="fixed inset-0 z-[110] bg-slate-950/98 backdrop-blur-3xl flex items-center justify-center p-6 md:p-12 overflow-y-auto">
+          <button onClick={() => setSelectedProg(null)} className="absolute top-6 right-6 md:top-10 md:right-10 text-slate-500 bg-slate-900 border border-slate-800 px-6 py-3 rounded-full uppercase text-[10px] font-black tracking-widest hover:text-white transition-all shadow-xl z-10">Fermer [X]</button>
+          
+          <div className="max-w-6xl w-full grid grid-cols-1 lg:grid-cols-3 gap-8 md:gap-16 items-center mt-16 md:mt-0">
+            <div className="lg:col-span-2 bg-black rounded-[2rem] md:rounded-[3.5rem] overflow-hidden shadow-2xl border border-white/5 shadow-indigo-500/10 h-[250px] md:h-[600px] w-full">
               <iframe width="100%" height="100%" src={`https://www.youtube.com/embed/${selectedProg.youtubeId}?autoplay=1`} frameBorder="0" allowFullScreen title="YouTube"></iframe>
             </div>
-            <div className="lg:col-span-1">
-              <span className="text-indigo-400 font-black text-[10px] uppercase tracking-widest bg-indigo-500/10 px-4 py-2 rounded-full mb-8 inline-block italic tracking-tighter">{selectedProg.creatorName}</span>
-              <h2 className="text-5xl font-black text-white leading-[1.1] mb-8 italic tracking-tighter">{selectedProg.title}</h2>
-              {selectedProg.pitch && <p className="text-slate-400 italic text-xl leading-relaxed border-l-4 border-indigo-500/50 pl-8 mb-12">"{selectedProg.pitch}"</p>}
+            <div className="lg:col-span-1 pb-10 md:pb-0">
+              <span className="text-indigo-400 font-black text-[10px] uppercase tracking-widest bg-indigo-500/10 px-4 py-2 rounded-full mb-6 md:mb-8 inline-block italic tracking-tighter">{selectedProg.creatorName}</span>
+              <h2 className="text-3xl md:text-5xl font-black text-white leading-[1.1] mb-6 md:mb-8 italic tracking-tighter">{selectedProg.title}</h2>
+              {selectedProg.pitch && <p className="text-slate-400 italic text-base md:text-xl leading-relaxed border-l-4 border-indigo-500/50 pl-6 md:pl-8 mb-12">"{selectedProg.pitch}"</p>}
             </div>
           </div>
         </div>
