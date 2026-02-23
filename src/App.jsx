@@ -449,7 +449,7 @@ export default function App() {
         <header className="px-6 md:px-0 pt-8 pb-4 flex justify-between items-center">
           <div className="flex items-center gap-4 md:gap-6">
             <h2 className="text-2xl md:text-3xl font-bold text-white tracking-tight">
-              {activeTab === 'accueil' ? 'En ce moment' : CATEGORIES.find(c => c.id === activeTab)?.label}
+              {activeTab === 'accueil' ? 'A la Une' : CATEGORIES.find(c => c.id === activeTab)?.label}
             </h2>
             
             {/* LE BOUTON D'ACTUALISATION INTELLIGENT */}
