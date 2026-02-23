@@ -1,31 +1,18 @@
 import { initializeApp } from 'firebase/app';
 import { getAuth } from 'firebase/auth';
-import { getFirestore, doc, updateDoc, arrayUnion, increment, addDoc, collection } from 'firebase/firestore';
+import { getFirestore } from 'firebase/firestore';
 
-// ... (config firebase existante)
+// Récupération des variables d'environnement (format Vite)
+const firebaseConfig = {
+  apiKey: import.meta.env.VITE_FIREBASE_API_KEY,
+  authDomain: import.meta.env.VITE_FIREBASE_AUTH_DOMAIN,
+  projectId: import.meta.env.VITE_FIREBASE_PROJECT_ID,
+  storageBucket: import.meta.env.VITE_FIREBASE_STORAGE_BUCKET,
+  messagingSenderId: import.meta.env.VITE_FIREBASE_MESSAGING_SENDER_ID,
+  appId: import.meta.env.VITE_FIREBASE_APP_ID
+};
 
 const app = initializeApp(firebaseConfig);
 export const auth = getAuth(app);
 export const db = getFirestore(app);
-export const FIREBASE_APP_ID = "tube-prog-v0";
-
-// Fonction pour créer un thème personnalisé
-export const createCustomTheme = async (userId, themeName, iconName) => {
-  const themeRef = await addDoc(collection(db, 'categories'), {
-    label: themeName,
-    icon: iconName,
-    createdBy: userId,
-    isPublic: false,
-    channels: [],
-    createdAt: Date.now()
-  });
-
-  // Mise à jour du profil utilisateur
-  const userRef = doc(db, 'users', userId);
-  await updateDoc(userRef, {
-    themeCount: increment(1),
-    customThemes: arrayUnion(themeRef.id)
-  });
-  
-  return themeRef.id;
-};
+export const FIREBASE_APP_ID = "tube-prog-v0"; // Votre ID d'application interne
