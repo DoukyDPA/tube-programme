@@ -261,23 +261,25 @@ export default function App() {
           )}
         </header>
 
-        {/* === FILTRES / CATÉGORIES (UNIQUEMENT SUR MOBILE) === */}
-        <div className="md:hidden flex overflow-x-auto no-scrollbar gap-2 mb-4 px-4 pb-2">
-           <button onClick={() => setActiveTab('accueil')} className={`flex-shrink-0 px-4 py-2 rounded-full text-xs font-bold transition-all ${activeTab === 'accueil' ? 'bg-indigo-600 text-white' : 'bg-slate-800 text-slate-400'}`}>
+        {/* === NOUVEAU : FILTRES / CATÉGORIES (UNIQUEMENT SUR MOBILE) EN GRILLE === */}
+        <div className="md:hidden flex flex-wrap gap-2 mb-6 px-4">
+           <button onClick={() => setActiveTab('accueil')} className={`px-4 py-2 rounded-full text-xs font-bold transition-all ${activeTab === 'accueil' ? 'bg-indigo-600 text-white shadow-lg shadow-indigo-500/20' : 'bg-slate-800 text-slate-400 border border-slate-700'}`}>
              Tout
            </button>
            
            {CATEGORIES.map(cat => (
-             <button key={cat.id} onClick={() => setActiveTab(cat.id)} className={`flex-shrink-0 flex items-center gap-2 px-4 py-2 rounded-full text-xs font-bold transition-all ${activeTab === cat.id ? 'bg-indigo-600 text-white' : 'bg-slate-800 text-slate-400'}`}>
+             <button key={cat.id} onClick={() => setActiveTab(cat.id)} className={`px-4 py-2 rounded-full text-xs font-bold transition-all ${activeTab === cat.id ? 'bg-indigo-600 text-white shadow-lg shadow-indigo-500/20' : 'bg-slate-800 text-slate-400 border border-slate-700'}`}>
                {cat.label}
              </button>
            ))}
 
            {customThemes.length > 0 && (
              <>
-               <div className="w-px bg-slate-700 mx-1 flex-shrink-0"></div>
+               <div className="w-full mt-2 mb-1 pl-1">
+                 <span className="text-[10px] font-black text-emerald-500 uppercase tracking-widest">Mes Thèmes</span>
+               </div>
                {customThemes.map(cat => (
-                 <button key={cat.id} onClick={() => setActiveTab(cat.id)} className={`flex-shrink-0 flex items-center gap-2 px-4 py-2 rounded-full text-xs font-bold transition-all ${activeTab === cat.id ? 'bg-emerald-600 text-white' : 'bg-slate-800 border border-emerald-500/30 text-emerald-400'}`}>
+                 <button key={cat.id} onClick={() => setActiveTab(cat.id)} className={`px-4 py-2 rounded-full text-xs font-bold transition-all ${activeTab === cat.id ? 'bg-emerald-600 text-white shadow-lg shadow-emerald-500/20' : 'bg-slate-800 text-emerald-400 border border-emerald-500/30'}`}>
                    {cat.name}
                  </button>
                ))}
