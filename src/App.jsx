@@ -130,7 +130,6 @@ export default function App() {
 
         for (const v of vData.items) {
           if (channelAddedVideos >= 5) break; 
-          
           if (existingVideoIds.has(v.id.videoId)) continue; 
 
           const detail = detailsData.items?.find(d => d.id === v.id.videoId);
@@ -178,42 +177,31 @@ export default function App() {
   return (
     <div className="min-h-screen md:h-screen bg-[#0a0f1c] text-slate-200 flex flex-col md:flex-row font-sans overflow-hidden">
       
-      {/* SIDEBAR */}
-      <aside className="w-full md:w-[260px] bg-slate-950/95 border-t md:border-t-0 md:border-r border-slate-800/50 fixed bottom-0 md:relative flex flex-row md:flex-col z-50 overflow-x-auto md:overflow-y-auto no-scrollbar items-center md:items-stretch shadow-[0_-10px_40px_rgba(0,0,0,0.5)] md:shadow-none">
-        
-        <div className="hidden md:flex p-8 items-center gap-3">
+      {/* === SIDEBAR (UNIQUEMENT SUR ORDINATEUR) === */}
+      <aside className="hidden md:flex w-[260px] bg-slate-950/95 border-r border-slate-800/50 flex-col z-50 overflow-y-auto shadow-2xl">
+        <div className="p-8 flex items-center gap-3">
           <div className="w-8 h-8 bg-indigo-600 rounded-lg flex items-center justify-center"><Sparkles size={16} className="text-white" /></div>
           <h1 className="text-xl font-black text-white tracking-tight">Tube<span className="text-indigo-500">mag</span></h1>
         </div>
         
-        <nav className="flex-1 px-2 md:px-4 py-3 md:py-4 flex flex-row md:flex-col gap-2 md:gap-1 items-center md:items-stretch m-auto md:m-0">
-          
-          <button onClick={() => setActiveTab('accueil')} className={`flex-shrink-0 flex items-center gap-2 md:gap-3 px-4 py-2.5 md:py-3 rounded-xl transition-all ${activeTab === 'accueil' ? 'bg-indigo-600/10 text-indigo-400 font-bold' : 'text-slate-400 hover:text-white hover:bg-slate-800/50'}`}>
-            <Home size={18} /> <span className="text-sm">Accueil</span>
+        <nav className="flex-1 px-4 py-4 space-y-1">
+          <button onClick={() => setActiveTab('accueil')} className={`w-full flex items-center gap-3 px-4 py-3 rounded-xl transition-all ${activeTab === 'accueil' ? 'bg-indigo-600/10 text-indigo-400 font-bold' : 'text-slate-400 hover:text-white hover:bg-slate-800/50'}`}>
+            <Home size={18} /> Accueil
           </button>
           
-          <div className="hidden md:block mt-8 mb-3 px-4 text-[10px] font-bold text-slate-600 uppercase tracking-widest">Catégories</div>
-          
+          <div className="mt-8 mb-3 px-4 text-[10px] font-bold text-slate-600 uppercase tracking-widest">Catégories</div>
           {CATEGORIES.map(cat => (
-            <button key={cat.id} onClick={() => setActiveTab(cat.id)} className={`flex-shrink-0 flex items-center gap-2 md:gap-3 px-4 py-2.5 md:py-3 rounded-xl transition-all ${activeTab === cat.id ? 'bg-indigo-600/10 text-indigo-400 font-bold' : 'text-slate-400 hover:text-white hover:bg-slate-800/50'}`}>
+            <button key={cat.id} onClick={() => setActiveTab(cat.id)} className={`w-full flex items-center gap-3 px-4 py-3 rounded-xl transition-all ${activeTab === cat.id ? 'bg-indigo-600/10 text-indigo-400 font-bold' : 'text-slate-400 hover:text-white hover:bg-slate-800/50'}`}>
               <span className={activeTab === cat.id ? 'text-indigo-400' : 'text-slate-500'}>{cat.icon}</span>
               <span className="text-sm whitespace-nowrap">{cat.label}</span>
             </button>
           ))}
 
-          {/* SÉPARATEUR ET THÈMES PERSONNALISÉS */}
           {customThemes.length > 0 && (
             <>
-              {/* Titre pour PC */}
-              <div className="hidden md:block mt-8 mb-3 px-4 text-[10px] font-bold text-slate-600 uppercase tracking-widest">Mes Thématiques</div>
-              
-              {/* Petit Titre pour Mobile */}
-              <div className="md:hidden flex items-center pl-3 pr-1 shrink-0">
-                 <span className="text-[9px] font-black text-emerald-500 uppercase tracking-widest whitespace-nowrap">Mes Thèmes :</span>
-              </div>
-
+              <div className="mt-8 mb-3 px-4 text-[10px] font-bold text-slate-600 uppercase tracking-widest">Mes Thématiques</div>
               {customThemes.map(cat => (
-                <button key={cat.id} onClick={() => setActiveTab(cat.id)} className={`flex-shrink-0 flex items-center gap-2 md:gap-3 px-4 py-2.5 md:py-3 rounded-xl transition-all ${activeTab === cat.id ? 'bg-emerald-600/10 text-emerald-400 font-bold' : 'text-slate-400 hover:text-white hover:bg-slate-800/50'}`}>
+                <button key={cat.id} onClick={() => setActiveTab(cat.id)} className={`w-full flex items-center gap-3 px-4 py-3 rounded-xl transition-all ${activeTab === cat.id ? 'bg-emerald-600/10 text-emerald-400 font-bold' : 'text-slate-400 hover:text-white hover:bg-slate-800/50'}`}>
                   <span className={activeTab === cat.id ? 'text-emerald-400' : 'text-slate-500'}>{getIconForCustomTheme(cat.icon)}</span>
                   <span className="text-sm whitespace-nowrap">{cat.name}</span>
                 </button>
@@ -221,71 +209,108 @@ export default function App() {
             </>
           )}
           
-          {/* Boutons actions */}
-          <div className="w-px h-6 bg-slate-800 md:hidden mx-2 flex-shrink-0"></div>
-          
-          <button onClick={() => setIsAdminOpen(true)} className="flex-shrink-0 flex items-center gap-2 md:gap-3 px-4 py-2.5 md:py-3 rounded-xl text-slate-400 hover:text-white hover:bg-slate-800/50 transition-all md:mt-4">
-            <Settings size={18} /> <span className="hidden md:inline text-sm">Configurer</span>
-          </button>
-
-          <button onClick={() => signOut(auth)} className="md:hidden flex-shrink-0 flex items-center gap-2 px-4 py-2.5 rounded-xl text-slate-500 hover:text-red-400 transition-colors">
-            <LogOut size={18} />
+          <button onClick={() => setIsAdminOpen(true)} className="w-full flex items-center gap-3 px-4 py-3 rounded-xl text-slate-400 hover:text-white hover:bg-slate-800/50 transition-all mt-4">
+            <Settings size={18} /> Configurer
           </button>
         </nav>
 
-        {/* Déconnexion PC */}
-        <div className="hidden md:block p-6 mt-auto border-t border-slate-800/50 w-full">
+        <div className="p-6 mt-auto border-t border-slate-800/50">
           <button onClick={() => signOut(auth)} className="w-full flex items-center gap-2 text-slate-500 hover:text-red-400 transition-colors text-sm font-semibold">
             <LogOut size={16} /> Déconnexion
           </button>
         </div>
       </aside>
+
+      {/* === BARRE DE NAVIGATION (UNIQUEMENT SUR MOBILE) === */}
+      <div className="md:hidden fixed bottom-0 left-0 right-0 bg-slate-950/98 backdrop-blur-lg border-t border-slate-800/50 flex justify-around items-center p-3 z-50 pb-safe shadow-[0_-10px_40px_rgba(0,0,0,0.5)]">
+        <button onClick={() => setActiveTab('accueil')} className={`flex flex-col items-center gap-1 p-2 transition-colors ${activeTab === 'accueil' ? 'text-indigo-400' : 'text-slate-500 hover:text-slate-300'}`}>
+          <Home size={22} />
+          <span className="text-[10px] font-bold">Accueil</span>
+        </button>
+        
+        <button onClick={() => setIsAdminOpen(true)} className="flex flex-col items-center gap-1 p-2 text-slate-500 hover:text-indigo-400 transition-colors">
+          <Settings size={22} />
+          <span className="text-[10px] font-bold">Config</span>
+        </button>
+        
+        <button onClick={() => signOut(auth)} className="flex flex-col items-center gap-1 p-2 text-slate-500 hover:text-red-400 transition-colors">
+          <LogOut size={22} />
+          <span className="text-[10px] font-bold">Sortir</span>
+        </button>
+      </div>
       
-      {/* MAIN CONTENT */}
-      <main className="flex-1 p-4 md:p-10 overflow-y-auto h-screen pb-24 md:pb-10">
-        <header className="flex justify-between items-center mb-8 pt-4 md:pt-0">
-          <h2 className="text-2xl md:text-3xl font-bold text-white tracking-tight">
+      {/* === ZONE PRINCIPALE === */}
+      <main className="flex-1 overflow-y-auto h-screen pb-24 md:pb-0 relative">
+        
+        {/* En-tête (Header) */}
+        <header className="flex justify-between items-center p-4 md:p-10 pb-4 md:pb-8">
+          <div className="flex items-center gap-3 md:hidden">
+            <div className="w-8 h-8 bg-indigo-600 rounded-lg flex items-center justify-center"><Sparkles size={16} className="text-white" /></div>
+            <h1 className="text-xl font-black text-white tracking-tight">Tube<span className="text-indigo-500">mag</span></h1>
+          </div>
+          
+          <h2 className="hidden md:block text-2xl md:text-3xl font-bold text-white tracking-tight">
              {activeTab === 'accueil' ? 'À la Une' : allCategories.find(c => c.id === activeTab)?.label}
           </h2>
           
           {activeTab === 'accueil' && (
-            <button onClick={syncWhatsNew} disabled={isSyncing} className="flex items-center gap-2 bg-indigo-600 hover:bg-indigo-500 text-white px-4 py-2 rounded-xl text-sm font-bold shadow-lg shadow-indigo-500/20 transition-all disabled:opacity-50">
+            <button onClick={syncWhatsNew} disabled={isSyncing} className="flex items-center gap-2 bg-indigo-600 hover:bg-indigo-500 text-white px-3 py-2 md:px-4 md:py-2 rounded-xl text-xs md:text-sm font-bold shadow-lg shadow-indigo-500/20 transition-all disabled:opacity-50">
               {isSyncing ? <Loader2 size={16} className="animate-spin"/> : <RefreshCw size={16} />} 
               <span className="hidden md:inline">{isSyncing ? 'Recherche...' : 'Actualiser'}</span>
             </button>
           )}
         </header>
 
-        {activeTab === 'accueil' ? (
-          <>
-            <ProgramRow 
-              title="Dernières vidéos" 
-              programs={programs.slice(0, 5)} 
-              large={true} 
-              onSelect={setSelectedProg} 
-              onRemove={removeProgram} 
-            />
-            {allCategories.map(cat => {
-              const catProgs = programs.filter(p => p.categoryId === cat.id);
-              if (catProgs.length === 0) return null;
-              return <ProgramRow key={cat.id} title={cat.label} programs={catProgs} onSelect={setSelectedProg} onRemove={removeProgram} />;
-            })}
-          </>
-        ) : (
-          <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-6">
-            {programs.filter(p => p.categoryId === activeTab).map(prog => (
-               <div key={prog.id} onClick={() => setSelectedProg(prog)} className="group cursor-pointer">
-                 <div className="relative bg-slate-900 rounded-xl overflow-hidden aspect-video mb-3 border border-slate-800 group-hover:border-slate-500">
-                    <img src={`https://img.youtube.com/vi/${prog.youtubeId}/maxresdefault.jpg`} onError={(e) => { e.target.src = `https://img.youtube.com/vi/${prog.youtubeId}/hqdefault.jpg`; }} className="w-full h-full object-cover transition-transform duration-500 group-hover:scale-105" alt="thumb"/>
+        {/* === FILTRES / CATÉGORIES (UNIQUEMENT SUR MOBILE) === */}
+        <div className="md:hidden flex overflow-x-auto no-scrollbar gap-2 mb-4 px-4 pb-2">
+           <button onClick={() => setActiveTab('accueil')} className={`flex-shrink-0 px-4 py-2 rounded-full text-xs font-bold transition-all ${activeTab === 'accueil' ? 'bg-indigo-600 text-white' : 'bg-slate-800 text-slate-400'}`}>
+             Tout
+           </button>
+           
+           {CATEGORIES.map(cat => (
+             <button key={cat.id} onClick={() => setActiveTab(cat.id)} className={`flex-shrink-0 flex items-center gap-2 px-4 py-2 rounded-full text-xs font-bold transition-all ${activeTab === cat.id ? 'bg-indigo-600 text-white' : 'bg-slate-800 text-slate-400'}`}>
+               {cat.label}
+             </button>
+           ))}
+
+           {customThemes.length > 0 && (
+             <>
+               <div className="w-px bg-slate-700 mx-1 flex-shrink-0"></div>
+               {customThemes.map(cat => (
+                 <button key={cat.id} onClick={() => setActiveTab(cat.id)} className={`flex-shrink-0 flex items-center gap-2 px-4 py-2 rounded-full text-xs font-bold transition-all ${activeTab === cat.id ? 'bg-emerald-600 text-white' : 'bg-slate-800 border border-emerald-500/30 text-emerald-400'}`}>
+                   {cat.name}
+                 </button>
+               ))}
+             </>
+           )}
+        </div>
+
+        {/* Contenu des Vidéos */}
+        <div className="px-0 md:px-10">
+          {activeTab === 'accueil' ? (
+            <>
+              <ProgramRow title="Dernières vidéos" programs={programs.slice(0, 5)} large={true} onSelect={setSelectedProg} onRemove={removeProgram} />
+              {allCategories.map(cat => {
+                const catProgs = programs.filter(p => p.categoryId === cat.id);
+                if (catProgs.length === 0) return null;
+                return <ProgramRow key={cat.id} title={cat.label} programs={catProgs} onSelect={setSelectedProg} onRemove={removeProgram} />;
+              })}
+            </>
+          ) : (
+            <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-6 px-4 md:px-0">
+              {programs.filter(p => p.categoryId === activeTab).map(prog => (
+                 <div key={prog.id} onClick={() => setSelectedProg(prog)} className="group cursor-pointer">
+                   <div className="relative bg-slate-900 rounded-xl overflow-hidden aspect-video mb-3 border border-slate-800 group-hover:border-slate-500">
+                      <img src={`https://img.youtube.com/vi/${prog.youtubeId}/maxresdefault.jpg`} onError={(e) => { e.target.src = `https://img.youtube.com/vi/${prog.youtubeId}/hqdefault.jpg`; }} className="w-full h-full object-cover transition-transform duration-500 group-hover:scale-105" alt="thumb"/>
+                   </div>
+                   <h3 className="font-semibold text-slate-100 text-sm leading-snug line-clamp-2">{decodeHTML(prog.title)}</h3>
                  </div>
-                 <h3 className="font-semibold text-slate-100 text-sm leading-snug line-clamp-2">{decodeHTML(prog.title)}</h3>
-               </div>
-            ))}
-          </div>
-        )}
+              ))}
+            </div>
+          )}
+        </div>
       </main>
 
-      {/* MODALS */}
       {selectedProg && <VideoModal prog={selectedProg} onClose={() => setSelectedProg(null)} />}
       {isAdminOpen && <AdminPanel user={user} userData={userData} customThemes={customThemes} onClose={() => setIsAdminOpen(false)} />}
     </div>
