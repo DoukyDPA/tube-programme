@@ -2,7 +2,6 @@ import { initializeApp } from 'firebase/app';
 import { getAuth } from 'firebase/auth';
 import { getFirestore } from 'firebase/firestore';
 
-// Récupération des variables d'environnement (format Vite)
 const firebaseConfig = {
   apiKey: import.meta.env.VITE_FIREBASE_API_KEY,
   authDomain: import.meta.env.VITE_FIREBASE_AUTH_DOMAIN,
@@ -13,6 +12,8 @@ const firebaseConfig = {
 };
 
 const app = initializeApp(firebaseConfig);
+
+// On exporte les instances prêtes à l'emploi
 export const auth = getAuth(app);
 export const db = getFirestore(app);
-export const FIREBASE_APP_ID = "tube-prog-v0"; // Votre ID d'application interne
+export const FIREBASE_APP_ID = "tube-prog-v0";
