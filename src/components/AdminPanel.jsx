@@ -1,6 +1,6 @@
 import React, { useState } from 'react';
 import { Cpu, BookOpen, Trophy, Mic2, X, Settings, Plus, Youtube, CheckCircle2, Loader2 } from 'lucide-react';
-import { db, createCustomTheme, FIREBASE_APP_ID } from '../firebase';
+import { db, FIREBASE_APP_ID } from '../firebase';
 import { collection, doc, setDoc } from 'firebase/firestore';
 
 const ICONS = [
@@ -23,15 +23,26 @@ export default function AdminPanel({ user, userData, onClose }) {
   const [category, setCategory] = useState('ia');
 
   const handleCreateTheme = async () => {
-    if (!themeName.trim()) return;
-    setLoading(true);
-    try {
-      await createCustomTheme(user.uid, themeName, selectedIcon);
-      alert("Thématique créée avec succès !");
-      onClose();
-    } catch (e) { alert(e.message); }
-    finally { setLoading(false); }
-  };
+  if (!themeName.trim()) return;
+  setLoading(true);
+  try {
+    // On crée une référence pour le nouveau thème dans la sous-collection "themes" de l'utilisateur
+    const themeRef = doc(collection(db, 'users', user.uid, 'themes'));
+    
+    await setDoc(themeRef, {
+      name: themeName,
+      icon: selectedIcon,
+      createdAt: Date.now()
+    });
+
+    alert("Thématique créée avec succès !");
+    onClose();
+  } catch (e) { 
+    alert(e.message); 
+  } finally { 
+    setLoading(false); 
+  }
+};
 
   // La fonction fetchAndAutoIntegrate reste identique à votre App.jsx originale
   // mais utilise les props 'category' et 'channelInput'
