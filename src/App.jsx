@@ -1,9 +1,9 @@
-import React, { useState, useEffect, useMemo } from 'react';
+import React, { useState, useEffect, useMemo, useRef } from 'react';
 import { initializeApp } from 'firebase/app';
 import { getAuth, signInAnonymously, onAuthStateChanged } from 'firebase/auth';
 import { getFirestore, collection, doc, setDoc, onSnapshot, deleteDoc } from 'firebase/firestore';
 import { 
-  Star, Cpu, BookOpen, Trophy, Mic2, Home, Sparkles, X, Trash2, Lock, AlertCircle, Settings, CheckCircle2, ServerCrash, Loader2
+  Star, Cpu, BookOpen, Trophy, Mic2, Home, Sparkles, X, Trash2, Lock, AlertCircle, Settings, CheckCircle2, ServerCrash, Loader2, ChevronLeft, ChevronRight, Play
 } from 'lucide-react';
 
 /**
@@ -37,13 +37,24 @@ if (firebaseConfig.apiKey) {
 }
 
 const CATEGORIES = [
-  { id: 'ia', label: 'IA / Tech', icon: <Cpu size={18}/> },
-  { id: 'lecture', label: 'Culture / Livres', icon: <BookOpen size={18}/> },
+  { id: 'ia', label: 'IA & Tech', icon: <Cpu size={18}/> },
+  { id: 'lecture', label: 'Culture & Livres', icon: <BookOpen size={18}/> },
   { id: 'foot', label: 'Analyse Foot', icon: <Trophy size={18}/> },
-  { id: 'interviews', label: 'Talks / Débats', icon: <Mic2 size={18}/> },
+  { id: 'interviews', label: 'Talks & Débats', icon: <Mic2 size={18}/> },
 ];
 
-// --- COMPOSANT : PANNEAU DE CURATION (100% AUTOMATIQUE) ---
+// --- UTILITAIRE : CONVERSION DURÉE YOUTUBE ---
+// Convertit le format "PT5M33S" en secondes
+const parseDuration = (duration) => {
+  const match = duration.match(/PT(?:(\d+)H)?(?:(\d+)M)?(?:(\d+)S)?/);
+  if (!match) return 0;
+  const h = parseInt(match[1] || 0, 10);
+  const m = parseInt(match[2] || 0, 10);
+  const s = parseInt(match[3] || 0, 10);
+  return h * 3600 + m * 60 + s;
+};
+
+// --- COMPOSANT : PANNEAU DE CURATION ---
 
 const AdminPanel = ({ onClose }) => {
   const [passInput, setPassInput] = useState('');
@@ -81,21 +92,21 @@ const AdminPanel = ({ onClose }) => {
         throw new Error("Aucune vidéo trouvée pour cette chaîne.");
       }
 
-      // 2.bis Extraire les IDs pour demander la durée exacte (Filtre anti-shorts)
+      // 2.bis Extraire les IDs pour demander la durée exacte
       const videoIds = vData.items.map(v => v.id.videoId).join(',');
       const detailsRes = await fetch(`https://www.googleapis.com/youtube/v3/videos?key=${YOUTUBE_API_KEY}&id=${videoIds}&part=contentDetails`);
       const detailsData = await detailsRes.json();
 
-      // 2.ter Filtrer pour enlever les shorts (< 60s) et ne garder que les 5 plus récentes
+      // 2.ter Filtrer pour enlever les shorts (< 120s / 2 minutes)
       const longVideos = vData.items.filter(v => {
         const detail = detailsData.items?.find(d => d.id === v.id.videoId);
-        // S'il y a un 'M' (Minutes) ou 'H' (Heures) dans la durée, ce n'est PAS un short.
-        return detail && (detail.contentDetails.duration.includes('M') || detail.contentDetails.duration.includes('H'));
+        if (!detail) return false;
+        return parseDuration(detail.contentDetails.duration) >= 120; // Au moins 2 minutes
       }).slice(0, 5);
 
-      if (longVideos.length === 0) throw new Error("Aucune vidéo de format long trouvée.");
+      if (longVideos.length === 0) throw new Error("Aucune vidéo de plus de 2 minutes trouvée.");
 
-      // 3. Sauvegarder automatiquement les 5 vidéos filtrées dans Firebase
+      // 3. Sauvegarder automatiquement
       if (!db) throw new Error("Base de données non connectée.");
       
       const promises = longVideos.map(v => {
@@ -118,11 +129,11 @@ const AdminPanel = ({ onClose }) => {
 
       await Promise.all(promises); 
       
-      alert(`✅ Succès ! ${longVideos.length} vidéos longues ont été ajoutées. Mettez la page à jour pour vérifier.`);
+      alert(`✅ Succès ! ${longVideos.length} vidéos longues ajoutées.`);
       onClose(); 
 
     } catch (e) { 
-      alert(`❌ ERREUR REJETÉE PAR L'API :\n${e.message}\n\nVérifiez que l'API YouTube Data v3 est activée sur Google Cloud !`); 
+      alert(`❌ ERREUR :\n${e.message}`); 
     }
     finally { setLoading(false); }
   };
@@ -132,10 +143,10 @@ const AdminPanel = ({ onClose }) => {
       <div className="fixed inset-0 z-[100] bg-slate-950/98 flex items-center justify-center p-6 backdrop-blur-md">
         <div className="w-full max-w-sm bg-slate-900 p-10 rounded-[2.5rem] border border-slate-800 shadow-2xl text-center">
           <Lock className="mx-auto mb-6 text-indigo-500" size={32} />
-          <h2 className="text-xl font-black mb-6 uppercase text-white tracking-tight">Accès Curation</h2>
+          <h2 className="text-xl font-bold mb-6 text-white tracking-tight">Accès Curation</h2>
           <input type="password" placeholder="Code secret" className="w-full bg-slate-800 p-4 rounded-2xl mb-4 text-center text-white outline-none ring-2 ring-transparent focus:ring-indigo-500" value={passInput} onChange={e => setPassInput(e.target.value)} />
-          <button onClick={checkPass} className="w-full py-4 bg-indigo-600 text-white rounded-2xl font-black uppercase text-xs tracking-widest hover:bg-indigo-500">Déverrouiller</button>
-          <button onClick={onClose} className="mt-6 text-slate-500 text-xs hover:text-white">Retour au site</button>
+          <button onClick={checkPass} className="w-full py-4 bg-indigo-600 text-white rounded-2xl font-bold uppercase text-xs tracking-widest hover:bg-indigo-500">Déverrouiller</button>
+          <button onClick={onClose} className="mt-6 text-slate-500 text-xs hover:text-white">Retour</button>
         </div>
       </div>
     );
@@ -143,28 +154,28 @@ const AdminPanel = ({ onClose }) => {
 
   return (
     <div className="fixed inset-0 z-[100] bg-slate-950/95 backdrop-blur-xl flex items-center justify-center p-4">
-      <div className="bg-slate-900 border border-slate-800 w-full max-w-lg rounded-[3rem] p-10 shadow-2xl">
+      <div className="bg-slate-900 border border-slate-800 w-full max-w-lg rounded-[2rem] p-8 shadow-2xl">
         <div className="flex justify-between items-center mb-8">
-          <h2 className="text-2xl font-black text-white uppercase italic flex items-center gap-3 tracking-tighter">
-            <Settings className="text-indigo-500" size={24} /> Import Rapide
+          <h2 className="text-xl font-bold text-white flex items-center gap-3">
+            <Settings className="text-indigo-500" size={20} /> Import YouTube
           </h2>
           <button onClick={onClose} className="p-2 bg-slate-800 rounded-full text-slate-400 hover:text-white"><X size={16} /></button>
         </div>
 
         <div className="space-y-6">
-          <div className="space-y-3">
-            <label className="text-[10px] font-black text-slate-500 uppercase tracking-widest block">1. Thématique Cible</label>
-            <select className="w-full bg-slate-800 p-4 rounded-2xl text-sm border-none outline-none text-white focus:ring-2 focus:ring-indigo-500" value={category} onChange={e => setCategory(e.target.value)}>
+          <div className="space-y-2">
+            <label className="text-xs font-bold text-slate-500 uppercase tracking-wider">1. Thématique</label>
+            <select className="w-full bg-slate-800 p-4 rounded-xl text-sm border-none outline-none text-white focus:ring-2 focus:ring-indigo-500" value={category} onChange={e => setCategory(e.target.value)}>
               {CATEGORIES.map(c => <option key={c.id} value={c.id}>{c.label}</option>)}
             </select>
           </div>
-          <div className="space-y-3">
-            <label className="text-[10px] font-black text-slate-500 uppercase tracking-widest block">2. Chaîne YouTube</label>
-            <input className="w-full bg-slate-800 p-4 rounded-2xl text-sm outline-none text-white focus:ring-2 focus:ring-indigo-500" placeholder="ex: @MonsieurPhi" value={channelInput} onChange={e => setChannelInput(e.target.value)} />
+          <div className="space-y-2">
+            <label className="text-xs font-bold text-slate-500 uppercase tracking-wider">2. Chaîne YouTube</label>
+            <input className="w-full bg-slate-800 p-4 rounded-xl text-sm outline-none text-white focus:ring-2 focus:ring-indigo-500" placeholder="ex: @MonsieurPhi" value={channelInput} onChange={e => setChannelInput(e.target.value)} />
           </div>
           
-          <button onClick={fetchAndAutoIntegrate} disabled={loading} className="w-full mt-4 bg-emerald-600 py-5 rounded-2xl font-black text-xs text-white uppercase tracking-widest hover:bg-emerald-500 disabled:opacity-50 flex justify-center items-center gap-2 shadow-[0_0_20px_rgba(16,185,129,0.2)]">
-            {loading ? "Aspiration en cours..." : <><CheckCircle2 size={18} /> Aspirer (Sans Shorts)</>}
+          <button onClick={fetchAndAutoIntegrate} disabled={loading} className="w-full mt-4 bg-emerald-600 py-4 rounded-xl font-bold text-sm text-white hover:bg-emerald-500 disabled:opacity-50 flex justify-center items-center gap-2">
+            {loading ? <Loader2 className="animate-spin" size={18}/> : <><CheckCircle2 size={18} /> Aspirer (Ignorer < 2min)</>}
           </button>
         </div>
       </div>
@@ -172,6 +183,86 @@ const AdminPanel = ({ onClose }) => {
   );
 };
 
+
+// --- COMPOSANT : CARTE VIDÉO (MOLOTOV STYLE) ---
+const ProgramCard = ({ prog, large, onSelect, onRemove }) => {
+  return (
+    <div 
+      className={`group relative flex-col shrink-0 snap-center cursor-pointer transition-all duration-300 ${large ? 'w-[80vw] md:w-[480px]' : 'w-[240px] md:w-[280px]'}`}
+      onClick={() => onSelect(prog)}
+    >
+      <div className={`relative bg-slate-900 overflow-hidden shadow-lg border border-slate-800/50 group-hover:border-slate-500 transition-colors rounded-xl ${large ? 'h-[200px] md:h-[270px]' : 'h-[135px] md:h-[157px]'}`}>
+        <img 
+          src={`https://img.youtube.com/vi/${prog.youtubeId}/maxresdefault.jpg`} 
+          onError={(e) => { e.target.onerror = null; e.target.src = `https://img.youtube.com/vi/${prog.youtubeId}/hqdefault.jpg`; }}
+          className="w-full h-full object-cover transition-transform duration-700 group-hover:scale-105" 
+          alt={prog.title} 
+        />
+        
+        {/* Overlay Dégradé (plus sombre en bas) */}
+        <div className="absolute inset-0 bg-gradient-to-t from-slate-950/90 via-slate-950/20 to-transparent opacity-90" />
+        
+        {/* Bouton Play au survol */}
+        <div className="absolute inset-0 flex items-center justify-center opacity-0 group-hover:opacity-100 transition-opacity duration-300 bg-black/20">
+          <div className="w-14 h-14 bg-indigo-600 rounded-full flex items-center justify-center pl-1 shadow-2xl scale-75 group-hover:scale-100 transition-transform">
+            <Play fill="white" size={24} className="text-white" />
+          </div>
+        </div>
+
+        {/* Bouton Suppression admin */}
+        <button onClick={(e) => { e.stopPropagation(); onRemove(prog.id); }} className="absolute top-3 right-3 p-2 bg-slate-900/80 hover:bg-red-600 text-slate-300 hover:text-white rounded-full opacity-100 md:opacity-0 group-hover:opacity-100 transition-all z-20">
+          <Trash2 size={14} />
+        </button>
+      </div>
+      
+      <div className="mt-3 px-1 w-full">
+        <span className="text-[10px] font-bold text-slate-400 uppercase tracking-widest block mb-1 truncate">{prog.creatorName}</span>
+        <h3 className={`font-semibold text-slate-100 leading-snug group-hover:text-white transition-colors line-clamp-2 ${large ? 'text-lg md:text-xl' : 'text-sm'}`} title={prog.title}>{prog.title}</h3>
+      </div>
+    </div>
+  );
+};
+
+
+// --- COMPOSANT : RANGÉE CARROUSEL ---
+const ProgramRow = ({ title, programs, large = false, onSelect, onRemove }) => {
+  const scrollRef = useRef(null);
+
+  const scroll = (direction) => {
+    if (scrollRef.current) {
+      const scrollAmount = large ? 500 : 300;
+      scrollRef.current.scrollBy({ left: direction === 'left' ? -scrollAmount : scrollAmount, behavior: 'smooth' });
+    }
+  };
+
+  if (!programs || programs.length === 0) return null;
+
+  return (
+    <div className="mb-10 relative group">
+      {title && <h2 className="text-xl md:text-2xl font-bold text-white mb-4 pl-2 md:pl-0 tracking-tight">{title}</h2>}
+      
+      {/* Flèche Gauche (Cachée sur mobile, visible au survol sur PC) */}
+      <button onClick={() => scroll('left')} className="hidden md:flex absolute left-0 top-1/2 -translate-y-1/2 -ml-6 z-10 bg-slate-800 hover:bg-indigo-600 text-white p-3 rounded-full opacity-0 group-hover:opacity-100 transition-all shadow-2xl border border-slate-700">
+        <ChevronLeft size={24} />
+      </button>
+      
+      {/* Conteneur défilant */}
+      <div ref={scrollRef} className="flex gap-4 md:gap-6 overflow-x-auto no-scrollbar snap-x snap-mandatory px-4 md:px-0 pb-4">
+        {programs.map(prog => (
+          <ProgramCard key={prog.id} prog={prog} large={large} onSelect={onSelect} onRemove={onRemove} />
+        ))}
+      </div>
+
+      {/* Flèche Droite */}
+      <button onClick={() => scroll('right')} className="hidden md:flex absolute right-0 top-1/2 -translate-y-1/2 -mr-6 z-10 bg-slate-800 hover:bg-indigo-600 text-white p-3 rounded-full opacity-0 group-hover:opacity-100 transition-all shadow-2xl border border-slate-700">
+        <ChevronRight size={24} />
+      </button>
+    </div>
+  );
+};
+
+
+// --- APP PRINCIPALE ---
 export default function App() {
   const [user, setUser] = useState(null);
   const [authError, setAuthError] = useState(null);
@@ -183,8 +274,7 @@ export default function App() {
 
   useEffect(() => {
     if (!auth) return;
-    signInAnonymously(auth)
-      .catch((error) => setAuthError(error.message));
+    signInAnonymously(auth).catch((error) => setAuthError(error.message));
     return onAuthStateChanged(auth, setUser);
   }, []);
 
@@ -209,148 +299,135 @@ export default function App() {
   }, [user]);
 
   const removeProgram = async (id) => {
-    if (confirm("Supprimer ce programme ?")) {
+    if (confirm("Supprimer définitivement ce programme ?")) {
       try {
         await deleteDoc(doc(db, 'artifacts', FIREBASE_APP_ID, 'public', 'data', 'programs', id));
-      } catch(e) { alert("❌ Erreur suppression : " + e.message); }
+      } catch(e) { alert("❌ Erreur : " + e.message); }
     }
   };
-
-  const filtered = useMemo(() => {
-    return activeTab === 'accueil' ? programs : programs.filter(p => p.categoryId === activeTab);
-  }, [programs, activeTab]);
 
   if (!firebaseConfig.apiKey) {
     return (
       <div className="min-h-screen bg-slate-950 flex items-center justify-center p-8 text-white">
-        <div className="max-w-md bg-slate-900 p-12 rounded-[3rem] border border-indigo-500/20 text-center shadow-2xl">
+        <div className="max-w-md bg-slate-900 p-12 rounded-[2rem] border border-indigo-500/20 text-center">
           <AlertCircle size={48} className="mx-auto mb-6 text-indigo-500" />
-          <h2 className="text-xl font-black mb-4 uppercase italic">V0 Non Configurée</h2>
-          <p className="text-slate-400 text-sm">Créez votre fichier .env et relancez.</p>
+          <h2 className="text-xl font-bold mb-4">Projet Non Configuré</h2>
         </div>
       </div>
     );
   }
 
   return (
-    // CONTENEUR PRINCIPAL MIS A JOUR POUR LE MOBILE (flex-col sur mobile, flex-row sur bureau)
-    <div className="min-h-screen bg-[#020617] text-slate-200 flex flex-col md:flex-row font-sans selection:bg-indigo-500/30 overflow-hidden">
+    <div className="min-h-screen bg-[#0a0f1c] text-slate-200 flex flex-col md:flex-row font-sans selection:bg-indigo-500/30 overflow-hidden">
       
       {/* --- SIDEBAR DEVENUE BOTTOM-BAR SUR MOBILE --- */}
-      <aside className="w-full md:w-72 bg-slate-950/90 md:bg-slate-950/80 backdrop-blur-xl border-t md:border-t-0 md:border-r border-slate-800/40 fixed bottom-0 md:top-0 md:h-full flex flex-row md:flex-col z-50 overflow-x-auto no-scrollbar md:overflow-hidden items-center md:items-stretch shadow-[0_-10px_40px_rgba(0,0,0,0.5)] md:shadow-none pb-safe">
+      <aside className="w-full md:w-[260px] bg-slate-950/95 border-t md:border-t-0 md:border-r border-slate-800/50 fixed bottom-0 md:top-0 md:h-full flex flex-row md:flex-col z-50 overflow-x-auto no-scrollbar md:overflow-hidden items-center md:items-stretch pb-safe">
         
-        <div className="hidden md:flex p-10 items-center gap-4">
-          <div className="w-10 h-10 bg-indigo-600 rounded-xl flex items-center justify-center shadow-lg"><Sparkles size={20} className="text-white" /></div>
-          <h1 className="text-xl font-black uppercase italic text-white tracking-tighter">Tube<span className="text-indigo-500">Prog</span></h1>
+        <div className="hidden md:flex p-8 items-center gap-3">
+          <div className="w-8 h-8 bg-indigo-600 rounded-lg flex items-center justify-center"><Sparkles size={16} className="text-white" /></div>
+          <h1 className="text-xl font-black text-white tracking-tight">Molot<span className="text-indigo-500">ube</span></h1>
         </div>
         
-        <nav className="flex-1 px-4 py-3 md:py-0 flex flex-row md:flex-col gap-2 md:gap-0 md:space-y-1 overflow-x-auto no-scrollbar items-center md:items-stretch">
-          <button onClick={() => setActiveTab('accueil')} className={`flex-shrink-0 md:w-full flex items-center gap-2 md:gap-4 px-4 md:px-6 py-3 md:py-4 rounded-2xl transition-all ${activeTab === 'accueil' ? 'bg-indigo-600/20 text-indigo-400 font-bold' : 'text-slate-400 hover:bg-slate-800/30'}`}>
-            <Home size={18} /> <span className="text-sm">La Grille</span>
+        <nav className="flex-1 px-2 md:px-4 py-3 md:py-0 flex flex-row md:flex-col gap-1 overflow-x-auto no-scrollbar items-center md:items-stretch">
+          <button onClick={() => setActiveTab('accueil')} className={`flex-shrink-0 flex items-center gap-3 px-4 py-3 md:py-3.5 rounded-xl transition-all ${activeTab === 'accueil' ? 'bg-indigo-600/10 text-indigo-400 font-bold' : 'text-slate-400 hover:text-white hover:bg-slate-800/50'}`}>
+            <Home size={18} /> <span className="text-sm">Accueil</span>
           </button>
           
-          <div className="hidden md:block mt-10 mb-4 px-6 text-[10px] font-black text-slate-600 uppercase tracking-widest">Thématiques</div>
+          <div className="hidden md:block mt-8 mb-3 px-4 text-[10px] font-bold text-slate-600 uppercase tracking-widest">Catégories</div>
           <div className="w-px h-6 bg-slate-800 md:hidden mx-2"></div>
 
           {CATEGORIES.map(cat => (
-            <button key={cat.id} onClick={() => setActiveTab(cat.id)} className={`flex-shrink-0 md:w-full flex items-center gap-2 md:gap-4 px-4 md:px-6 py-3 md:py-4 rounded-2xl transition-all ${activeTab === cat.id ? 'bg-indigo-600/20 text-indigo-400 font-bold' : 'text-slate-400 hover:bg-slate-800/30'}`}>
+            <button key={cat.id} onClick={() => setActiveTab(cat.id)} className={`flex-shrink-0 flex items-center gap-3 px-4 py-3 md:py-3.5 rounded-xl transition-all ${activeTab === cat.id ? 'bg-indigo-600/10 text-indigo-400 font-bold' : 'text-slate-400 hover:text-white hover:bg-slate-800/50'}`}>
               <span className={activeTab === cat.id ? 'text-indigo-400' : 'text-slate-500'}>{cat.icon}</span>
               <span className="text-sm whitespace-nowrap">{cat.label}</span>
             </button>
           ))}
         </nav>
 
-        <div className="p-3 md:p-8 flex-shrink-0">
-          <button onClick={() => setIsAdminOpen(true)} className="md:w-full p-3 md:py-4 bg-slate-900 border border-slate-800 rounded-2xl text-[10px] md:font-black uppercase tracking-widest text-slate-500 hover:text-indigo-400 transition-all flex items-center justify-center gap-0 md:gap-3">
-            <Lock size={16} className="md:w-[14px] md:h-[14px]" /> 
-            <span className="hidden md:inline">Admin Curation</span>
+        <div className="p-2 md:p-6 flex-shrink-0">
+          <button onClick={() => setIsAdminOpen(true)} className="p-3 bg-slate-900 border border-slate-800 rounded-xl text-slate-500 hover:text-white transition-all flex items-center justify-center gap-2">
+            <Lock size={14} /> <span className="hidden md:inline text-xs font-bold uppercase tracking-wider">Curation</span>
           </button>
         </div>
       </aside>
 
-      {/* --- MAIN AREA ADAPTÉE POUR MOBILE --- */}
-      <main className="md:ml-72 flex-1 p-6 md:p-12 mb-20 md:mb-0 w-full md:w-[calc(100vw-18rem)] overflow-x-hidden">
-        <header className="mb-10 md:mb-16 flex flex-col md:flex-row justify-between items-start gap-6 md:gap-0 mt-4 md:mt-0">
-          <div>
-            <h2 className="text-4xl md:text-7xl font-black text-white uppercase italic leading-none mb-4 tracking-tighter">{activeTab === 'accueil' ? "À l'affiche" : CATEGORIES.find(c => c.id === activeTab).label}</h2>
-            <p className="text-slate-500 font-medium text-sm md:text-xl italic tracking-tight border-l-4 border-indigo-500 pl-4 md:pl-6">Le savoir sélectionné pour vous.</p>
-          </div>
-          <div className="text-left md:text-right w-full md:w-auto flex flex-row md:flex-col justify-between items-center md:items-end">
-             <span className="text-[10px] font-black text-slate-600 uppercase tracking-widest block md:mb-2 hidden md:block">Base de données</span>
-             {authError ? (
-               <span className="text-red-500 font-bold flex items-center gap-2 text-xs bg-red-500/10 px-3 py-1.5 rounded-full"><ServerCrash size={14} /> Erreur Permissions</span>
-             ) : isFetching ? (
-               <span className="text-indigo-400 font-bold flex items-center gap-2 text-xs bg-indigo-500/10 px-3 py-1.5 rounded-full"><Loader2 size={14} className="animate-spin"/> Synchronisation...</span>
-             ) : user ? (
-               <span className="text-emerald-500 font-bold flex items-center gap-2 text-xs bg-emerald-500/10 px-3 py-1.5 rounded-full"><CheckCircle2 size={14} /> En ligne</span>
-             ) : null}
+      {/* --- ZONE PRINCIPALE --- */}
+      <main className="md:ml-[260px] flex-1 p-0 md:p-10 mb-20 md:mb-0 w-full overflow-x-hidden overflow-y-auto bg-[#0a0f1c]">
+        
+        {/* Header (Statut BD) */}
+        <header className="px-6 md:px-0 pt-8 pb-4 flex justify-between items-center">
+          <h2 className="text-2xl md:text-3xl font-bold text-white tracking-tight">
+            {activeTab === 'accueil' ? 'En ce moment' : CATEGORIES.find(c => c.id === activeTab)?.label}
+          </h2>
+          <div className="hidden md:block">
+             {authError ? <span className="text-red-500 text-xs font-bold bg-red-500/10 px-3 py-1.5 rounded-full flex gap-2"><ServerCrash size={14} /> Erreur Auth</span> 
+             : isFetching ? <span className="text-indigo-400 text-xs font-bold bg-indigo-500/10 px-3 py-1.5 rounded-full flex gap-2"><Loader2 size={14} className="animate-spin"/> Sync...</span>
+             : user ? <span className="text-emerald-500 text-xs font-bold bg-emerald-500/10 px-3 py-1.5 rounded-full flex gap-2"><CheckCircle2 size={14} /> En ligne</span> : null}
           </div>
         </header>
 
-        {/* --- LA GRILLE DE VIGNETTES --- */}
-        <div className="flex gap-6 md:gap-8 overflow-x-auto pb-10 md:pb-20 no-scrollbar items-start snap-x snap-mandatory">
-          
-          {filtered.length === 0 && isFetching && (
-            <div className="w-full flex justify-center items-center py-20 text-indigo-500/50">
-              <Loader2 size={40} className="animate-spin" />
-            </div>
-          )}
+        {isFetching && programs.length === 0 ? (
+           <div className="w-full h-[50vh] flex justify-center items-center"><Loader2 size={40} className="animate-spin text-indigo-500/50" /></div>
+        ) : programs.length === 0 ? (
+           <div className="m-6 border-2 border-dashed border-slate-800 rounded-2xl p-20 text-center">
+             <p className="text-slate-500 font-bold mb-4">Aucun programme disponible.</p>
+             <button onClick={() => setIsAdminOpen(true)} className="text-indigo-400 hover:text-white underline">Ajouter des vidéos</button>
+           </div>
+        ) : (
+          <div className="pb-10 pt-4">
+            {/* VUE ACCUEIL (Mode Molotov : Toutes les lignes) */}
+            {activeTab === 'accueil' && (
+              <>
+                {/* Ligne 1 : À la une (Grand format, 5 dernières vidéos) */}
+                <ProgramRow programs={programs.slice(0, 5)} large={true} onSelect={setSelectedProg} onRemove={removeProgram} />
+                
+                {/* Lignes Suivantes : Par catégorie (Format normal) */}
+                {CATEGORIES.map(cat => {
+                  const catProgs = programs.filter(p => p.categoryId === cat.id);
+                  return catProgs.length > 0 ? (
+                    <ProgramRow key={cat.id} title={cat.label} programs={catProgs} onSelect={setSelectedProg} onRemove={removeProgram} />
+                  ) : null;
+                })}
+              </>
+            )}
 
-          {!isFetching && filtered.map(prog => (
-            <div 
-              key={prog.id} 
-              className="group animate-in fade-in zoom-in-95 duration-500 relative flex-col shrink-0 w-[280px] md:w-[320px] snap-center"
-            >
-              <div 
-                className="relative bg-slate-900 overflow-hidden cursor-pointer shadow-2xl border border-slate-800 group-hover:border-indigo-500 transition-all duration-500 w-full h-[160px] md:h-[180px] rounded-[24px]"
-                onClick={() => setSelectedProg(prog)}
-              >
-                <img 
-                  src={`https://img.youtube.com/vi/${prog.youtubeId}/maxresdefault.jpg`} 
-                  onError={(e) => { e.target.onerror = null; e.target.src = `https://img.youtube.com/vi/${prog.youtubeId}/hqdefault.jpg`; }}
-                  className="group-hover:scale-110 transition-transform duration-700 w-full h-full object-cover" 
-                  alt="Thumbnail" 
-                />
-                <div className="absolute inset-0 bg-gradient-to-t from-slate-950/90 via-transparent to-transparent opacity-80" />
-                
-                <button onClick={(e) => { e.stopPropagation(); removeProgram(prog.id); }} className="absolute top-4 right-4 p-3 bg-red-600/90 text-white rounded-full opacity-100 md:opacity-0 group-hover:opacity-100 transition-all hover:scale-110 shadow-lg"><Trash2 size={14} /></button>
-                
-                <div className="absolute bottom-4 left-4 bg-indigo-600/90 backdrop-blur-md px-3 py-1 rounded-lg text-[9px] text-white font-bold uppercase tracking-widest shadow-lg">
-                  {new Date(prog.publishedAt || prog.createdAt).toLocaleDateString('fr-FR', {day: 'numeric', month: 'short'})}
-                </div>
+            {/* VUE CATÉGORIE SPÉCIFIQUE (Grille ou lignes) */}
+            {activeTab !== 'accueil' && (
+              <div className="grid grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-4 px-4 md:px-0">
+                {programs.filter(p => p.categoryId === activeTab).map(prog => (
+                   // On utilise le composant carte directement en ajustant ses classes pour la grille
+                   <div key={prog.id} onClick={() => setSelectedProg(prog)} className="group cursor-pointer">
+                      <div className="relative bg-slate-900 rounded-xl overflow-hidden aspect-video mb-3 border border-slate-800 group-hover:border-slate-500">
+                        <img src={`https://img.youtube.com/vi/${prog.youtubeId}/maxresdefault.jpg`} onError={(e) => { e.target.src = `https://img.youtube.com/vi/${prog.youtubeId}/hqdefault.jpg`; }} className="w-full h-full object-cover transition-transform duration-500 group-hover:scale-105" alt="thumb"/>
+                        <div className="absolute inset-0 flex items-center justify-center opacity-0 group-hover:opacity-100 transition-opacity bg-black/20">
+                          <div className="w-12 h-12 bg-indigo-600 rounded-full flex items-center justify-center pl-1"><Play fill="white" size={20} className="text-white"/></div>
+                        </div>
+                        <button onClick={(e) => { e.stopPropagation(); removeProgram(prog.id); }} className="absolute top-2 right-2 p-2 bg-slate-900/80 hover:bg-red-600 text-white rounded-full opacity-0 group-hover:opacity-100 z-20"><Trash2 size={12} /></button>
+                      </div>
+                      <span className="text-[10px] font-bold text-slate-400 uppercase tracking-widest block mb-1">{prog.creatorName}</span>
+                      <h3 className="font-semibold text-slate-100 text-sm leading-snug line-clamp-2">{prog.title}</h3>
+                   </div>
+                ))}
               </div>
-              
-              <div className="mt-4 px-2 w-full">
-                <span className="text-[10px] font-black text-indigo-500 uppercase tracking-widest block mb-2 truncate">{prog.creatorName}</span>
-                <h3 className="text-lg md:text-xl font-bold text-white leading-tight group-hover:text-indigo-400 transition-colors line-clamp-2 italic tracking-tighter" title={prog.title}>{prog.title}</h3>
-                {prog.pitch && <p className="text-slate-500 text-xs mt-3 line-clamp-2 italic border-l border-slate-800 pl-4 leading-relaxed font-medium">"{prog.pitch}"</p>}
-              </div>
-            </div>
-          ))}
-          
-          {filtered.length === 0 && !isFetching && (
-            <div className="w-full border-2 border-dashed border-slate-800 rounded-[2rem] md:rounded-[4rem] p-16 md:p-32 text-center flex flex-col items-center">
-              <p className="text-slate-600 font-black uppercase tracking-widest text-xs mb-8 italic">Grille vide.</p>
-              <button onClick={() => setIsAdminOpen(true)} className="text-indigo-400 font-black uppercase italic underline decoration-2 underline-offset-8 hover:text-white transition-all text-sm md:text-base">Accéder à la curation →</button>
-            </div>
-          )}
-        </div>
+            )}
+          </div>
+        )}
       </main>
 
       {/* --- MODAL LECTEUR --- */}
       {selectedProg && (
-        <div className="fixed inset-0 z-[110] bg-slate-950/98 backdrop-blur-3xl flex items-center justify-center p-6 md:p-12 overflow-y-auto">
-          <button onClick={() => setSelectedProg(null)} className="absolute top-6 right-6 md:top-10 md:right-10 text-slate-500 bg-slate-900 border border-slate-800 px-6 py-3 rounded-full uppercase text-[10px] font-black tracking-widest hover:text-white transition-all shadow-xl z-10">Fermer [X]</button>
+        <div className="fixed inset-0 z-[110] bg-black/95 backdrop-blur-sm flex flex-col md:flex-row items-center justify-center p-0 md:p-10">
+          <button onClick={() => setSelectedProg(null)} className="absolute top-6 right-6 md:top-10 md:right-10 text-white bg-white/10 hover:bg-white/20 p-3 rounded-full transition-all z-50 backdrop-blur-md">
+            <X size={24} />
+          </button>
           
-          <div className="max-w-6xl w-full grid grid-cols-1 lg:grid-cols-3 gap-8 md:gap-16 items-center mt-16 md:mt-0">
-            <div className="lg:col-span-2 bg-black rounded-[2rem] md:rounded-[3.5rem] overflow-hidden shadow-2xl border border-white/5 shadow-indigo-500/10 h-[250px] md:h-[600px] w-full">
-              <iframe width="100%" height="100%" src={`https://www.youtube.com/embed/${selectedProg.youtubeId}?autoplay=1`} frameBorder="0" allowFullScreen title="YouTube"></iframe>
-            </div>
-            <div className="lg:col-span-1 pb-10 md:pb-0">
-              <span className="text-indigo-400 font-black text-[10px] uppercase tracking-widest bg-indigo-500/10 px-4 py-2 rounded-full mb-6 md:mb-8 inline-block italic tracking-tighter">{selectedProg.creatorName}</span>
-              <h2 className="text-3xl md:text-5xl font-black text-white leading-[1.1] mb-6 md:mb-8 italic tracking-tighter">{selectedProg.title}</h2>
-              {selectedProg.pitch && <p className="text-slate-400 italic text-base md:text-xl leading-relaxed border-l-4 border-indigo-500/50 pl-6 md:pl-8 mb-12">"{selectedProg.pitch}"</p>}
-            </div>
+          <div className="w-full h-[30vh] md:h-[80vh] md:w-[70vw] bg-black md:rounded-2xl overflow-hidden shadow-2xl flex-shrink-0">
+            <iframe width="100%" height="100%" src={`https://www.youtube.com/embed/${selectedProg.youtubeId}?autoplay=1`} frameBorder="0" allowFullScreen title="YouTube"></iframe>
+          </div>
+          
+          <div className="w-full flex-1 p-6 md:p-10 text-left overflow-y-auto">
+            <span className="text-indigo-400 font-bold text-xs uppercase tracking-widest bg-indigo-500/10 px-3 py-1.5 rounded-full mb-4 inline-block">{selectedProg.creatorName}</span>
+            <h2 className="text-2xl md:text-4xl font-bold text-white leading-tight mb-6">{selectedProg.title}</h2>
           </div>
         </div>
       )}
