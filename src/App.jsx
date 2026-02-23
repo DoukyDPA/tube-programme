@@ -101,7 +101,7 @@ const AdminPanel = ({ onClose }) => {
       const longVideos = vData.items.filter(v => {
         const detail = detailsData.items?.find(d => d.id === v.id.videoId);
         if (!detail) return false;
-        return parseDuration(detail.contentDetails.duration) >= 120;
+        return parseDuration(detail.contentDetails.duration) >= 180;
       }).slice(0, 5); 
 
       if (longVideos.length === 0) throw new Error("Aucune vidéo de plus de 2 minutes trouvée.");
@@ -347,7 +347,7 @@ export default function App() {
         }
 
         // Récupérer les 5 dernières vidéos de la chaîne
-        const vRes = await fetch(`https://www.googleapis.com/youtube/v3/search?key=${YOUTUBE_API_KEY}&channelId=${cid}&part=snippet,id&order=date&maxResults=5&type=video`);
+        const vRes = await fetch(`https://www.googleapis.com/youtube/v3/search?key=${YOUTUBE_API_KEY}&channelId=${cid}&part=snippet,id&order=date&maxResults=30&type=video`);
         const vData = await vRes.json();
         if (!vData.items) continue;
 
@@ -362,7 +362,7 @@ export default function App() {
 
           const detail = detailsData.items?.find(d => d.id === v.id.videoId);
           // Si c'est un short (< 2 min), on passe !
-          if (!detail || parseDuration(detail.contentDetails.duration) < 120) continue; 
+          if (!detail || parseDuration(detail.contentDetails.duration) < 180) continue; 
 
           // NOUVEAUTÉ DÉTECTÉE ! On l'ajoute à la base de données.
           const newDocRef = doc(collection(db, 'artifacts', FIREBASE_APP_ID, 'public', 'data', 'programs'));
