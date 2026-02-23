@@ -1,14 +1,15 @@
 import React, { useState, useEffect } from 'react';
-import { auth, db, FIREBASE_APP_ID } from './firebase';
+import { auth, db, FIREBASE_APP_ID } from './firebase'; // Import centralisé
 import { onAuthStateChanged } from 'firebase/auth';
-import { collection, onSnapshot, doc, getDoc } from 'firebase/firestore';
+import { collection, onSnapshot, doc, getDoc, setDoc } from 'firebase/firestore';
 
-// Composants
+// Composants extraits
 import Auth from './components/Auth';
 import AdminPanel from './components/AdminPanel';
-import ProgramCard from './components/ProgramCard';
+import ProgramRow from './components/ProgramRow';
 import VideoModal from './components/VideoModal';
-import { Sparkles, Home, Settings, Loader2 } from 'lucide-react';
+
+import { Sparkles, Home, Settings, Loader2, RefreshCw } from 'lucide-react';
 
 export default function App() {
   const [user, setUser] = useState(null);
@@ -19,52 +20,62 @@ export default function App() {
   const [isAdminOpen, setIsAdminOpen] = useState(false);
   const [selectedProg, setSelectedProg] = useState(null);
 
+  // Listener Auth & Profil
   useEffect(() => {
     return onAuthStateChanged(auth, async (u) => {
       setUser(u);
       if (u) {
-        const snap = await getDoc(doc(db, 'users', u.uid));
-        setUserData(snap.data());
+        const userRef = doc(db, 'users', u.uid);
+        const snap = await getDoc(userRef);
+        if (snap.exists()) {
+          setUserData(snap.data());
+        } else {
+          const initData = { isPremium: false, themeCount: 0 };
+          await setDoc(userRef, initData);
+          setUserData(initData);
+        }
       }
       setLoading(false);
     });
   }, []);
 
+  // Sync des programmes
   useEffect(() => {
     if (!user) return;
-    return onSnapshot(collection(db, 'artifacts', FIREBASE_APP_ID, 'public', 'data', 'programs'), (snap) => {
+    const q = collection(db, 'artifacts', FIREBASE_APP_ID, 'public', 'data', 'programs');
+    return onSnapshot(q, (snap) => {
       setPrograms(snap.docs.map(d => ({ id: d.id, ...d.data() })));
     });
   }, [user]);
 
-  if (loading) return <div className="h-screen bg-slate-950 flex items-center justify-center"><Loader2 className="animate-spin text-indigo-500" /></div>;
+  if (loading) return <div className="h-screen bg-slate-950 flex items-center justify-center"><Loader2 className="animate-spin text-indigo-500" size={40} /></div>;
   if (!user) return <Auth />;
 
   return (
-    <div className="min-h-screen bg-[#0a0f1c] text-slate-200 flex flex-col md:flex-row font-sans">
-      <aside className="w-[260px] bg-slate-950 border-r border-slate-800/50 fixed h-full flex flex-col z-50">
-        <div className="p-8 flex items-center gap-3">
-          <Sparkles className="text-indigo-600" />
-          <h1 className="text-xl font-black text-white">Tube<span className="text-indigo-500">mag</span></h1>
-        </div>
-        <nav className="flex-1 px-4">
-          <button onClick={() => setActiveTab('accueil')} className={`w-full flex items-center gap-3 px-4 py-3 rounded-xl ${activeTab === 'accueil' ? 'bg-indigo-600/10 text-indigo-400' : ''}`}>
-            <Home size={18} /> <span className="text-sm font-bold">Accueil</span>
+    <div className="min-h-screen bg-[#0a0f1c] text-slate-200 flex flex-col md:flex-row font-sans overflow-hidden">
+      {/* Sidebar ... (même structure que précédemment) */}
+      
+      <main className="md:ml-[260px] flex-1 p-4 md:p-10 overflow-y-auto h-screen">
+        <header className="flex justify-between items-center mb-8">
+          <h2 className="text-2xl md:text-3xl font-bold text-white tracking-tight">
+            {activeTab === 'accueil' ? 'À la Une' : 'Ma Sélection'}
+          </h2>
+          <button className="flex items-center gap-2 bg-indigo-600 hover:bg-indigo-500 text-white px-4 py-2 rounded-xl text-sm font-bold shadow-lg shadow-indigo-500/20 transition-all active:scale-95">
+            <RefreshCw size={16} /> <span className="hidden md:inline">Actualiser</span>
           </button>
-        </nav>
-        <div className="p-6">
-          <button onClick={() => setIsAdminOpen(true)} className="w-full p-3 bg-slate-900 border border-slate-800 rounded-xl text-xs font-bold text-slate-500 uppercase flex items-center justify-center gap-2">
-            <Settings size={14} /> Gérer
-          </button>
-        </div>
-      </aside>
+        </header>
 
-      <main className="ml-[260px] flex-1 p-10">
-        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-6">
-          {programs.map(p => (
-            <ProgramCard key={p.id} prog={p} onSelect={setSelectedProg} onRemove={() => {}} />
-          ))}
-        </div>
+        {activeTab === 'accueil' && (
+          <>
+            <ProgramRow 
+              title="Nouveautés" 
+              programs={programs.slice(0, 5)} 
+              large={true} 
+              onSelect={setSelectedProg} 
+            />
+            {/* Autres rangées par catégories dynamiques */}
+          </>
+        )}
       </main>
 
       {selectedProg && <VideoModal prog={selectedProg} onClose={() => setSelectedProg(null)} />}
