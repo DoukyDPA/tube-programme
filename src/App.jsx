@@ -181,7 +181,7 @@ const AdminPanel = ({ onClose }) => {
           </div>
           
           <button onClick={fetchAndAutoIntegrate} disabled={loading} className="w-full mt-4 bg-emerald-600 py-4 rounded-xl font-bold text-sm text-white hover:bg-emerald-500 disabled:opacity-50 flex justify-center items-center gap-2">
-            {loading ? <Loader2 className="animate-spin" size={18}/> : <><CheckCircle2 size={18} /> Aspirer (Ignorer moins de 3min)</>}
+            {loading ? <Loader2 className="animate-spin" size={18}/> : <><CheckCircle2 size={18} /> Aspirer (Ignorer moins de 2min)</>}
           </button>
         </div>
       </div>
