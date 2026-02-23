@@ -43,11 +43,11 @@ const CATEGORIES = [
   { id: 'interviews', label: 'Talks & Débats', icon: <Mic2 size={18}/> },
 ];
 
-// --- UTILITAIRE : NETTOYEUR DE TEXTE (Enlève les &#39; et &quot;) ---
+// --- UTILITAIRE : NETTOYEUR DE TEXTE 100% ROBUSTE ---
 const decodeHTML = (html) => {
-  const txt = document.createElement("textarea");
-  txt.innerHTML = html;
-  return txt.value;
+  if (!html) return "";
+  const doc = new DOMParser().parseFromString(html, "text/html");
+  return doc.documentElement.textContent;
 };
 
 // --- UTILITAIRE : CONVERSION DURÉE YOUTUBE ---
@@ -90,7 +90,7 @@ const AdminPanel = ({ onClose }) => {
         else throw new Error("Chaîne introuvable sur YouTube.");
       }
       
-      // 2. Récupérer 30 vidéos (pour contrer les chaînes qui spamment les shorts)
+      // 2. Récupérer 30 vidéos
       const vRes = await fetch(`https://www.googleapis.com/youtube/v3/search?key=${YOUTUBE_API_KEY}&channelId=${cid}&part=snippet,id&order=date&maxResults=30&type=video`);
       const vData = await vRes.json();
       
@@ -108,7 +108,7 @@ const AdminPanel = ({ onClose }) => {
         const detail = detailsData.items?.find(d => d.id === v.id.videoId);
         if (!detail) return false;
         return parseDuration(detail.contentDetails.duration) >= 120;
-      }).slice(0, 5); // On garde les 5 plus récentes parmi les longues
+      }).slice(0, 5); 
 
       if (longVideos.length === 0) throw new Error("Aucune vidéo de plus de 2 minutes trouvée.");
 
@@ -123,8 +123,8 @@ const AdminPanel = ({ onClose }) => {
         return setDoc(newDocRef, {
           id,
           youtubeId: v.id.videoId,
-          title: decodeHTML(v.snippet.title), // Nettoyage du titre
-          creatorName: decodeHTML(v.snippet.channelTitle), // Nettoyage de la chaîne
+          title: decodeHTML(v.snippet.title), 
+          creatorName: decodeHTML(v.snippet.channelTitle), 
           categoryId: category,
           pitch: "", 
           createdAt: Date.now(),
@@ -181,7 +181,7 @@ const AdminPanel = ({ onClose }) => {
           </div>
           
           <button onClick={fetchAndAutoIntegrate} disabled={loading} className="w-full mt-4 bg-emerald-600 py-4 rounded-xl font-bold text-sm text-white hover:bg-emerald-500 disabled:opacity-50 flex justify-center items-center gap-2">
-            {loading ? <Loader2 className="animate-spin" size={18}/> : <><CheckCircle2 size={18} /> Aspirer (Ignorer moins de 2min)</>}
+            {loading ? <Loader2 className="animate-spin" size={18}/> : <><CheckCircle2 size={18} /> Aspirer (Ignorer moins de 3min)</>}
           </button>
         </div>
       </div>
@@ -190,7 +190,7 @@ const AdminPanel = ({ onClose }) => {
 };
 
 
-// --- COMPOSANT : CARTE VIDÉO (MOLOTOV STYLE) ---
+// --- COMPOSANT : CARTE VIDÉO (MOLOTOV STYLE AVEC DATE) ---
 const ProgramCard = ({ prog, large, onSelect, onRemove }) => {
   return (
     <div 
@@ -208,6 +208,11 @@ const ProgramCard = ({ prog, large, onSelect, onRemove }) => {
         {/* Overlay Dégradé */}
         <div className="absolute inset-0 bg-gradient-to-t from-slate-950/90 via-slate-950/20 to-transparent opacity-90" />
         
+        {/* Badge Date de publication ajouté ici */}
+        <div className="absolute bottom-2 left-2 bg-indigo-600/90 backdrop-blur-md px-2 py-1 rounded text-[9px] md:text-[10px] text-white font-bold uppercase tracking-widest z-10 shadow-lg">
+          {new Date(prog.publishedAt || prog.createdAt).toLocaleDateString('fr-FR', {day: 'numeric', month: 'short', year: 'numeric'})}
+        </div>
+
         {/* Bouton Play au survol */}
         <div className="absolute inset-0 flex items-center justify-center opacity-0 group-hover:opacity-100 transition-opacity duration-300 bg-black/20">
           <div className="w-14 h-14 bg-indigo-600 rounded-full flex items-center justify-center pl-1 shadow-2xl scale-75 group-hover:scale-100 transition-transform">
@@ -397,7 +402,7 @@ export default function App() {
               </>
             )}
 
-            {/* VUE CATÉGORIE SPÉCIFIQUE */}
+            {/* VUE CATÉGORIE SPÉCIFIQUE (Modifiée pour inclure la date) */}
             {activeTab !== 'accueil' && (
               <div className="grid grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-4 px-4 md:px-0">
                 {programs.filter(p => p.categoryId === activeTab).map(prog => (
@@ -407,6 +412,12 @@ export default function App() {
                         <div className="absolute inset-0 flex items-center justify-center opacity-0 group-hover:opacity-100 transition-opacity bg-black/20">
                           <div className="w-12 h-12 bg-indigo-600 rounded-full flex items-center justify-center pl-1"><Play fill="white" size={20} className="text-white"/></div>
                         </div>
+                        
+                        {/* Badge Date de publication */}
+                        <div className="absolute bottom-2 left-2 bg-indigo-600/90 backdrop-blur-md px-2 py-1 rounded text-[9px] text-white font-bold uppercase tracking-widest z-10 shadow-lg">
+                          {new Date(prog.publishedAt || prog.createdAt).toLocaleDateString('fr-FR', {day: 'numeric', month: 'short', year: 'numeric'})}
+                        </div>
+
                         <button onClick={(e) => { e.stopPropagation(); removeProgram(prog.id); }} className="absolute top-2 right-2 p-2 bg-slate-900/80 hover:bg-red-600 text-white rounded-full opacity-0 group-hover:opacity-100 z-20"><Trash2 size={12} /></button>
                       </div>
                       <span className="text-[10px] font-bold text-slate-400 uppercase tracking-widest block mb-1">{prog.creatorName}</span>
