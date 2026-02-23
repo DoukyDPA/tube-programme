@@ -190,7 +190,7 @@ const AdminPanel = ({ onClose }) => {
 };
 
 
-// --- COMPOSANT : CARTE VIDÉO (MOLOTOV STYLE AVEC DATE) ---
+// --- COMPOSANT : CARTE VIDÉO AVEC DATE ---
 const ProgramCard = ({ prog, large, onSelect, onRemove }) => {
   return (
     <div 
@@ -336,7 +336,7 @@ export default function App() {
         
         <div className="hidden md:flex p-8 items-center gap-3">
           <div className="w-8 h-8 bg-indigo-600 rounded-lg flex items-center justify-center"><Sparkles size={16} className="text-white" /></div>
-          <h1 className="text-xl font-black text-white tracking-tight">Molot<span className="text-indigo-500">ube</span></h1>
+          <h1 className="text-xl font-black text-white tracking-tight">Tube<span className="text-indigo-500">mag</span></h1>
         </div>
         
         <nav className="flex-1 px-2 md:px-4 py-3 md:py-0 flex flex-row md:flex-col gap-1 overflow-x-auto no-scrollbar items-center md:items-stretch">
