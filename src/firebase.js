@@ -17,3 +17,4 @@ const app = initializeApp(firebaseConfig);
 export const auth = getAuth(app);
 export const db = getFirestore(app);
 export const FIREBASE_APP_ID = "tube-prog-v0";
+export const YOUTUBE_API_KEY = import.meta.env.VITE_YOUTUBE_API_KEY;
