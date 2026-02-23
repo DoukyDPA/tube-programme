@@ -1,6 +1,6 @@
 import React, { useState } from 'react';
 import { Cpu, BookOpen, Trophy, Mic2, X, Settings, CheckCircle2, Loader2 } from 'lucide-react';
-import { db, YOUTUBE_API_KEY, FIREBASE_APP_ID } from '../firebase';
+import { db, FIREBASE_APP_ID, YOUTUBE_API_KEY } from '../firebase';
 import { collection, doc, setDoc } from 'firebase/firestore';
 
 const ICONS = [
@@ -33,11 +33,9 @@ export default function AdminPanel({ user, userData, onClose }) {
   const [tab, setTab] = useState('channel');
   const [loading, setLoading] = useState(false);
   
-  // États Thème
   const [themeName, setThemeName] = useState('');
   const [selectedIcon, setSelectedIcon] = useState('ia');
 
-  // États Chaîne
   const [channelInput, setChannelInput] = useState('');
   const [category, setCategory] = useState('ia');
 
@@ -68,7 +66,7 @@ export default function AdminPanel({ user, userData, onClose }) {
         else throw new Error("Chaîne introuvable sur YouTube.");
       }
       
-      const vRes = await fetch(`https://www.googleapis.com/youtube/v3/search?key=${YOUTUBE_API_KEY}&channelId=${cid}&part=snippet,id&order=date&maxResults=10&type=video`);
+      const vRes = await fetch(`https://www.googleapis.com/youtube/v3/search?key=${YOUTUBE_API_KEY}&channelId=${cid}&part=snippet,id&order=date&maxResults=15&type=video`);
       const vData = await vRes.json();
       if (!vData.items || vData.items.length === 0) throw new Error("Aucune vidéo trouvée.");
 
@@ -88,7 +86,7 @@ export default function AdminPanel({ user, userData, onClose }) {
         return setDoc(newDocRef, {
           id: newDocRef.id,
           youtubeId: v.id.videoId,
-          channelId: cid, // Sauvegarde de l'ID pour la synchronisation !
+          channelId: cid, 
           title: decodeHTML(v.snippet.title), 
           creatorName: decodeHTML(v.snippet.channelTitle), 
           categoryId: category,
@@ -118,7 +116,6 @@ export default function AdminPanel({ user, userData, onClose }) {
         <div className="p-8">
           {tab === 'theme' ? (
             <div className="space-y-6">
-              {/* Formulaire de thème identique à votre ancienne version */}
               <div>
                 <label className="text-[10px] font-bold text-slate-500 uppercase tracking-widest block mb-2">Nom de la thématique</label>
                 <input className="w-full bg-slate-800 p-4 rounded-xl text-white outline-none focus:ring-2 focus:ring-indigo-500" value={themeName} onChange={e => setThemeName(e.target.value)} placeholder="Ex: Science & Espace" />
@@ -144,10 +141,10 @@ export default function AdminPanel({ user, userData, onClose }) {
                 </select>
               </div>
               <div className="space-y-2">
-                <label className="text-xs font-bold text-slate-500 uppercase tracking-wider">Chaîne YouTube</label>
+                <label className="text-xs font-bold text-slate-500 uppercase tracking-wider">Nouvelle Chaîne YouTube</label>
                 <input className="w-full bg-slate-800 p-4 rounded-xl text-sm outline-none text-white focus:ring-2 focus:ring-indigo-500" placeholder="ex: @MonsieurPhi" value={channelInput} onChange={e => setChannelInput(e.target.value)} />
               </div>
-              <button onClick={fetchAndAutoIntegrate} disabled={loading} className="w-full bg-emerald-600 py-4 rounded-xl font-bold text-white flex justify-center items-center gap-2">
+              <button onClick={fetchAndAutoIntegrate} disabled={loading} className="w-full bg-emerald-600 py-4 rounded-xl font-bold text-white flex justify-center items-center gap-2 hover:bg-emerald-500 disabled:opacity-50">
                 {loading ? <Loader2 className="animate-spin" size={18}/> : <><CheckCircle2 size={18} /> Ajouter la chaîne</>}
               </button>
             </div>
