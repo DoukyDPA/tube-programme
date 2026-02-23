@@ -1,10 +1,9 @@
 import React, { useState, useEffect, useRef } from 'react';
 import { initializeApp } from 'firebase/app';
 import { getAuth, signInAnonymously, onAuthStateChanged } from 'firebase/auth';
-// Ajout de getDocs pour vérifier les doublons
 import { getFirestore, collection, doc, setDoc, onSnapshot, deleteDoc, getDocs } from 'firebase/firestore';
 import { 
-  Cpu, BookOpen, Trophy, Mic2, Home, Sparkles, X, Trash2, Lock, AlertCircle, Settings, CheckCircle2, ServerCrash, Loader2, ChevronLeft, ChevronRight, Play, Calendar
+  Cpu, BookOpen, Trophy, Mic2, Home, Sparkles, X, Trash2, Lock, AlertCircle, Settings, CheckCircle2, ServerCrash, Loader2, ChevronLeft, ChevronRight, Play, Calendar, RefreshCw
 } from 'lucide-react';
 
 /**
@@ -61,7 +60,7 @@ const parseDuration = (duration) => {
   return h * 3600 + m * 60 + s;
 };
 
-// --- COMPOSANT : PANNEAU DE CURATION ---
+// --- COMPOSANT : PANNEAU DE CURATION MANUEL ---
 const AdminPanel = ({ onClose }) => {
   const [passInput, setPassInput] = useState('');
   const [isUnlocked, setIsUnlocked] = useState(false);
@@ -74,7 +73,6 @@ const AdminPanel = ({ onClose }) => {
     else alert("Code erroné");
   };
 
-  // --- 1. IMPORT MANUEL CLASSIQUE ---
   const fetchAndAutoIntegrate = async () => {
     if (!YOUTUBE_API_KEY) return alert("❌ Clé API YouTube manquante !");
     if (!channelInput.trim()) return alert("Veuillez entrer une chaîne (ex: @MonsieurPhi).");
@@ -83,6 +81,7 @@ const AdminPanel = ({ onClose }) => {
     try {
       let cid = channelInput.trim();
       
+      // 1. Trouver l'ID exact de la chaîne
       if (cid.startsWith('@')) {
         const res = await fetch(`https://www.googleapis.com/youtube/v3/channels?key=${YOUTUBE_API_KEY}&forHandle=${cid}&part=id`);
         const data = await res.json();
@@ -111,23 +110,22 @@ const AdminPanel = ({ onClose }) => {
       
       const promises = longVideos.map(v => {
         const newDocRef = doc(collection(db, 'artifacts', FIREBASE_APP_ID, 'public', 'data', 'programs'));
-        const publishedTimestamp = new Date(v.snippet.publishedAt).getTime();
-
         return setDoc(newDocRef, {
           id: newDocRef.id,
           youtubeId: v.id.videoId,
+          channelId: cid, // <-- NOUVEAU : On sauvegarde l'ID de la chaîne pour pouvoir la retrouver plus tard !
           title: decodeHTML(v.snippet.title), 
           creatorName: decodeHTML(v.snippet.channelTitle), 
           categoryId: category,
           pitch: "", 
           createdAt: Date.now(),
-          publishedAt: publishedTimestamp,
+          publishedAt: new Date(v.snippet.publishedAt).getTime(),
           avgScore: 0
         });
       });
 
       await Promise.all(promises); 
-      alert(`✅ Succès ! ${longVideos.length} vidéos longues ajoutées.`);
+      alert(`✅ Succès ! ${longVideos.length} vidéos ajoutées. Cette chaîne sera maintenant mise à jour automatiquement.`);
       onClose(); 
 
     } catch (e) { 
@@ -136,85 +134,12 @@ const AdminPanel = ({ onClose }) => {
     finally { setLoading(false); }
   };
 
-  // --- 2. LE BOUTON MAGIQUE : QUOI DE NEUF ? ---
-  const syncWhatsNew = async () => {
-    if (!YOUTUBE_API_KEY) return alert("❌ Clé API manquante !");
-
-    // 👇 AJOUTEZ VOS CHAÎNES ICI 👇
-    const CHANNELS_TO_MONITOR = [
-      { handle: "@MonsieurPhi", category: "ia" },
-      { handle: "@NotaBene", category: "lecture" },
-      { handle: "@Wiloo", category: "foot" }
-    ];
-
-    setLoading(true);
-    let addedCount = 0;
-
-    try {
-      // 1. On récupère les ID des vidéos déjà présentes pour éviter les doublons
-      const programsRef = collection(db, 'artifacts', FIREBASE_APP_ID, 'public', 'data', 'programs');
-      const existingSnap = await getDocs(programsRef);
-      const existingIds = new Set(existingSnap.docs.map(d => d.data().youtubeId));
-
-      // 2. On scanne chaque chaîne de la liste
-      for (const channel of CHANNELS_TO_MONITOR) {
-        // Trouver ID de la chaîne
-        const cRes = await fetch(`https://www.googleapis.com/youtube/v3/channels?key=${YOUTUBE_API_KEY}&forHandle=${channel.handle}&part=id`);
-        const cData = await cRes.json();
-        if (!cData.items || cData.items.length === 0) continue;
-        const cid = cData.items[0].id;
-
-        // Récupérer les 5 dernières vidéos (inutile d'en prendre 30, on cherche juste la nouveauté du jour)
-        const vRes = await fetch(`https://www.googleapis.com/youtube/v3/search?key=${YOUTUBE_API_KEY}&channelId=${cid}&part=snippet,id&order=date&maxResults=5&type=video`);
-        const vData = await vRes.json();
-        if (!vData.items) continue;
-
-        const videoIds = vData.items.map(v => v.id.videoId).join(',');
-        const detailsRes = await fetch(`https://www.googleapis.com/youtube/v3/videos?key=${YOUTUBE_API_KEY}&id=${videoIds}&part=contentDetails`);
-        const detailsData = await detailsRes.json();
-
-        const promises = [];
-        for (const v of vData.items) {
-          if (existingIds.has(v.id.videoId)) continue; // 🛑 Déjà dans la base = on l'ignore
-
-          const detail = detailsData.items?.find(d => d.id === v.id.videoId);
-          if (!detail || parseDuration(detail.contentDetails.duration) < 120) continue; // 🛑 C'est un short = on l'ignore
-
-          // 🟢 Nouvelle vidéo valide trouvée ! On l'ajoute.
-          const newDocRef = doc(collection(db, 'artifacts', FIREBASE_APP_ID, 'public', 'data', 'programs'));
-          promises.push(setDoc(newDocRef, {
-            id: newDocRef.id,
-            youtubeId: v.id.videoId,
-            title: decodeHTML(v.snippet.title),
-            creatorName: decodeHTML(v.snippet.channelTitle),
-            categoryId: channel.category,
-            pitch: "",
-            createdAt: Date.now(),
-            publishedAt: new Date(v.snippet.publishedAt).getTime(),
-            avgScore: 0
-          }));
-          addedCount++;
-          existingIds.add(v.id.videoId); // Met à jour la mémoire locale anti-doublon
-        }
-        await Promise.all(promises);
-      }
-
-      alert(`✅ Synchronisation terminée ! ${addedCount} nouvelles vidéos trouvées et ajoutées à Tubemag.`);
-      if (addedCount > 0) onClose();
-
-    } catch (e) {
-      alert(`❌ Erreur lors de la synchronisation : ${e.message}`);
-    } finally {
-      setLoading(false);
-    }
-  };
-
   if (!isUnlocked) {
     return (
       <div className="fixed inset-0 z-[100] bg-slate-950/98 flex items-center justify-center p-6 backdrop-blur-md">
         <div className="w-full max-w-sm bg-slate-900 p-10 rounded-[2.5rem] border border-slate-800 shadow-2xl text-center">
           <Lock className="mx-auto mb-6 text-indigo-500" size={32} />
-          <h2 className="text-xl font-bold mb-6 text-white tracking-tight">Accès Curation</h2>
+          <h2 className="text-xl font-bold mb-6 text-white tracking-tight">Accès Admin</h2>
           <input type="password" placeholder="Code secret" className="w-full bg-slate-800 p-4 rounded-2xl mb-4 text-center text-white outline-none ring-2 ring-transparent focus:ring-indigo-500" value={passInput} onChange={e => setPassInput(e.target.value)} />
           <button onClick={checkPass} className="w-full py-4 bg-indigo-600 text-white rounded-2xl font-bold uppercase text-xs tracking-widest hover:bg-indigo-500">Déverrouiller</button>
           <button onClick={onClose} className="mt-6 text-slate-500 text-xs hover:text-white">Retour</button>
@@ -228,12 +153,11 @@ const AdminPanel = ({ onClose }) => {
       <div className="bg-slate-900 border border-slate-800 w-full max-w-lg rounded-[2rem] p-8 shadow-2xl">
         <div className="flex justify-between items-center mb-8">
           <h2 className="text-xl font-bold text-white flex items-center gap-3">
-            <Settings className="text-indigo-500" size={20} /> Curation Tubemag
+            <Settings className="text-indigo-500" size={20} /> Ajout Manuel Tubemag
           </h2>
           <button onClick={onClose} className="p-2 bg-slate-800 rounded-full text-slate-400 hover:text-white"><X size={16} /></button>
         </div>
 
-        {/* Bloc 1 : Ajout manuel */}
         <div className="space-y-6">
           <div className="space-y-2">
             <label className="text-xs font-bold text-slate-500 uppercase tracking-wider">1. Thématique</label>
@@ -242,19 +166,11 @@ const AdminPanel = ({ onClose }) => {
             </select>
           </div>
           <div className="space-y-2">
-            <label className="text-xs font-bold text-slate-500 uppercase tracking-wider">2. Chaîne YouTube (Ajout manuel)</label>
+            <label className="text-xs font-bold text-slate-500 uppercase tracking-wider">2. Nouvelle Chaîne YouTube</label>
             <input className="w-full bg-slate-800 p-4 rounded-xl text-sm outline-none text-white focus:ring-2 focus:ring-indigo-500" placeholder="ex: @MonsieurPhi" value={channelInput} onChange={e => setChannelInput(e.target.value)} />
           </div>
           <button onClick={fetchAndAutoIntegrate} disabled={loading} className="w-full mt-4 bg-emerald-600 py-4 rounded-xl font-bold text-sm text-white hover:bg-emerald-500 disabled:opacity-50 flex justify-center items-center gap-2">
-            {loading ? <Loader2 className="animate-spin" size={18}/> : <><CheckCircle2 size={18} /> Aspirer manuellement</>}
-          </button>
-        </div>
-
-        {/* Bloc 2 : Le bouton magique */}
-        <div className="mt-8 pt-8 border-t border-slate-800">
-          <h3 className="text-xs font-bold text-slate-500 uppercase tracking-wider mb-4 text-center">Ou scanner vos chaînes favorites</h3>
-          <button onClick={syncWhatsNew} disabled={loading} className="w-full bg-indigo-600 py-4 rounded-xl font-bold text-sm text-white hover:bg-indigo-500 disabled:opacity-50 flex justify-center items-center gap-2 shadow-[0_0_20px_rgba(79,70,229,0.2)]">
-            {loading ? <Loader2 className="animate-spin" size={18}/> : <><Sparkles size={18} /> Quoi de neuf aujourd'hui ?</>}
+            {loading ? <Loader2 className="animate-spin" size={18}/> : <><CheckCircle2 size={18} /> Ajouter la chaîne</>}
           </button>
         </div>
       </div>
@@ -280,30 +196,23 @@ const ProgramCard = ({ prog, large, onSelect, onRemove }) => {
           alt={decodeHTML(prog.title)} 
         />
         
-        <div className="absolute inset-0 bg-gradient-to-t from-slate-950/90 via-slate-950/20 to-transparent opacity-90 z-10" />
+        <div className="absolute inset-0 bg-gradient-to-t from-slate-950/80 via-transparent to-transparent opacity-80 z-10" />
+        
+        <div className="absolute inset-0 flex items-center justify-center opacity-0 group-hover:opacity-100 transition-opacity bg-black/30 z-20">
+          <div className="w-12 h-12 bg-indigo-600 rounded-full flex items-center justify-center pl-1"><Play fill="white" size={20} className="text-white"/></div>
+        </div>
         
         {displayDate && (
-          <div className="absolute bottom-3 left-3 bg-slate-900/90 border border-slate-700 backdrop-blur-md px-2 py-1 rounded-md text-[10px] text-slate-200 font-bold uppercase tracking-widest z-30 shadow-xl flex items-center gap-1.5">
-            <Calendar size={10} className="text-indigo-400" />
+          <div className="absolute bottom-2 left-2 bg-slate-900/90 border border-slate-700 backdrop-blur-md px-2 py-1 rounded text-[9px] text-slate-200 font-bold uppercase tracking-widest z-30 flex items-center gap-1">
+            <Calendar size={8} className="text-indigo-400" />
             {new Date(displayDate).toLocaleDateString('fr-FR', {day: '2-digit', month: 'short', year: 'numeric'})}
           </div>
         )}
 
-        <div className="absolute inset-0 flex items-center justify-center opacity-0 group-hover:opacity-100 transition-opacity duration-300 bg-black/30 z-20">
-          <div className="w-14 h-14 bg-indigo-600 rounded-full flex items-center justify-center pl-1 shadow-2xl scale-75 group-hover:scale-100 transition-transform">
-            <Play fill="white" size={24} className="text-white" />
-          </div>
-        </div>
-
-        <button onClick={(e) => { e.stopPropagation(); onRemove(prog.id); }} className="absolute top-3 right-3 p-2 bg-slate-900/90 hover:bg-red-600 text-slate-300 hover:text-white rounded-full opacity-100 md:opacity-0 group-hover:opacity-100 transition-all z-40 shadow-lg">
-          <Trash2 size={14} />
-        </button>
+        <button onClick={(e) => { e.stopPropagation(); onRemove(prog.id); }} className="absolute top-2 right-2 p-2 bg-slate-900/90 hover:bg-red-600 text-white rounded-full opacity-0 group-hover:opacity-100 z-40 shadow-lg"><Trash2 size={12} /></button>
       </div>
-      
-      <div className="mt-3 px-1 w-full">
-        <span className="text-[10px] font-bold text-slate-400 uppercase tracking-widest block mb-1 truncate">{decodeHTML(prog.creatorName)}</span>
-        <h3 className={`font-semibold text-slate-100 leading-snug group-hover:text-white transition-colors line-clamp-2 ${large ? 'text-lg md:text-xl' : 'text-sm'}`} title={decodeHTML(prog.title)}>{decodeHTML(prog.title)}</h3>
-      </div>
+      <span className="text-[10px] font-bold text-slate-400 uppercase tracking-widest block mb-1 truncate">{decodeHTML(prog.creatorName)}</span>
+      <h3 className="font-semibold text-slate-100 text-sm leading-snug line-clamp-2" title={decodeHTML(prog.title)}>{decodeHTML(prog.title)}</h3>
     </div>
   );
 };
@@ -349,6 +258,7 @@ export default function App() {
   const [user, setUser] = useState(null);
   const [authError, setAuthError] = useState(null);
   const [isFetching, setIsFetching] = useState(true);
+  const [isSyncing, setIsSyncing] = useState(false);
   const [programs, setPrograms] = useState([]);
   const [activeTab, setActiveTab] = useState('accueil');
   const [selectedProg, setSelectedProg] = useState(null);
@@ -374,7 +284,7 @@ export default function App() {
       setIsFetching(false);
     }, (err) => {
       console.error("Erreur Snapshot Firebase:", err);
-      setAuthError("Permission Firebase refusée. Vérifiez les règles.");
+      setAuthError("Permission Firebase refusée.");
       setIsFetching(false);
     });
     return () => unsub();
@@ -385,6 +295,105 @@ export default function App() {
       try {
         await deleteDoc(doc(db, 'artifacts', FIREBASE_APP_ID, 'public', 'data', 'programs', id));
       } catch(e) { alert("❌ Erreur : " + e.message); }
+    }
+  };
+
+  // --- NOUVELLE FONCTION DE MISE À JOUR INTELLIGENTE ---
+  const syncWhatsNew = async () => {
+    if (!YOUTUBE_API_KEY) return alert("❌ Clé API manquante !");
+
+    setIsSyncing(true);
+    let addedCount = 0;
+
+    try {
+      // 1. Lire toutes les vidéos actuellement dans la base de données
+      const programsRef = collection(db, 'artifacts', FIREBASE_APP_ID, 'public', 'data', 'programs');
+      const existingSnap = await getDocs(programsRef);
+      const existingPrograms = existingSnap.docs.map(d => d.data());
+      
+      const existingVideoIds = new Set(existingPrograms.map(p => p.youtubeId));
+
+      // 2. Déduire dynamiquement la liste des chaînes à vérifier !
+      const channelsToUpdate = new Map();
+      
+      for (const p of existingPrograms) {
+        // Si la vidéo a été enregistrée avec le nouveau code (avec channelId)
+        if (p.channelId && p.categoryId) {
+          channelsToUpdate.set(p.channelId, { id: p.channelId, category: p.categoryId, name: p.creatorName });
+        } 
+        // Si c'est une vieille vidéo (sans channelId), on la met dans une file d'attente spéciale
+        else if (p.creatorName && p.categoryId) {
+          channelsToUpdate.set(p.creatorName, { name: p.creatorName, category: p.categoryId, needsIdFetch: true });
+        }
+      }
+
+      const channels = Array.from(channelsToUpdate.values());
+      
+      if (channels.length === 0) {
+        setIsSyncing(false);
+        return alert("Aucune chaîne trouvée. Ajoutez d'abord une chaîne manuellement avec le bouton '+ Manuel'.");
+      }
+
+      // 3. Vérifier les nouveautés pour chaque chaîne trouvée
+      for (const channel of channels) {
+        let cid = channel.id;
+
+        // Si c'est une ancienne vidéo dont on n'avait pas l'ID, on demande à YouTube de retrouver la chaîne
+        if (channel.needsIdFetch) {
+          const res = await fetch(`https://www.googleapis.com/youtube/v3/search?key=${YOUTUBE_API_KEY}&q=${encodeURIComponent(channel.name)}&type=channel&part=snippet`);
+          const data = await res.json();
+          if (data.items && data.items.length > 0) cid = data.items[0].snippet.channelId;
+          else continue;
+        }
+
+        // Récupérer les 5 dernières vidéos de la chaîne
+        const vRes = await fetch(`https://www.googleapis.com/youtube/v3/search?key=${YOUTUBE_API_KEY}&channelId=${cid}&part=snippet,id&order=date&maxResults=5&type=video`);
+        const vData = await vRes.json();
+        if (!vData.items) continue;
+
+        const videoIds = vData.items.map(v => v.id.videoId).join(',');
+        const detailsRes = await fetch(`https://www.googleapis.com/youtube/v3/videos?key=${YOUTUBE_API_KEY}&id=${videoIds}&part=contentDetails`);
+        const detailsData = await detailsRes.json();
+
+        const promises = [];
+        for (const v of vData.items) {
+          // Si on l'a déjà en base, on passe !
+          if (existingVideoIds.has(v.id.videoId)) continue; 
+
+          const detail = detailsData.items?.find(d => d.id === v.id.videoId);
+          // Si c'est un short (< 2 min), on passe !
+          if (!detail || parseDuration(detail.contentDetails.duration) < 120) continue; 
+
+          // NOUVEAUTÉ DÉTECTÉE ! On l'ajoute à la base de données.
+          const newDocRef = doc(collection(db, 'artifacts', FIREBASE_APP_ID, 'public', 'data', 'programs'));
+          promises.push(setDoc(newDocRef, {
+            id: newDocRef.id,
+            youtubeId: v.id.videoId,
+            channelId: cid,
+            title: decodeHTML(v.snippet.title),
+            creatorName: decodeHTML(v.snippet.channelTitle),
+            categoryId: channel.category,
+            pitch: "",
+            createdAt: Date.now(),
+            publishedAt: new Date(v.snippet.publishedAt).getTime(),
+            avgScore: 0
+          }));
+          addedCount++;
+          existingVideoIds.add(v.id.videoId); 
+        }
+        await Promise.all(promises);
+      }
+
+      if (addedCount > 0) {
+        alert(`✅ C'est tout frais ! ${addedCount} nouvelles vidéos ont été ajoutées à Tubemag.`);
+      } else {
+        alert(`ℹ️ Tout est à jour. Vos chaînes n'ont pas sorti de nouvelle vidéo longue.`);
+      }
+
+    } catch (e) {
+      alert(`❌ Erreur lors de l'actualisation : ${e.message}`);
+    } finally {
+      setIsSyncing(false);
     }
   };
 
@@ -427,8 +436,8 @@ export default function App() {
         </nav>
 
         <div className="p-2 md:p-6 flex-shrink-0">
-          <button onClick={() => setIsAdminOpen(true)} className="p-3 bg-slate-900 border border-slate-800 rounded-xl text-slate-500 hover:text-white transition-all flex items-center justify-center gap-2">
-            <Lock size={14} /> <span className="hidden md:inline text-xs font-bold uppercase tracking-wider">Curation</span>
+          <button onClick={() => setIsAdminOpen(true)} className="p-3 bg-slate-900 border border-slate-800 rounded-xl text-slate-500 hover:text-white transition-all flex items-center justify-center gap-2" title="Ajouter une nouvelle chaîne manuellement">
+            <Lock size={14} /> <span className="hidden md:inline text-xs font-bold uppercase tracking-wider">+ Manuel</span>
           </button>
         </div>
       </aside>
@@ -436,11 +445,27 @@ export default function App() {
       {/* --- ZONE PRINCIPALE --- */}
       <main className="md:ml-[260px] flex-1 p-0 md:p-10 mb-20 md:mb-0 w-full overflow-x-hidden overflow-y-auto bg-[#0a0f1c]">
         
-        {/* Header */}
+        {/* Header avec le bouton Actualiser sur l'Accueil */}
         <header className="px-6 md:px-0 pt-8 pb-4 flex justify-between items-center">
-          <h2 className="text-2xl md:text-3xl font-bold text-white tracking-tight">
-            {activeTab === 'accueil' ? 'En ce moment' : CATEGORIES.find(c => c.id === activeTab)?.label}
-          </h2>
+          <div className="flex items-center gap-4 md:gap-6">
+            <h2 className="text-2xl md:text-3xl font-bold text-white tracking-tight">
+              {activeTab === 'accueil' ? 'En ce moment' : CATEGORIES.find(c => c.id === activeTab)?.label}
+            </h2>
+            
+            {/* LE BOUTON D'ACTUALISATION INTELLIGENT */}
+            {activeTab === 'accueil' && (
+              <button 
+                onClick={syncWhatsNew} 
+                disabled={isSyncing} 
+                className="flex items-center gap-2 bg-indigo-600 hover:bg-indigo-500 text-white px-3 py-2 md:px-4 rounded-xl text-xs md:text-sm font-bold transition-all disabled:opacity-50 shadow-lg shadow-indigo-500/20"
+                title="Vérifier si vos chaînes ont publié du nouveau"
+              >
+                {isSyncing ? <Loader2 size={16} className="animate-spin"/> : <RefreshCw size={16} />}
+                <span className="hidden md:inline">{isSyncing ? 'Recherche...' : 'Actualiser'}</span>
+              </button>
+            )}
+          </div>
+          
           <div className="hidden md:block">
              {authError ? <span className="text-red-500 text-xs font-bold bg-red-500/10 px-3 py-1.5 rounded-full flex gap-2"><ServerCrash size={14} /> Erreur Auth</span> 
              : isFetching ? <span className="text-indigo-400 text-xs font-bold bg-indigo-500/10 px-3 py-1.5 rounded-full flex gap-2"><Loader2 size={14} className="animate-spin"/> Sync...</span>
@@ -453,7 +478,7 @@ export default function App() {
         ) : programs.length === 0 ? (
            <div className="m-6 border-2 border-dashed border-slate-800 rounded-2xl p-20 text-center">
              <p className="text-slate-500 font-bold mb-4">Aucun programme disponible.</p>
-             <button onClick={() => setIsAdminOpen(true)} className="text-indigo-400 hover:text-white underline">Ajouter des vidéos</button>
+             <button onClick={() => setIsAdminOpen(true)} className="text-indigo-400 hover:text-white underline">Ajouter une chaîne via le bouton "+ Manuel"</button>
            </div>
         ) : (
           <div className="pb-10 pt-4">
