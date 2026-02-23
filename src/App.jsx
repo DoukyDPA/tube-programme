@@ -178,7 +178,7 @@ export default function App() {
   return (
     <div className="min-h-screen md:h-screen bg-[#0a0f1c] text-slate-200 flex flex-col md:flex-row font-sans overflow-hidden">
       
-      {/* SIDEBAR RESPONSIVE : Barre latérale sur PC / Barre horizontale en bas sur Mobile */}
+      {/* SIDEBAR */}
       <aside className="w-full md:w-[260px] bg-slate-950/95 border-t md:border-t-0 md:border-r border-slate-800/50 fixed bottom-0 md:relative flex flex-row md:flex-col z-50 overflow-x-auto md:overflow-y-auto no-scrollbar items-center md:items-stretch shadow-[0_-10px_40px_rgba(0,0,0,0.5)] md:shadow-none">
         
         <div className="hidden md:flex p-8 items-center gap-3">
@@ -201,10 +201,16 @@ export default function App() {
             </button>
           ))}
 
+          {/* SÉPARATEUR ET THÈMES PERSONNALISÉS */}
           {customThemes.length > 0 && (
             <>
+              {/* Titre pour PC */}
               <div className="hidden md:block mt-8 mb-3 px-4 text-[10px] font-bold text-slate-600 uppercase tracking-widest">Mes Thématiques</div>
-              <div className="w-px h-6 bg-slate-800 md:hidden mx-1 flex-shrink-0"></div>
+              
+              {/* Petit Titre pour Mobile */}
+              <div className="md:hidden flex items-center pl-3 pr-1 shrink-0">
+                 <span className="text-[9px] font-black text-emerald-500 uppercase tracking-widest whitespace-nowrap">Mes Thèmes :</span>
+              </div>
 
               {customThemes.map(cat => (
                 <button key={cat.id} onClick={() => setActiveTab(cat.id)} className={`flex-shrink-0 flex items-center gap-2 md:gap-3 px-4 py-2.5 md:py-3 rounded-xl transition-all ${activeTab === cat.id ? 'bg-emerald-600/10 text-emerald-400 font-bold' : 'text-slate-400 hover:text-white hover:bg-slate-800/50'}`}>
@@ -215,8 +221,8 @@ export default function App() {
             </>
           )}
           
-          {/* Boutons actions (Configurer & Déconnexion mobile) */}
-          <div className="w-px h-6 bg-slate-800 md:hidden mx-1 flex-shrink-0"></div>
+          {/* Boutons actions */}
+          <div className="w-px h-6 bg-slate-800 md:hidden mx-2 flex-shrink-0"></div>
           
           <button onClick={() => setIsAdminOpen(true)} className="flex-shrink-0 flex items-center gap-2 md:gap-3 px-4 py-2.5 md:py-3 rounded-xl text-slate-400 hover:text-white hover:bg-slate-800/50 transition-all md:mt-4">
             <Settings size={18} /> <span className="hidden md:inline text-sm">Configurer</span>
