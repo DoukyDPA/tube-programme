@@ -1,9 +1,10 @@
 import React, { useState, useEffect, useRef } from 'react';
 import { initializeApp } from 'firebase/app';
 import { getAuth, signInAnonymously, onAuthStateChanged } from 'firebase/auth';
-import { getFirestore, collection, doc, setDoc, onSnapshot, deleteDoc } from 'firebase/firestore';
+// Ajout de getDocs pour vérifier les doublons
+import { getFirestore, collection, doc, setDoc, onSnapshot, deleteDoc, getDocs } from 'firebase/firestore';
 import { 
-  Cpu, BookOpen, Trophy, Mic2, Home, Sparkles, X, Trash2, Lock, AlertCircle, Settings, CheckCircle2, ServerCrash, Loader2, ChevronLeft, ChevronRight, Play
+  Cpu, BookOpen, Trophy, Mic2, Home, Sparkles, X, Trash2, Lock, AlertCircle, Settings, CheckCircle2, ServerCrash, Loader2, ChevronLeft, ChevronRight, Play, Calendar
 } from 'lucide-react';
 
 /**
@@ -43,7 +44,7 @@ const CATEGORIES = [
   { id: 'interviews', label: 'Talks & Débats', icon: <Mic2 size={18}/> },
 ];
 
-// --- UTILITAIRE : NETTOYEUR DE TEXTE 100% ROBUSTE ---
+// --- UTILITAIRE : NETTOYEUR DE TEXTE ---
 const decodeHTML = (html) => {
   if (!html) return "";
   const doc = new DOMParser().parseFromString(html, "text/html");
@@ -61,7 +62,6 @@ const parseDuration = (duration) => {
 };
 
 // --- COMPOSANT : PANNEAU DE CURATION ---
-
 const AdminPanel = ({ onClose }) => {
   const [passInput, setPassInput] = useState('');
   const [isUnlocked, setIsUnlocked] = useState(false);
@@ -74,15 +74,15 @@ const AdminPanel = ({ onClose }) => {
     else alert("Code erroné");
   };
 
+  // --- 1. IMPORT MANUEL CLASSIQUE ---
   const fetchAndAutoIntegrate = async () => {
-    if (!YOUTUBE_API_KEY) return alert("❌ Clé API YouTube manquante sur Vercel !");
+    if (!YOUTUBE_API_KEY) return alert("❌ Clé API YouTube manquante !");
     if (!channelInput.trim()) return alert("Veuillez entrer une chaîne (ex: @MonsieurPhi).");
     
     setLoading(true);
     try {
       let cid = channelInput.trim();
       
-      // 1. Trouver l'ID de la chaîne
       if (cid.startsWith('@')) {
         const res = await fetch(`https://www.googleapis.com/youtube/v3/channels?key=${YOUTUBE_API_KEY}&forHandle=${cid}&part=id`);
         const data = await res.json();
@@ -90,20 +90,15 @@ const AdminPanel = ({ onClose }) => {
         else throw new Error("Chaîne introuvable sur YouTube.");
       }
       
-      // 2. Récupérer 30 vidéos
       const vRes = await fetch(`https://www.googleapis.com/youtube/v3/search?key=${YOUTUBE_API_KEY}&channelId=${cid}&part=snippet,id&order=date&maxResults=30&type=video`);
       const vData = await vRes.json();
       
-      if (!vData.items || vData.items.length === 0) {
-        throw new Error("Aucune vidéo trouvée pour cette chaîne.");
-      }
+      if (!vData.items || vData.items.length === 0) throw new Error("Aucune vidéo trouvée pour cette chaîne.");
 
-      // 2.bis Extraire les IDs pour demander la durée exacte
       const videoIds = vData.items.map(v => v.id.videoId).join(',');
       const detailsRes = await fetch(`https://www.googleapis.com/youtube/v3/videos?key=${YOUTUBE_API_KEY}&id=${videoIds}&part=contentDetails`);
       const detailsData = await detailsRes.json();
 
-      // 2.ter Filtrer pour enlever les shorts (< 120s / 2 minutes)
       const longVideos = vData.items.filter(v => {
         const detail = detailsData.items?.find(d => d.id === v.id.videoId);
         if (!detail) return false;
@@ -112,16 +107,14 @@ const AdminPanel = ({ onClose }) => {
 
       if (longVideos.length === 0) throw new Error("Aucune vidéo de plus de 2 minutes trouvée.");
 
-      // 3. Sauvegarder automatiquement (avec nettoyage du texte)
       if (!db) throw new Error("Base de données non connectée.");
       
       const promises = longVideos.map(v => {
         const newDocRef = doc(collection(db, 'artifacts', FIREBASE_APP_ID, 'public', 'data', 'programs'));
-        const id = newDocRef.id;
         const publishedTimestamp = new Date(v.snippet.publishedAt).getTime();
 
         return setDoc(newDocRef, {
-          id,
+          id: newDocRef.id,
           youtubeId: v.id.videoId,
           title: decodeHTML(v.snippet.title), 
           creatorName: decodeHTML(v.snippet.channelTitle), 
@@ -134,7 +127,6 @@ const AdminPanel = ({ onClose }) => {
       });
 
       await Promise.all(promises); 
-      
       alert(`✅ Succès ! ${longVideos.length} vidéos longues ajoutées.`);
       onClose(); 
 
@@ -142,6 +134,79 @@ const AdminPanel = ({ onClose }) => {
       alert(`❌ ERREUR :\n${e.message}`); 
     }
     finally { setLoading(false); }
+  };
+
+  // --- 2. LE BOUTON MAGIQUE : QUOI DE NEUF ? ---
+  const syncWhatsNew = async () => {
+    if (!YOUTUBE_API_KEY) return alert("❌ Clé API manquante !");
+
+    // 👇 AJOUTEZ VOS CHAÎNES ICI 👇
+    const CHANNELS_TO_MONITOR = [
+      { handle: "@MonsieurPhi", category: "ia" },
+      { handle: "@NotaBene", category: "lecture" },
+      { handle: "@Wiloo", category: "foot" }
+    ];
+
+    setLoading(true);
+    let addedCount = 0;
+
+    try {
+      // 1. On récupère les ID des vidéos déjà présentes pour éviter les doublons
+      const programsRef = collection(db, 'artifacts', FIREBASE_APP_ID, 'public', 'data', 'programs');
+      const existingSnap = await getDocs(programsRef);
+      const existingIds = new Set(existingSnap.docs.map(d => d.data().youtubeId));
+
+      // 2. On scanne chaque chaîne de la liste
+      for (const channel of CHANNELS_TO_MONITOR) {
+        // Trouver ID de la chaîne
+        const cRes = await fetch(`https://www.googleapis.com/youtube/v3/channels?key=${YOUTUBE_API_KEY}&forHandle=${channel.handle}&part=id`);
+        const cData = await cRes.json();
+        if (!cData.items || cData.items.length === 0) continue;
+        const cid = cData.items[0].id;
+
+        // Récupérer les 5 dernières vidéos (inutile d'en prendre 30, on cherche juste la nouveauté du jour)
+        const vRes = await fetch(`https://www.googleapis.com/youtube/v3/search?key=${YOUTUBE_API_KEY}&channelId=${cid}&part=snippet,id&order=date&maxResults=5&type=video`);
+        const vData = await vRes.json();
+        if (!vData.items) continue;
+
+        const videoIds = vData.items.map(v => v.id.videoId).join(',');
+        const detailsRes = await fetch(`https://www.googleapis.com/youtube/v3/videos?key=${YOUTUBE_API_KEY}&id=${videoIds}&part=contentDetails`);
+        const detailsData = await detailsRes.json();
+
+        const promises = [];
+        for (const v of vData.items) {
+          if (existingIds.has(v.id.videoId)) continue; // 🛑 Déjà dans la base = on l'ignore
+
+          const detail = detailsData.items?.find(d => d.id === v.id.videoId);
+          if (!detail || parseDuration(detail.contentDetails.duration) < 120) continue; // 🛑 C'est un short = on l'ignore
+
+          // 🟢 Nouvelle vidéo valide trouvée ! On l'ajoute.
+          const newDocRef = doc(collection(db, 'artifacts', FIREBASE_APP_ID, 'public', 'data', 'programs'));
+          promises.push(setDoc(newDocRef, {
+            id: newDocRef.id,
+            youtubeId: v.id.videoId,
+            title: decodeHTML(v.snippet.title),
+            creatorName: decodeHTML(v.snippet.channelTitle),
+            categoryId: channel.category,
+            pitch: "",
+            createdAt: Date.now(),
+            publishedAt: new Date(v.snippet.publishedAt).getTime(),
+            avgScore: 0
+          }));
+          addedCount++;
+          existingIds.add(v.id.videoId); // Met à jour la mémoire locale anti-doublon
+        }
+        await Promise.all(promises);
+      }
+
+      alert(`✅ Synchronisation terminée ! ${addedCount} nouvelles vidéos trouvées et ajoutées à Tubemag.`);
+      if (addedCount > 0) onClose();
+
+    } catch (e) {
+      alert(`❌ Erreur lors de la synchronisation : ${e.message}`);
+    } finally {
+      setLoading(false);
+    }
   };
 
   if (!isUnlocked) {
@@ -163,11 +228,12 @@ const AdminPanel = ({ onClose }) => {
       <div className="bg-slate-900 border border-slate-800 w-full max-w-lg rounded-[2rem] p-8 shadow-2xl">
         <div className="flex justify-between items-center mb-8">
           <h2 className="text-xl font-bold text-white flex items-center gap-3">
-            <Settings className="text-indigo-500" size={20} /> Import YouTube
+            <Settings className="text-indigo-500" size={20} /> Curation Tubemag
           </h2>
           <button onClick={onClose} className="p-2 bg-slate-800 rounded-full text-slate-400 hover:text-white"><X size={16} /></button>
         </div>
 
+        {/* Bloc 1 : Ajout manuel */}
         <div className="space-y-6">
           <div className="space-y-2">
             <label className="text-xs font-bold text-slate-500 uppercase tracking-wider">1. Thématique</label>
@@ -176,12 +242,19 @@ const AdminPanel = ({ onClose }) => {
             </select>
           </div>
           <div className="space-y-2">
-            <label className="text-xs font-bold text-slate-500 uppercase tracking-wider">2. Chaîne YouTube</label>
+            <label className="text-xs font-bold text-slate-500 uppercase tracking-wider">2. Chaîne YouTube (Ajout manuel)</label>
             <input className="w-full bg-slate-800 p-4 rounded-xl text-sm outline-none text-white focus:ring-2 focus:ring-indigo-500" placeholder="ex: @MonsieurPhi" value={channelInput} onChange={e => setChannelInput(e.target.value)} />
           </div>
-          
           <button onClick={fetchAndAutoIntegrate} disabled={loading} className="w-full mt-4 bg-emerald-600 py-4 rounded-xl font-bold text-sm text-white hover:bg-emerald-500 disabled:opacity-50 flex justify-center items-center gap-2">
-            {loading ? <Loader2 className="animate-spin" size={18}/> : <><CheckCircle2 size={18} /> Aspirer (Ignorer moins de 2min)</>}
+            {loading ? <Loader2 className="animate-spin" size={18}/> : <><CheckCircle2 size={18} /> Aspirer manuellement</>}
+          </button>
+        </div>
+
+        {/* Bloc 2 : Le bouton magique */}
+        <div className="mt-8 pt-8 border-t border-slate-800">
+          <h3 className="text-xs font-bold text-slate-500 uppercase tracking-wider mb-4 text-center">Ou scanner vos chaînes favorites</h3>
+          <button onClick={syncWhatsNew} disabled={loading} className="w-full bg-indigo-600 py-4 rounded-xl font-bold text-sm text-white hover:bg-indigo-500 disabled:opacity-50 flex justify-center items-center gap-2 shadow-[0_0_20px_rgba(79,70,229,0.2)]">
+            {loading ? <Loader2 className="animate-spin" size={18}/> : <><Sparkles size={18} /> Quoi de neuf aujourd'hui ?</>}
           </button>
         </div>
       </div>
@@ -190,8 +263,10 @@ const AdminPanel = ({ onClose }) => {
 };
 
 
-// --- COMPOSANT : CARTE VIDÉO AVEC DATE ---
+// --- COMPOSANT : CARTE VIDÉO ---
 const ProgramCard = ({ prog, large, onSelect, onRemove }) => {
+  const displayDate = prog.publishedAt || prog.createdAt;
+
   return (
     <div 
       className={`group relative flex-col shrink-0 snap-center cursor-pointer transition-all duration-300 ${large ? 'w-[80vw] md:w-[480px]' : 'w-[240px] md:w-[280px]'}`}
@@ -202,33 +277,32 @@ const ProgramCard = ({ prog, large, onSelect, onRemove }) => {
           src={`https://img.youtube.com/vi/${prog.youtubeId}/maxresdefault.jpg`} 
           onError={(e) => { e.target.onerror = null; e.target.src = `https://img.youtube.com/vi/${prog.youtubeId}/hqdefault.jpg`; }}
           className="w-full h-full object-cover transition-transform duration-700 group-hover:scale-105" 
-          alt={prog.title} 
+          alt={decodeHTML(prog.title)} 
         />
         
-        {/* Overlay Dégradé */}
-        <div className="absolute inset-0 bg-gradient-to-t from-slate-950/90 via-slate-950/20 to-transparent opacity-90" />
+        <div className="absolute inset-0 bg-gradient-to-t from-slate-950/90 via-slate-950/20 to-transparent opacity-90 z-10" />
         
-        {/* Badge Date de publication ajouté ici */}
-        <div className="absolute bottom-2 left-2 bg-indigo-600/90 backdrop-blur-md px-2 py-1 rounded text-[9px] md:text-[10px] text-white font-bold uppercase tracking-widest z-10 shadow-lg">
-          {new Date(prog.publishedAt || prog.createdAt).toLocaleDateString('fr-FR', {day: 'numeric', month: 'short', year: 'numeric'})}
-        </div>
+        {displayDate && (
+          <div className="absolute bottom-3 left-3 bg-slate-900/90 border border-slate-700 backdrop-blur-md px-2 py-1 rounded-md text-[10px] text-slate-200 font-bold uppercase tracking-widest z-30 shadow-xl flex items-center gap-1.5">
+            <Calendar size={10} className="text-indigo-400" />
+            {new Date(displayDate).toLocaleDateString('fr-FR', {day: '2-digit', month: 'short', year: 'numeric'})}
+          </div>
+        )}
 
-        {/* Bouton Play au survol */}
-        <div className="absolute inset-0 flex items-center justify-center opacity-0 group-hover:opacity-100 transition-opacity duration-300 bg-black/20">
+        <div className="absolute inset-0 flex items-center justify-center opacity-0 group-hover:opacity-100 transition-opacity duration-300 bg-black/30 z-20">
           <div className="w-14 h-14 bg-indigo-600 rounded-full flex items-center justify-center pl-1 shadow-2xl scale-75 group-hover:scale-100 transition-transform">
             <Play fill="white" size={24} className="text-white" />
           </div>
         </div>
 
-        {/* Bouton Suppression admin */}
-        <button onClick={(e) => { e.stopPropagation(); onRemove(prog.id); }} className="absolute top-3 right-3 p-2 bg-slate-900/80 hover:bg-red-600 text-slate-300 hover:text-white rounded-full opacity-100 md:opacity-0 group-hover:opacity-100 transition-all z-20">
+        <button onClick={(e) => { e.stopPropagation(); onRemove(prog.id); }} className="absolute top-3 right-3 p-2 bg-slate-900/90 hover:bg-red-600 text-slate-300 hover:text-white rounded-full opacity-100 md:opacity-0 group-hover:opacity-100 transition-all z-40 shadow-lg">
           <Trash2 size={14} />
         </button>
       </div>
       
       <div className="mt-3 px-1 w-full">
-        <span className="text-[10px] font-bold text-slate-400 uppercase tracking-widest block mb-1 truncate">{prog.creatorName}</span>
-        <h3 className={`font-semibold text-slate-100 leading-snug group-hover:text-white transition-colors line-clamp-2 ${large ? 'text-lg md:text-xl' : 'text-sm'}`} title={prog.title}>{prog.title}</h3>
+        <span className="text-[10px] font-bold text-slate-400 uppercase tracking-widest block mb-1 truncate">{decodeHTML(prog.creatorName)}</span>
+        <h3 className={`font-semibold text-slate-100 leading-snug group-hover:text-white transition-colors line-clamp-2 ${large ? 'text-lg md:text-xl' : 'text-sm'}`} title={decodeHTML(prog.title)}>{decodeHTML(prog.title)}</h3>
       </div>
     </div>
   );
@@ -252,19 +326,16 @@ const ProgramRow = ({ title, programs, large = false, onSelect, onRemove }) => {
     <div className="mb-10 relative group">
       {title && <h2 className="text-xl md:text-2xl font-bold text-white mb-4 pl-2 md:pl-0 tracking-tight">{title}</h2>}
       
-      {/* Flèche Gauche */}
       <button onClick={() => scroll('left')} className="hidden md:flex absolute left-0 top-1/2 -translate-y-1/2 -ml-6 z-10 bg-slate-800 hover:bg-indigo-600 text-white p-3 rounded-full opacity-0 group-hover:opacity-100 transition-all shadow-2xl border border-slate-700">
         <ChevronLeft size={24} />
       </button>
       
-      {/* Conteneur défilant */}
       <div ref={scrollRef} className="flex gap-4 md:gap-6 overflow-x-auto no-scrollbar snap-x snap-mandatory px-4 md:px-0 pb-4">
         {programs.map(prog => (
           <ProgramCard key={prog.id} prog={prog} large={large} onSelect={onSelect} onRemove={onRemove} />
         ))}
       </div>
 
-      {/* Flèche Droite */}
       <button onClick={() => scroll('right')} className="hidden md:flex absolute right-0 top-1/2 -translate-y-1/2 -mr-6 z-10 bg-slate-800 hover:bg-indigo-600 text-white p-3 rounded-full opacity-0 group-hover:opacity-100 transition-all shadow-2xl border border-slate-700">
         <ChevronRight size={24} />
       </button>
@@ -389,10 +460,7 @@ export default function App() {
             {/* VUE ACCUEIL */}
             {activeTab === 'accueil' && (
               <>
-                {/* Ligne 1 : À la une */}
                 <ProgramRow programs={programs.slice(0, 5)} large={true} onSelect={setSelectedProg} onRemove={removeProgram} />
-                
-                {/* Lignes Suivantes : Par catégorie */}
                 {CATEGORIES.map(cat => {
                   const catProgs = programs.filter(p => p.categoryId === cat.id);
                   return catProgs.length > 0 ? (
@@ -402,26 +470,30 @@ export default function App() {
               </>
             )}
 
-            {/* VUE CATÉGORIE SPÉCIFIQUE (Modifiée pour inclure la date) */}
+            {/* VUE CATÉGORIE SPÉCIFIQUE */}
             {activeTab !== 'accueil' && (
               <div className="grid grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-4 px-4 md:px-0">
                 {programs.filter(p => p.categoryId === activeTab).map(prog => (
                    <div key={prog.id} onClick={() => setSelectedProg(prog)} className="group cursor-pointer">
                       <div className="relative bg-slate-900 rounded-xl overflow-hidden aspect-video mb-3 border border-slate-800 group-hover:border-slate-500">
                         <img src={`https://img.youtube.com/vi/${prog.youtubeId}/maxresdefault.jpg`} onError={(e) => { e.target.src = `https://img.youtube.com/vi/${prog.youtubeId}/hqdefault.jpg`; }} className="w-full h-full object-cover transition-transform duration-500 group-hover:scale-105" alt="thumb"/>
-                        <div className="absolute inset-0 flex items-center justify-center opacity-0 group-hover:opacity-100 transition-opacity bg-black/20">
+                        <div className="absolute inset-0 bg-gradient-to-t from-slate-950/80 via-transparent to-transparent opacity-80 z-10" />
+                        
+                        <div className="absolute inset-0 flex items-center justify-center opacity-0 group-hover:opacity-100 transition-opacity bg-black/30 z-20">
                           <div className="w-12 h-12 bg-indigo-600 rounded-full flex items-center justify-center pl-1"><Play fill="white" size={20} className="text-white"/></div>
                         </div>
                         
-                        {/* Badge Date de publication */}
-                        <div className="absolute bottom-2 left-2 bg-indigo-600/90 backdrop-blur-md px-2 py-1 rounded text-[9px] text-white font-bold uppercase tracking-widest z-10 shadow-lg">
-                          {new Date(prog.publishedAt || prog.createdAt).toLocaleDateString('fr-FR', {day: 'numeric', month: 'short', year: 'numeric'})}
-                        </div>
+                        {(prog.publishedAt || prog.createdAt) && (
+                          <div className="absolute bottom-2 left-2 bg-slate-900/90 border border-slate-700 backdrop-blur-md px-2 py-1 rounded text-[9px] text-slate-200 font-bold uppercase tracking-widest z-30 flex items-center gap-1">
+                            <Calendar size={8} className="text-indigo-400" />
+                            {new Date(prog.publishedAt || prog.createdAt).toLocaleDateString('fr-FR', {day: '2-digit', month: 'short', year: 'numeric'})}
+                          </div>
+                        )}
 
-                        <button onClick={(e) => { e.stopPropagation(); removeProgram(prog.id); }} className="absolute top-2 right-2 p-2 bg-slate-900/80 hover:bg-red-600 text-white rounded-full opacity-0 group-hover:opacity-100 z-20"><Trash2 size={12} /></button>
+                        <button onClick={(e) => { e.stopPropagation(); removeProgram(prog.id); }} className="absolute top-2 right-2 p-2 bg-slate-900/90 hover:bg-red-600 text-white rounded-full opacity-0 group-hover:opacity-100 z-40 shadow-lg"><Trash2 size={12} /></button>
                       </div>
-                      <span className="text-[10px] font-bold text-slate-400 uppercase tracking-widest block mb-1">{prog.creatorName}</span>
-                      <h3 className="font-semibold text-slate-100 text-sm leading-snug line-clamp-2">{prog.title}</h3>
+                      <span className="text-[10px] font-bold text-slate-400 uppercase tracking-widest block mb-1 truncate">{decodeHTML(prog.creatorName)}</span>
+                      <h3 className="font-semibold text-slate-100 text-sm leading-snug line-clamp-2" title={decodeHTML(prog.title)}>{decodeHTML(prog.title)}</h3>
                    </div>
                 ))}
               </div>
@@ -442,8 +514,8 @@ export default function App() {
           </div>
           
           <div className="w-full flex-1 p-6 md:p-10 text-left overflow-y-auto">
-            <span className="text-indigo-400 font-bold text-xs uppercase tracking-widest bg-indigo-500/10 px-3 py-1.5 rounded-full mb-4 inline-block">{selectedProg.creatorName}</span>
-            <h2 className="text-2xl md:text-4xl font-bold text-white leading-tight mb-6">{selectedProg.title}</h2>
+            <span className="text-indigo-400 font-bold text-xs uppercase tracking-widest bg-indigo-500/10 px-3 py-1.5 rounded-full mb-4 inline-block">{decodeHTML(selectedProg.creatorName)}</span>
+            <h2 className="text-2xl md:text-4xl font-bold text-white leading-tight mb-6">{decodeHTML(selectedProg.title)}</h2>
           </div>
         </div>
       )}
