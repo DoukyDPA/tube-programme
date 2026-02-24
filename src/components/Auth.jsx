@@ -19,7 +19,7 @@ export default function Auth() {
     <div className="fixed inset-0 bg-slate-950 flex items-center justify-center z-[200] p-6">
       <div className="w-full max-w-md bg-slate-900 border border-slate-800 p-8 rounded-[2rem] shadow-2xl">
         <h2 className="text-2xl font-bold text-white mb-6 text-center">
-          {isLogin ? 'Bon retour sur Tubemag' : 'Créer un compte'}
+          {isLogin ? 'Bon retour sur TubiScope' : 'Créer un compte'}
         </h2>
         <form onSubmit={handleSubmit} className="space-y-4">
           <input type="email" placeholder="Email" className="w-full bg-slate-800 p-4 rounded-xl text-white outline-none focus:ring-2 focus:ring-indigo-500" value={email} onChange={e => setEmail(e.target.value)} required />
