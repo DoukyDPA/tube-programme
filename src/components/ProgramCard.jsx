@@ -10,7 +10,6 @@ const decodeHTML = (html) => {
 export default function ProgramCard({ prog, large, onSelect, onRemove, currentUser, isAdmin }) {
   const displayDate = prog.publishedAt || prog.createdAt;
   
-  // VERIFICATION DU DROIT : Est-ce l'admin, ou est-ce MON ajout ?
   const canDelete = isAdmin || prog.addedBy === currentUser?.uid;
 
   return (
@@ -31,13 +30,18 @@ export default function ProgramCard({ prog, large, onSelect, onRemove, currentUs
         </div>
         
         {displayDate && (
-          <div className="absolute bottom-2 left-2 bg-slate-900/90 border border-slate-700 backdrop-blur-md px-2 py-1 rounded text-[9px] text-slate-200 font-bold uppercase tracking-widest z-30 flex items-center gap-1">
-            <Calendar size={8} className="text-indigo-400" />
-            {new Date(displayDate).toLocaleDateString('fr-FR', {day: '2-digit', month: 'short', year: 'numeric'})}
+          <div className="absolute bottom-2 left-2 flex items-center gap-2 z-30">
+            <div className="bg-slate-900/90 border border-slate-700 backdrop-blur-md px-2 py-1 rounded text-[9px] text-slate-200 font-bold uppercase tracking-widest flex items-center gap-1">
+              <Calendar size={8} className="text-indigo-400" />
+              {new Date(displayDate).toLocaleDateString('fr-FR', {day: '2-digit', month: 'short', year: 'numeric'})}
+            </div>
+            {/* BRANDING YOUTUBE OBLIGATOIRE */}
+            <div className="bg-red-600 text-white px-2 py-1 rounded text-[9px] font-bold uppercase tracking-widest">
+              YouTube
+            </div>
           </div>
         )}
 
-        {/* AFFICHAGE CONDITIONNEL DE LA POUBELLE */}
         {canDelete && (
           <button onClick={(e) => { e.stopPropagation(); onRemove(prog); }} className="absolute top-2 right-2 p-2 bg-slate-900/90 hover:bg-red-600 text-white rounded-full opacity-0 group-hover:opacity-100 z-40 shadow-lg">
             <Trash2 size={12} />
