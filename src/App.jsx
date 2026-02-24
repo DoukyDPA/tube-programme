@@ -285,7 +285,7 @@ export default function App() {
         <header className="flex justify-between items-center p-4 md:p-10 pb-4 md:pb-8">
           <div className="flex items-center gap-3 md:hidden">
             <div className="w-8 h-8 bg-indigo-600 rounded-lg flex items-center justify-center"><Sparkles size={16} className="text-white" /></div>
-            <h1 className="text-xl font-black text-white tracking-tight">Tube<span className="text-indigo-500">mag</span></h1>
+            <h1 className="text-xl font-black text-white tracking-tight">Tubi<span className="text-indigo-500">Scope</span></h1>
           </div>
           
           <h2 className="hidden md:block text-2xl md:text-3xl font-bold text-white tracking-tight">
