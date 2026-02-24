@@ -1,5 +1,5 @@
 import React from 'react';
-import { Play, Trash2, Calendar, Trophy } from 'lucide-react';
+import { Play, Calendar, Trash2 } from 'lucide-react';
 
 const decodeHTML = (html) => {
   if (!html) return "";
@@ -7,8 +7,11 @@ const decodeHTML = (html) => {
   return doc.documentElement.textContent;
 };
 
-export default function ProgramCard({ prog, large, onSelect, onRemove, canVote, onVote }) {
+export default function ProgramCard({ prog, large, onSelect, onRemove, currentUser, isAdmin }) {
   const displayDate = prog.publishedAt || prog.createdAt;
+  
+  // VERIFICATION DU DROIT : Est-ce l'admin, ou est-ce MON ajout ?
+  const canDelete = isAdmin || prog.addedBy === currentUser?.uid;
 
   return (
     <div 
@@ -22,13 +25,9 @@ export default function ProgramCard({ prog, large, onSelect, onRemove, canVote, 
           className="w-full h-full object-cover transition-transform duration-700 group-hover:scale-105" 
           alt={decodeHTML(prog.title)} 
         />
-        
         <div className="absolute inset-0 bg-gradient-to-t from-slate-950/80 via-transparent to-transparent opacity-80 z-10" />
-        
         <div className="absolute inset-0 flex items-center justify-center opacity-0 group-hover:opacity-100 transition-opacity bg-black/30 z-20">
-          <div className="w-12 h-12 bg-indigo-600 rounded-full flex items-center justify-center pl-1">
-            <Play fill="white" size={20} className="text-white"/>
-          </div>
+          <div className="w-12 h-12 bg-indigo-600 rounded-full flex items-center justify-center pl-1"><Play fill="white" size={20} className="text-white"/></div>
         </div>
         
         {displayDate && (
@@ -38,19 +37,15 @@ export default function ProgramCard({ prog, large, onSelect, onRemove, canVote, 
           </div>
         )}
 
-        <div className="absolute top-2 right-2 flex gap-2 opacity-0 group-hover:opacity-100 z-40 transition-opacity">
-          {canVote && (
-            <button onClick={(e) => { e.stopPropagation(); onVote(prog.id); }} className="p-2 bg-indigo-600 hover:bg-indigo-500 text-white rounded-full shadow-lg">
-              <Trophy size={12} />
-            </button>
-          )}
-          <button onClick={(e) => { e.stopPropagation(); onRemove(prog.id); }} className="p-2 bg-slate-900/90 hover:bg-red-600 text-white rounded-full shadow-lg">
+        {/* AFFICHAGE CONDITIONNEL DE LA POUBELLE */}
+        {canDelete && (
+          <button onClick={(e) => { e.stopPropagation(); onRemove(prog); }} className="absolute top-2 right-2 p-2 bg-slate-900/90 hover:bg-red-600 text-white rounded-full opacity-0 group-hover:opacity-100 z-40 shadow-lg">
             <Trash2 size={12} />
           </button>
-        </div>
+        )}
       </div>
       <span className="text-[10px] font-bold text-slate-400 uppercase tracking-widest block mb-1 truncate">{decodeHTML(prog.creatorName)}</span>
-      <h3 className="font-semibold text-slate-100 text-sm leading-snug line-clamp-2">{decodeHTML(prog.title)}</h3>
+      <h3 className="font-semibold text-slate-100 text-sm leading-snug line-clamp-2" title={decodeHTML(prog.title)}>{decodeHTML(prog.title)}</h3>
     </div>
   );
 }
