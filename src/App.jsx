@@ -20,6 +20,16 @@ const CATEGORIES = [
   { id: 'interviews', label: 'Talks Scope', icon: <Mic2 size={18}/> },
 ];
 
+// Nouveau composant d'icône TubiScope
+const AppIcon = () => (
+  <div className="w-10 h-10 bg-gradient-to-br from-indigo-500 to-indigo-700 rounded-xl flex items-center justify-center shadow-lg shadow-indigo-500/20 shrink-0">
+    <svg viewBox="0 0 24 24" fill="none" stroke="white" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round" className="w-6 h-6">
+      <circle cx="12" cy="12" r="10" />
+      <polygon points="10 8 16 12 10 16 10 8" fill="white" />
+    </svg>
+  </div>
+);
+
 const getIconForCustomTheme = (iconId) => {
   switch(iconId) {
     case 'ia': return <Cpu size={18}/>;
@@ -35,14 +45,7 @@ const parseDuration = (duration) => {
   if (!match) return 0;
   return (parseInt(match[1] || 0, 10) * 3600) + (parseInt(match[2] || 0, 10) * 60) + parseInt(match[3] || 0, 10);
 };
-const AppIcon = () => (
-  <div className="w-10 h-10 bg-gradient-to-br from-indigo-500 to-indigo-700 rounded-xl flex items-center justify-center shadow-lg shadow-indigo-500/20 shrink-0">
-    <svg viewBox="0 0 24 24" fill="none" stroke="white" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round" className="w-6 h-6">
-      <circle cx="12" cy="12" r="10" />
-      <polygon points="10 8 16 12 10 16 10 8" fill="white" />
-    </svg>
-  </div>
-);
+
 export default function App() {
   const [user, setUser] = useState(null);
   const isAdmin = user?.email === ADMIN_EMAIL;
@@ -50,8 +53,8 @@ export default function App() {
   const [userData, setUserData] = useState(null);
   const [loading, setLoading] = useState(true);
   
-  const [programs, setPrograms] = useState([]); // Données brutes de Firebase
-  const [hydratedPrograms, setHydratedPrograms] = useState([]); // Données hydratées avec YouTube
+  const [programs, setPrograms] = useState([]); 
+  const [hydratedPrograms, setHydratedPrograms] = useState([]); 
   
   const [customThemes, setCustomThemes] = useState([]);
   const [activeTab, setActiveTab] = useState('accueil');
@@ -82,11 +85,10 @@ export default function App() {
     const q = collection(db, 'artifacts', FIREBASE_APP_ID, 'public', 'data', 'programs');
     return onSnapshot(q, (snap) => {
       const data = snap.docs.map(d => ({ id: d.id, ...d.data() }));
-      setPrograms(data); // On ne trie pas encore, on le fera après hydratation
+      setPrograms(data); 
     });
   }, [user]);
 
-  // NOUVEAU USE-EFFECT : Hydratation des données avec l'API YouTube (Conformité ToS)
   useEffect(() => {
     const fetchYoutubeData = async () => {
       if (!programs.length || !YOUTUBE_API_KEY) return;
@@ -94,7 +96,6 @@ export default function App() {
       const uniqueIds = [...new Set(programs.map(p => p.youtubeId))];
       let fetchedData = {};
       
-      // On groupe les requêtes par lot de 50 (limite de l'API YouTube)
       for (let i = 0; i < uniqueIds.length; i += 50) {
         const chunk = uniqueIds.slice(i, i + 50).join(',');
         try {
@@ -114,7 +115,6 @@ export default function App() {
         }
       }
       
-      // On fusionne les données Firebase avec les données fraîches de YouTube
       const merged = programs.map(p => ({
         ...p,
         title: fetchedData[p.youtubeId]?.title || "Vidéo indisponible",
@@ -145,7 +145,6 @@ export default function App() {
       const existingVideoIds = new Set(programs.map(p => p.youtubeId));
       const channelsToUpdate = new Map();
       
-      // Utilisation des identifiants de chaînes (Conformité ToS)
       for (const p of programs) {
         if (p.channelId && p.categoryId) {
           channelsToUpdate.set(p.channelId, { id: p.channelId, category: p.categoryId });
@@ -155,12 +154,11 @@ export default function App() {
       const channels = Array.from(channelsToUpdate.values());
       if (channels.length === 0) {
         setIsSyncing(false);
-        return alert("Aucune chaîne trouvée (Assurez-vous qu'elles aient un channelId).");
+        return alert("Aucune chaîne trouvée.");
       }
 
       for (const channel of channels) {
         let cid = channel.id;
-
         const playlistId = cid.replace(/^UC/, 'UU');
         const pRes = await fetch(`https://www.googleapis.com/youtube/v3/playlistItems?key=${YOUTUBE_API_KEY}&playlistId=${playlistId}&part=snippet,contentDetails&maxResults=15`);
         const pData = await pRes.json();
@@ -175,10 +173,8 @@ export default function App() {
 
         for (const v of pData.items) {
           if (channelAddedVideos >= 5) break; 
-          
           const vidId = v.contentDetails.videoId;
           if (existingVideoIds.has(vidId)) continue; 
-
           const detail = detailsData.items?.find(d => d.id === vidId);
           if (!detail || parseDuration(detail.contentDetails.duration) < 180) continue; 
 
@@ -206,7 +202,7 @@ export default function App() {
 
   const removeProgram = async (prog) => {
     if (!isAdmin && prog.addedBy !== user.uid) {
-        return alert("❌ Action refusée : Vous ne pouvez supprimer que les vidéos que vous avez vous-même ajoutées.");
+        return alert("❌ Action refusée.");
     }
     if (confirm("Supprimer définitivement ce programme ?")) {
       try { await deleteDoc(doc(db, 'artifacts', FIREBASE_APP_ID, 'public', 'data', 'programs', prog.id)); }
@@ -228,9 +224,8 @@ export default function App() {
       {/* SIDEBAR PC */}
       <aside className="hidden md:flex w-[260px] bg-slate-950/95 border-r border-slate-800/50 flex-col z-50 overflow-y-auto shadow-2xl">
         <div className="p-8 flex items-center gap-3">
-        <div className="p-8 flex items-center gap-3">
-        <AppIcon />
-        <h1 className="text-xl font-black text-white tracking-tight">Tubi<span className="text-indigo-500">Scope</span></h1>
+          <AppIcon />
+          <h1 className="text-xl font-black text-white tracking-tight">Tubi<span className="text-indigo-500">Scope</span></h1>
         </div>
         
         <nav className="flex-1 px-4 py-4 space-y-1">
@@ -291,10 +286,10 @@ export default function App() {
       {/* ZONE PRINCIPALE */}
       <main className="flex-1 overflow-y-auto h-screen pb-24 md:pb-0 relative">
         <header className="flex justify-between items-center p-4 md:p-10 pb-4 md:pb-8">
-        <div className="flex items-center gap-3 md:hidden">
-        <AppIcon />
-        <h1 className="text-xl font-black text-white tracking-tight">Tubi<span className="text-indigo-500">Scope</span></h1>
-        </div>
+          <div className="flex items-center gap-3 md:hidden">
+            <AppIcon />
+            <h1 className="text-xl font-black text-white tracking-tight">Tubi<span className="text-indigo-500">Scope</span></h1>
+          </div>
           
           <h2 className="hidden md:block text-2xl md:text-3xl font-bold text-white tracking-tight">
              {activeTab === 'accueil' ? 'À la Une' : allCategories.find(c => c.id === activeTab)?.label}
@@ -308,30 +303,6 @@ export default function App() {
           )}
         </header>
 
-        {/* FILTRES MOBILE */}
-        <div className="md:hidden flex flex-wrap gap-2 mb-6 px-4">
-           <button onClick={() => setActiveTab('accueil')} className={`px-4 py-2 rounded-full text-xs font-bold transition-all ${activeTab === 'accueil' ? 'bg-indigo-600 text-white shadow-lg shadow-indigo-500/20' : 'bg-slate-800 text-slate-400 border border-slate-700'}`}>Tout</button>
-           {CATEGORIES.map(cat => (
-             <button key={cat.id} onClick={() => setActiveTab(cat.id)} className={`px-4 py-2 rounded-full text-xs font-bold transition-all ${activeTab === cat.id ? 'bg-indigo-600 text-white shadow-lg shadow-indigo-500/20' : 'bg-slate-800 text-slate-400 border border-slate-700'}`}>
-               {cat.label}
-             </button>
-           ))}
-           <div className="w-full mt-2 mb-1 pl-1 flex items-center gap-2">
-             <span className="text-[10px] font-black text-emerald-500 uppercase tracking-widest">Mes Thèmes</span>
-             <div className="h-px bg-slate-800 flex-1"></div>
-           </div>
-           {customThemes.length > 0 ? (
-             customThemes.map(cat => (
-               <button key={cat.id} onClick={() => setActiveTab(cat.id)} className={`px-4 py-2 rounded-full text-xs font-bold transition-all ${activeTab === cat.id ? 'bg-emerald-600 text-white shadow-lg shadow-emerald-500/20' : 'bg-slate-800 text-emerald-400 border border-emerald-500/30'}`}>
-                 {cat.name}
-               </button>
-             ))
-           ) : (
-             <p className="text-xs text-slate-500 italic px-2 w-full">Vous n'avez pas encore créé de thème.</p>
-           )}
-        </div>
-
-        {/* VIDEOS HYDRATÉES */}
         <div className="px-0 md:px-10">
           {activeTab === 'accueil' ? (
             <>
@@ -345,14 +316,7 @@ export default function App() {
           ) : (
             <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-6 px-4 md:px-0">
               {hydratedPrograms.filter(p => p.categoryId === activeTab).map(prog => (
-                 <ProgramCard 
-                    key={prog.id} 
-                    prog={prog} 
-                    onSelect={setSelectedProg} 
-                    onRemove={removeProgram}
-                    currentUser={user}
-                    isAdmin={isAdmin}
-                 />
+                 <ProgramCard key={prog.id} prog={prog} onSelect={setSelectedProg} onRemove={removeProgram} currentUser={user} isAdmin={isAdmin} />
               ))}
             </div>
           )}
