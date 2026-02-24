@@ -228,8 +228,9 @@ export default function App() {
       {/* SIDEBAR PC */}
       <aside className="hidden md:flex w-[260px] bg-slate-950/95 border-r border-slate-800/50 flex-col z-50 overflow-y-auto shadow-2xl">
         <div className="p-8 flex items-center gap-3">
-          <div className="w-8 h-8 bg-indigo-600 rounded-lg flex items-center justify-center"><Sparkles size={16} className="text-white" /></div>
-          <h1 className="text-xl font-black text-white tracking-tight">Tubi<span className="text-indigo-500">Scope</span></h1>
+        <div className="p-8 flex items-center gap-3">
+        <AppIcon />
+        <h1 className="text-xl font-black text-white tracking-tight">Tubi<span className="text-indigo-500">Scope</span></h1>
         </div>
         
         <nav className="flex-1 px-4 py-4 space-y-1">
@@ -290,10 +291,10 @@ export default function App() {
       {/* ZONE PRINCIPALE */}
       <main className="flex-1 overflow-y-auto h-screen pb-24 md:pb-0 relative">
         <header className="flex justify-between items-center p-4 md:p-10 pb-4 md:pb-8">
-          <div className="flex items-center gap-3 md:hidden">
-            <div className="w-8 h-8 bg-indigo-600 rounded-lg flex items-center justify-center"><Sparkles size={16} className="text-white" /></div>
-            <h1 className="text-xl font-black text-white tracking-tight">Tubi<span className="text-indigo-500">Scope</span></h1>
-          </div>
+        <div className="flex items-center gap-3 md:hidden">
+        <AppIcon />
+        <h1 className="text-xl font-black text-white tracking-tight">Tubi<span className="text-indigo-500">Scope</span></h1>
+        </div>
           
           <h2 className="hidden md:block text-2xl md:text-3xl font-bold text-white tracking-tight">
              {activeTab === 'accueil' ? 'À la Une' : allCategories.find(c => c.id === activeTab)?.label}
