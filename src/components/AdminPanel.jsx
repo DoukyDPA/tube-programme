@@ -3,7 +3,7 @@ import { Cpu, BookOpen, Trophy, Mic2, X, CheckCircle2, Loader2, Sparkles, Edit2,
 import { db, FIREBASE_APP_ID, YOUTUBE_API_KEY } from '../firebase';
 import { collection, doc, setDoc, updateDoc, deleteDoc } from 'firebase/firestore';
 
-const ADMIN_EMAIL = "votre.email@gmail.com"; // ⚠️ N'oubliez pas de remettre votre e-mail ici
+const ADMIN_EMAIL = "daniel.p.angelini@gmail.com"; // ⚠️ N'oubliez pas de remettre votre e-mail ici
 
 const ICONS = [
   { id: 'ia', icon: <Cpu size={18}/> },
@@ -14,10 +14,10 @@ const ICONS = [
 ];
 
 const CATEGORIES = [
-  { id: 'ia', label: 'IA & Tech' },
-  { id: 'lecture', label: 'Culture & Livres' },
-  { id: 'foot', label: 'Analyse Foot' },
-  { id: 'interviews', label: 'Talks & Débats' },
+  { id: 'ia', label: 'IA & Tech Mag' },
+  { id: 'lecture', label: 'Culture Mag' },
+  { id: 'foot', label: 'Economie Mag' },
+  { id: 'interviews', label: 'Talks Mag' },
 ];
 
 const decodeHTML = (html) => {
