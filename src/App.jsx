@@ -14,10 +14,10 @@ import { Sparkles, Home, Settings, Loader2, RefreshCw, LogOut, Cpu, BookOpen, Tr
 const ADMIN_EMAIL = "daniel.p.angelini@gmail.com"; // ⚠️ N'oubliez pas de remettre votre e-mail ici
 
 const CATEGORIES = [
-  { id: 'ia', label: 'IA & Tech', icon: <Cpu size={18}/> },
-  { id: 'lecture', label: 'Culture & Livres', icon: <BookOpen size={18}/> },
-  { id: 'foot', label: 'Analyse Foot', icon: <Trophy size={18}/> },
-  { id: 'interviews', label: 'Talks & Débats', icon: <Mic2 size={18}/> },
+  { id: 'ia', label: 'IA & Tech Mag', icon: <Cpu size={18}/> },
+  { id: 'lecture', label: 'Culture Mag', icon: <BookOpen size={18}/> },
+  { id: 'foot', label: 'Economie Mag', icon: <Trophy size={18}/> },
+  { id: 'interviews', label: 'Talks Mag', icon: <Mic2 size={18}/> },
 ];
 
 const getIconForCustomTheme = (iconId) => {
