@@ -14,10 +14,10 @@ import { Sparkles, Home, Settings, Loader2, RefreshCw, LogOut, Cpu, BookOpen, Tr
 const ADMIN_EMAIL = "daniel.p.angelini@gmail.com"; // ⚠️ N'oubliez pas de remettre votre e-mail ici
 
 const CATEGORIES = [
-  { id: 'ia', label: 'IA & Tech Mag', icon: <Cpu size={18}/> },
-  { id: 'lecture', label: 'Culture Mag', icon: <BookOpen size={18}/> },
-  { id: 'foot', label: 'Economie Mag', icon: <Trophy size={18}/> },
-  { id: 'interviews', label: 'Talks Mag', icon: <Mic2 size={18}/> },
+  { id: 'ia', label: 'IA & Tech Scope', icon: <Cpu size={18}/> },
+  { id: 'lecture', label: 'Culture Scope', icon: <BookOpen size={18}/> },
+  { id: 'foot', label: 'Economie Scope', icon: <Trophy size={18}/> },
+  { id: 'interviews', label: 'Talks Scope', icon: <Mic2 size={18}/> },
 ];
 
 const getIconForCustomTheme = (iconId) => {
@@ -194,7 +194,7 @@ export default function App() {
       <aside className="hidden md:flex w-[260px] bg-slate-950/95 border-r border-slate-800/50 flex-col z-50 overflow-y-auto shadow-2xl">
         <div className="p-8 flex items-center gap-3">
           <div className="w-8 h-8 bg-indigo-600 rounded-lg flex items-center justify-center"><Sparkles size={16} className="text-white" /></div>
-          <h1 className="text-xl font-black text-white tracking-tight">Tube<span className="text-indigo-500">mag</span></h1>
+          <h1 className="text-xl font-black text-white tracking-tight">Tubi<span className="text-indigo-500">Scope</span></h1>
         </div>
         
         <nav className="flex-1 px-4 py-4 space-y-1">
