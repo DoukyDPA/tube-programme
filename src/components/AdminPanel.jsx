@@ -11,6 +11,7 @@ const ICONS = [
   { id: 'custom', icon: <Sparkles size={18}/> }
 ];
 
+// Si vous souhaitez renommer les catégories de base, faites-le ici (et dans App.jsx)
 const CATEGORIES = [
   { id: 'ia', label: 'IA & Tech' },
   { id: 'lecture', label: 'Culture & Livres' },
@@ -31,6 +32,11 @@ const parseDuration = (duration) => {
 };
 
 export default function AdminPanel({ user, userData, customThemes = [], onClose }) {
+  
+  // === DÉFINISSEZ VOTRE EMAIL ADMIN ICI ===
+  const ADMIN_EMAIL = "daniel.p.angelini@gmail.com"; 
+  const isAdmin = user?.email === ADMIN_EMAIL;
+
   const [tab, setTab] = useState('channel');
   const [loading, setLoading] = useState(false);
   
@@ -44,7 +50,8 @@ export default function AdminPanel({ user, userData, customThemes = [], onClose 
 
   // Ajout Chaîne
   const [channelInput, setChannelInput] = useState('');
-  const [category, setCategory] = useState('ia');
+  // Par défaut, l'admin voit "ia", les autres voient leur 1er thème perso (s'il existe)
+  const [category, setCategory] = useState(isAdmin ? 'ia' : (customThemes[0]?.id || ''));
 
   // --- ACTIONS SUR LES THÈMES ---
 
@@ -65,6 +72,11 @@ export default function AdminPanel({ user, userData, customThemes = [], onClose 
 
       alert("Thématique créée avec succès !");
       setThemeName('');
+      
+      // Si l'utilisateur n'avait pas de thème, on sélectionne celui-ci par défaut pour l'ajout de chaîne
+      if (!isAdmin && customThemes.length === 0) {
+        setCategory(themeRef.id);
+      }
     } catch (e) { alert(e.message); }
     finally { setLoading(false); }
   };
@@ -83,6 +95,12 @@ export default function AdminPanel({ user, userData, customThemes = [], onClose 
         await deleteDoc(doc(db, 'users', user.uid, 'themes', themeId));
         const userRef = doc(db, 'users', user.uid);
         await setDoc(userRef, { themeCount: Math.max(0, customThemes.length - 1) }, { merge: true });
+        
+        // Si le thème supprimé était sélectionné, on change la sélection
+        if (!isAdmin && category === themeId) {
+            const remainingThemes = customThemes.filter(t => t.id !== themeId);
+            setCategory(remainingThemes.length > 0 ? remainingThemes[0].id : '');
+        }
       } catch (e) { alert(e.message); }
     }
   };
@@ -92,6 +110,7 @@ export default function AdminPanel({ user, userData, customThemes = [], onClose 
   const fetchAndAutoIntegrate = async () => {
     if (!YOUTUBE_API_KEY) return alert("❌ Clé API YouTube manquante !");
     if (!channelInput.trim()) return alert("Veuillez entrer une chaîne (ex: @MonsieurPhi).");
+    if (!category) return alert("Veuillez sélectionner une thématique de destination.");
     
     setLoading(true);
     try {
@@ -218,26 +237,45 @@ export default function AdminPanel({ user, userData, customThemes = [], onClose 
             </div>
           ) : (
             <div className="space-y-6">
-              <div className="space-y-2">
-                <label className="text-xs font-bold text-slate-500 uppercase tracking-wider">Thématique</label>
-                <select className="w-full bg-slate-800 p-4 rounded-xl text-sm border-none outline-none text-white focus:ring-2 focus:ring-indigo-500" value={category} onChange={e => setCategory(e.target.value)}>
-                  <optgroup label="Catégories TubeMag">
-                    {CATEGORIES.map(c => <option key={c.id} value={c.id}>{c.label}</option>)}
-                  </optgroup>
-                  {customThemes.length > 0 && (
-                    <optgroup label="Mes Thématiques">
-                      {customThemes.map(c => <option key={c.id} value={c.id}>{c.name}</option>)}
-                    </optgroup>
-                  )}
-                </select>
-              </div>
-              <div className="space-y-2">
-                <label className="text-xs font-bold text-slate-500 uppercase tracking-wider">Nouvelle Chaîne YouTube</label>
-                <input className="w-full bg-slate-800 p-4 rounded-xl text-sm outline-none text-white focus:ring-2 focus:ring-indigo-500" placeholder="ex: @MonsieurPhi" value={channelInput} onChange={e => setChannelInput(e.target.value)} />
-              </div>
-              <button onClick={fetchAndAutoIntegrate} disabled={loading} className="w-full bg-emerald-600 py-4 rounded-xl font-bold text-white flex justify-center items-center gap-2 hover:bg-emerald-500 disabled:opacity-50">
-                {loading ? <Loader2 className="animate-spin" size={18}/> : <><CheckCircle2 size={18} /> Ajouter la chaîne</>}
-              </button>
+              {!isAdmin && customThemes.length === 0 ? (
+                <div className="p-6 bg-amber-500/10 border border-amber-500/20 rounded-xl text-amber-400 text-sm text-center font-medium">
+                  Créez d'abord une thématique dans l'onglet "Mes Thèmes" pour pouvoir y ajouter vos propres chaînes YouTube.
+                </div>
+              ) : (
+                <>
+                  <div className="space-y-2">
+                    <label className="text-xs font-bold text-slate-500 uppercase tracking-wider">
+                      Thématique de destination
+                    </label>
+                    <select 
+                      className="w-full bg-slate-800 p-4 rounded-xl text-sm border-none outline-none text-white focus:ring-2 focus:ring-indigo-500" 
+                      value={category} 
+                      onChange={e => setCategory(e.target.value)}
+                    >
+                      {/* L'ADMIN VOIT LES CATÉGORIES GLOBALES */}
+                      {isAdmin && (
+                        <optgroup label="Catégories TubeMag (Admin)">
+                          {CATEGORIES.map(c => <option key={c.id} value={c.id}>{c.label}</option>)}
+                        </optgroup>
+                      )}
+                      
+                      {/* TOUT LE MONDE VOIT SES PROPRES THÈMES */}
+                      {customThemes.length > 0 && (
+                        <optgroup label="Mes Thématiques Personnelles">
+                          {customThemes.map(c => <option key={c.id} value={c.id}>{c.name}</option>)}
+                        </optgroup>
+                      )}
+                    </select>
+                  </div>
+                  <div className="space-y-2">
+                    <label className="text-xs font-bold text-slate-500 uppercase tracking-wider">Nouvelle Chaîne YouTube</label>
+                    <input className="w-full bg-slate-800 p-4 rounded-xl text-sm outline-none text-white focus:ring-2 focus:ring-indigo-500" placeholder="ex: @MonsieurPhi" value={channelInput} onChange={e => setChannelInput(e.target.value)} />
+                  </div>
+                  <button onClick={fetchAndAutoIntegrate} disabled={loading} className="w-full bg-emerald-600 py-4 rounded-xl font-bold text-white flex justify-center items-center gap-2 hover:bg-emerald-500 disabled:opacity-50">
+                    {loading ? <Loader2 className="animate-spin" size={18}/> : <><CheckCircle2 size={18} /> Ajouter la chaîne</>}
+                  </button>
+                </>
+              )}
             </div>
           )}
         </div>
