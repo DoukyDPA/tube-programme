@@ -15,7 +15,7 @@ const ICONS = [
 const CATEGORIES = [
   { id: 'ia', label: 'IA & Tech' },
   { id: 'lecture', label: 'Culture & Livres' },
-  { id: 'foot', label: 'Analyse Foot' },
+  { id: 'foot', label: 'Sport & Santé' },
   { id: 'interviews', label: 'Talks & Débats' },
 ];
 
