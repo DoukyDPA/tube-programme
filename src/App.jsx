@@ -6,9 +6,12 @@ import { collection, onSnapshot, doc, getDoc, setDoc, deleteDoc } from 'firebase
 import Auth from './components/Auth';
 import AdminPanel from './components/AdminPanel';
 import ProgramRow from './components/ProgramRow';
+import ProgramCard from './components/ProgramCard'; // On utilise aussi la carte dans la grille
 import VideoModal from './components/VideoModal'; 
 
 import { Sparkles, Home, Settings, Loader2, RefreshCw, LogOut, Cpu, BookOpen, Trophy, Mic2 } from 'lucide-react';
+
+const ADMIN_EMAIL = "daniel.p.angelini@gmail.com"; // ⚠️ N'oubliez pas de remettre votre e-mail ici
 
 const CATEGORIES = [
   { id: 'ia', label: 'IA & Tech', icon: <Cpu size={18}/> },
@@ -41,6 +44,8 @@ const parseDuration = (duration) => {
 
 export default function App() {
   const [user, setUser] = useState(null);
+  const isAdmin = user?.email === ADMIN_EMAIL;
+
   const [userData, setUserData] = useState(null);
   const [loading, setLoading] = useState(true);
   const [programs, setPrograms] = useState([]);
@@ -49,9 +54,7 @@ export default function App() {
   const [isAdminOpen, setIsAdminOpen] = useState(false);
   const [selectedProg, setSelectedProg] = useState(null);
   const [isSyncing, setIsSyncing] = useState(false);
-  const ADMIN_EMAIL = "daniel.p.angelini@gmail.com"; 
-  const isAdmin = user?.email === ADMIN_EMAIL;
-  
+
   useEffect(() => {
     return onAuthStateChanged(auth, async (u) => {
       setUser(u);
@@ -87,7 +90,7 @@ export default function App() {
     });
   }, [user]);
 
-const syncWhatsNew = async () => {
+  const syncWhatsNew = async () => {
     if (!YOUTUBE_API_KEY) return alert("❌ Clé API manquante !");
     setIsSyncing(true);
     let addedCount = 0;
@@ -107,13 +110,11 @@ const syncWhatsNew = async () => {
       const channels = Array.from(channelsToUpdate.values());
       if (channels.length === 0) {
         setIsSyncing(false);
-        return alert("Aucune chaîne trouvée. Ajoutez d'abord une chaîne manuellement.");
+        return alert("Aucune chaîne trouvée.");
       }
 
       for (const channel of channels) {
         let cid = channel.id;
-        
-        // Sécurité pour les très anciennes vidéos sans ID
         if (channel.needsIdFetch) {
           const res = await fetch(`https://www.googleapis.com/youtube/v3/search?key=${YOUTUBE_API_KEY}&q=${encodeURIComponent(channel.name)}&type=channel&part=snippet`);
           const data = await res.json();
@@ -121,9 +122,7 @@ const syncWhatsNew = async () => {
           else continue;
         }
 
-        // L'ASTUCE MAGIQUE ICI AUSSI (1 point au lieu de 100)
         const playlistId = cid.replace(/^UC/, 'UU');
-
         const pRes = await fetch(`https://www.googleapis.com/youtube/v3/playlistItems?key=${YOUTUBE_API_KEY}&playlistId=${playlistId}&part=snippet,contentDetails&maxResults=15`);
         const pData = await pRes.json();
         if (!pData.items) continue;
@@ -152,6 +151,7 @@ const syncWhatsNew = async () => {
             title: decodeHTML(v.snippet.title),
             creatorName: decodeHTML(v.snippet.channelTitle),
             categoryId: channel.category,
+            addedBy: user.uid, // On tagge la vidéo comme vous appartenant
             pitch: "",
             createdAt: Date.now(),
             publishedAt: new Date(v.snippet.publishedAt).getTime(),
@@ -168,9 +168,13 @@ const syncWhatsNew = async () => {
     finally { setIsSyncing(false); }
   };
 
-  const removeProgram = async (id) => {
+  const removeProgram = async (prog) => {
+    // SÉCURITÉ ANTI-HACK : on vérifie que l'utilisateur a le droit
+    if (!isAdmin && prog.addedBy !== user.uid) {
+        return alert("❌ Action refusée : Vous ne pouvez supprimer que les vidéos que vous avez vous-même ajoutées.");
+    }
     if (confirm("Supprimer définitivement ce programme ?")) {
-      try { await deleteDoc(doc(db, 'artifacts', FIREBASE_APP_ID, 'public', 'data', 'programs', id)); }
+      try { await deleteDoc(doc(db, 'artifacts', FIREBASE_APP_ID, 'public', 'data', 'programs', prog.id)); }
       catch(e) { alert("❌ Erreur : " + e.message); }
     }
   };
@@ -186,7 +190,7 @@ const syncWhatsNew = async () => {
   return (
     <div className="min-h-screen md:h-screen bg-[#0a0f1c] text-slate-200 flex flex-col md:flex-row font-sans overflow-hidden">
       
-      {/* === SIDEBAR (UNIQUEMENT SUR ORDINATEUR) === */}
+      {/* SIDEBAR PC */}
       <aside className="hidden md:flex w-[260px] bg-slate-950/95 border-r border-slate-800/50 flex-col z-50 overflow-y-auto shadow-2xl">
         <div className="p-8 flex items-center gap-3">
           <div className="w-8 h-8 bg-indigo-600 rounded-lg flex items-center justify-center"><Sparkles size={16} className="text-white" /></div>
@@ -230,7 +234,7 @@ const syncWhatsNew = async () => {
         </div>
       </aside>
 
-      {/* === BARRE DE NAVIGATION (UNIQUEMENT SUR MOBILE) === */}
+      {/* NAVBAR MOBILE */}
       <div className="md:hidden fixed bottom-0 left-0 right-0 bg-slate-950/98 backdrop-blur-lg border-t border-slate-800/50 flex justify-around items-center p-3 z-50 pb-safe shadow-[0_-10px_40px_rgba(0,0,0,0.5)]">
         <button onClick={() => setActiveTab('accueil')} className={`flex flex-col items-center gap-1 p-2 transition-colors ${activeTab === 'accueil' ? 'text-indigo-400' : 'text-slate-500 hover:text-slate-300'}`}>
           <Home size={22} />
@@ -248,10 +252,8 @@ const syncWhatsNew = async () => {
         </button>
       </div>
       
-      {/* === ZONE PRINCIPALE === */}
+      {/* ZONE PRINCIPALE */}
       <main className="flex-1 overflow-y-auto h-screen pb-24 md:pb-0 relative">
-        
-        {/* En-tête (Header) */}
         <header className="flex justify-between items-center p-4 md:p-10 pb-4 md:pb-8">
           <div className="flex items-center gap-3 md:hidden">
             <div className="w-8 h-8 bg-indigo-600 rounded-lg flex items-center justify-center"><Sparkles size={16} className="text-white" /></div>
@@ -262,62 +264,59 @@ const syncWhatsNew = async () => {
              {activeTab === 'accueil' ? 'À la Une' : allCategories.find(c => c.id === activeTab)?.label}
           </h2>
           
-          {/* Le bouton ne s'affiche que si l'onglet est 'accueil' ET que l'utilisateur est admin */}
           {activeTab === 'accueil' && isAdmin && (
             <button onClick={syncWhatsNew} disabled={isSyncing} className="flex items-center gap-2 bg-indigo-600 hover:bg-indigo-500 text-white px-3 py-2 md:px-4 md:py-2 rounded-xl text-xs md:text-sm font-bold shadow-lg shadow-indigo-500/20 transition-all disabled:opacity-50">
               {isSyncing ? <Loader2 size={16} className="animate-spin"/> : <RefreshCw size={16} />} 
               <span className="hidden md:inline">{isSyncing ? 'Recherche...' : 'Actualiser'}</span>
             </button>
           )}
-          
         </header>
 
-        {/* === NOUVEAU : FILTRES / CATÉGORIES (UNIQUEMENT SUR MOBILE) EN GRILLE === */}
+        {/* FILTRES MOBILE */}
         <div className="md:hidden flex flex-wrap gap-2 mb-6 px-4">
-           <button onClick={() => setActiveTab('accueil')} className={`px-4 py-2 rounded-full text-xs font-bold transition-all ${activeTab === 'accueil' ? 'bg-indigo-600 text-white shadow-lg shadow-indigo-500/20' : 'bg-slate-800 text-slate-400 border border-slate-700'}`}>
-             Tout
-           </button>
-           
+           <button onClick={() => setActiveTab('accueil')} className={`px-4 py-2 rounded-full text-xs font-bold transition-all ${activeTab === 'accueil' ? 'bg-indigo-600 text-white shadow-lg shadow-indigo-500/20' : 'bg-slate-800 text-slate-400 border border-slate-700'}`}>Tout</button>
            {CATEGORIES.map(cat => (
              <button key={cat.id} onClick={() => setActiveTab(cat.id)} className={`px-4 py-2 rounded-full text-xs font-bold transition-all ${activeTab === cat.id ? 'bg-indigo-600 text-white shadow-lg shadow-indigo-500/20' : 'bg-slate-800 text-slate-400 border border-slate-700'}`}>
                {cat.label}
              </button>
            ))}
-
-           {customThemes.length > 0 && (
-             <>
-               <div className="w-full mt-2 mb-1 pl-1">
-                 <span className="text-[10px] font-black text-emerald-500 uppercase tracking-widest">Mes Thèmes</span>
-               </div>
-               {customThemes.map(cat => (
-                 <button key={cat.id} onClick={() => setActiveTab(cat.id)} className={`px-4 py-2 rounded-full text-xs font-bold transition-all ${activeTab === cat.id ? 'bg-emerald-600 text-white shadow-lg shadow-emerald-500/20' : 'bg-slate-800 text-emerald-400 border border-emerald-500/30'}`}>
-                   {cat.name}
-                 </button>
-               ))}
-             </>
+           <div className="w-full mt-2 mb-1 pl-1 flex items-center gap-2">
+             <span className="text-[10px] font-black text-emerald-500 uppercase tracking-widest">Mes Thèmes</span>
+             <div className="h-px bg-slate-800 flex-1"></div>
+           </div>
+           {customThemes.length > 0 ? (
+             customThemes.map(cat => (
+               <button key={cat.id} onClick={() => setActiveTab(cat.id)} className={`px-4 py-2 rounded-full text-xs font-bold transition-all ${activeTab === cat.id ? 'bg-emerald-600 text-white shadow-lg shadow-emerald-500/20' : 'bg-slate-800 text-emerald-400 border border-emerald-500/30'}`}>
+                 {cat.name}
+               </button>
+             ))
+           ) : (
+             <p className="text-xs text-slate-500 italic px-2 w-full">Vous n'avez pas encore créé de thème.</p>
            )}
         </div>
 
-        {/* Contenu des Vidéos */}
+        {/* VIDEOS */}
         <div className="px-0 md:px-10">
           {activeTab === 'accueil' ? (
             <>
-              <ProgramRow title="Dernières vidéos" programs={programs.slice(0, 5)} large={true} onSelect={setSelectedProg} onRemove={removeProgram} />
+              <ProgramRow title="Dernières vidéos" programs={programs.slice(0, 5)} large={true} onSelect={setSelectedProg} onRemove={removeProgram} currentUser={user} isAdmin={isAdmin} />
               {allCategories.map(cat => {
                 const catProgs = programs.filter(p => p.categoryId === cat.id);
                 if (catProgs.length === 0) return null;
-                return <ProgramRow key={cat.id} title={cat.label} programs={catProgs} onSelect={setSelectedProg} onRemove={removeProgram} />;
+                return <ProgramRow key={cat.id} title={cat.label} programs={catProgs} onSelect={setSelectedProg} onRemove={removeProgram} currentUser={user} isAdmin={isAdmin} />;
               })}
             </>
           ) : (
             <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-6 px-4 md:px-0">
               {programs.filter(p => p.categoryId === activeTab).map(prog => (
-                 <div key={prog.id} onClick={() => setSelectedProg(prog)} className="group cursor-pointer">
-                   <div className="relative bg-slate-900 rounded-xl overflow-hidden aspect-video mb-3 border border-slate-800 group-hover:border-slate-500">
-                      <img src={`https://img.youtube.com/vi/${prog.youtubeId}/maxresdefault.jpg`} onError={(e) => { e.target.src = `https://img.youtube.com/vi/${prog.youtubeId}/hqdefault.jpg`; }} className="w-full h-full object-cover transition-transform duration-500 group-hover:scale-105" alt="thumb"/>
-                   </div>
-                   <h3 className="font-semibold text-slate-100 text-sm leading-snug line-clamp-2">{decodeHTML(prog.title)}</h3>
-                 </div>
+                 <ProgramCard 
+                    key={prog.id} 
+                    prog={prog} 
+                    onSelect={setSelectedProg} 
+                    onRemove={removeProgram}
+                    currentUser={user}
+                    isAdmin={isAdmin}
+                 />
               ))}
             </div>
           )}
