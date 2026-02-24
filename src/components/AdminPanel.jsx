@@ -116,49 +116,48 @@ const fetchAndAutoIntegrate = async () => {
     try {
       let cid = channelInput.trim();
       
-      // AUTO-CORRECTION : Si l'utilisateur oublie le @ et que ce n'est pas un ID de chaîne brut (qui commence par UC)
       if (!cid.startsWith('@') && !cid.startsWith('UC')) {
         cid = '@' + cid;
       }
       
-      // 1. RECHERCHE DE L'ID DE LA CHAÎNE VIA LE HANDLE (@)
+      // 1. OBTENIR L'ID DE LA CHAINE (Coût : 1 point)
       if (cid.startsWith('@')) {
         const res = await fetch(`https://www.googleapis.com/youtube/v3/channels?key=${YOUTUBE_API_KEY}&forHandle=${cid}&part=id`);
         const data = await res.json();
-        
-        // Affichage de l'erreur API s'il y en a une (ex: quota dépassé, domaine non autorisé)
-        if (data.error) throw new Error(`Erreur API YouTube : ${data.error.message}`);
-        
-        if (data.items?.length > 0) {
-          cid = data.items[0].id;
-        } else {
-          throw new Error(`La chaîne "${cid}" est introuvable sur YouTube. Vérifiez l'orthographe exacte.`);
-        }
+        if (data.error) throw new Error(`API YouTube : ${data.error.message}`);
+        if (data.items?.length > 0) cid = data.items[0].id;
+        else throw new Error(`Chaîne introuvable sur YouTube.`);
       }
       
-      // 2. RECHERCHE DES VIDÉOS DE LA CHAÎNE
-      const vRes = await fetch(`https://www.googleapis.com/youtube/v3/search?key=${YOUTUBE_API_KEY}&channelId=${cid}&part=snippet,id&order=date&maxResults=15&type=video`);
-      const vData = await vRes.json();
-      
-      if (vData.error) throw new Error(`Erreur API YouTube : ${vData.error.message}`);
-      if (!vData.items || vData.items.length === 0) throw new Error("La chaîne a été trouvée, mais elle ne contient aucune vidéo publique.");
+      // L'ASTUCE MAGIQUE : Remplacer "UC" par "UU" pour cibler la playlist "Uploads" !
+      const playlistId = cid.replace(/^UC/, 'UU');
 
-      const videoIds = vData.items.map(v => v.id.videoId).join(',');
+      // 2. OBTENIR LES DERNIÈRES VIDÉOS VIA LA PLAYLIST (Coût : 1 point au lieu de 100 !)
+      const pRes = await fetch(`https://www.googleapis.com/youtube/v3/playlistItems?key=${YOUTUBE_API_KEY}&playlistId=${playlistId}&part=snippet,contentDetails&maxResults=15`);
+      const pData = await pRes.json();
+      
+      if (pData.error) throw new Error(`API YouTube : ${pData.error.message}`);
+      if (!pData.items || pData.items.length === 0) throw new Error("La chaîne ne contient aucune vidéo publique.");
+
+      // 3. OBTENIR LA DURÉE DES VIDÉOS (Coût : 1 point)
+      const videoIds = pData.items.map(v => v.contentDetails.videoId).join(',');
       const detailsRes = await fetch(`https://www.googleapis.com/youtube/v3/videos?key=${YOUTUBE_API_KEY}&id=${videoIds}&part=contentDetails`);
       const detailsData = await detailsRes.json();
 
-      const longVideos = vData.items.filter(v => {
-        const detail = detailsData.items?.find(d => d.id === v.id.videoId);
+      const longVideos = pData.items.filter(v => {
+        const vidId = v.contentDetails.videoId;
+        const detail = detailsData.items?.find(d => d.id === vidId);
         return detail && parseDuration(detail.contentDetails.duration) >= 180;
       }).slice(0, 5); 
 
-      if (longVideos.length === 0) throw new Error("Aucune vidéo de plus de 3 minutes trouvée sur les 15 dernières publiées.");
+      if (longVideos.length === 0) throw new Error("Aucune vidéo de plus de 3 minutes trouvée.");
       
       const promises = longVideos.map(v => {
+        const vidId = v.contentDetails.videoId;
         const newDocRef = doc(collection(db, 'artifacts', FIREBASE_APP_ID, 'public', 'data', 'programs'));
         return setDoc(newDocRef, {
           id: newDocRef.id,
-          youtubeId: v.id.videoId,
+          youtubeId: vidId,
           channelId: cid, 
           title: decodeHTML(v.snippet.title), 
           creatorName: decodeHTML(v.snippet.channelTitle), 
