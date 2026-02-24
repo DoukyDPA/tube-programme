@@ -107,7 +107,7 @@ export default function AdminPanel({ user, userData, customThemes = [], onClose 
 
   // --- AJOUT DE CHAÎNE YOUTUBE ---
 
-  const fetchAndAutoIntegrate = async () => {
+const fetchAndAutoIntegrate = async () => {
     if (!YOUTUBE_API_KEY) return alert("❌ Clé API YouTube manquante !");
     if (!channelInput.trim()) return alert("Veuillez entrer une chaîne (ex: @MonsieurPhi).");
     if (!category) return alert("Veuillez sélectionner une thématique de destination.");
@@ -116,16 +116,32 @@ export default function AdminPanel({ user, userData, customThemes = [], onClose 
     try {
       let cid = channelInput.trim();
       
+      // AUTO-CORRECTION : Si l'utilisateur oublie le @ et que ce n'est pas un ID de chaîne brut (qui commence par UC)
+      if (!cid.startsWith('@') && !cid.startsWith('UC')) {
+        cid = '@' + cid;
+      }
+      
+      // 1. RECHERCHE DE L'ID DE LA CHAÎNE VIA LE HANDLE (@)
       if (cid.startsWith('@')) {
         const res = await fetch(`https://www.googleapis.com/youtube/v3/channels?key=${YOUTUBE_API_KEY}&forHandle=${cid}&part=id`);
         const data = await res.json();
-        if (data.items?.length > 0) cid = data.items[0].id;
-        else throw new Error("Chaîne introuvable sur YouTube.");
+        
+        // Affichage de l'erreur API s'il y en a une (ex: quota dépassé, domaine non autorisé)
+        if (data.error) throw new Error(`Erreur API YouTube : ${data.error.message}`);
+        
+        if (data.items?.length > 0) {
+          cid = data.items[0].id;
+        } else {
+          throw new Error(`La chaîne "${cid}" est introuvable sur YouTube. Vérifiez l'orthographe exacte.`);
+        }
       }
       
+      // 2. RECHERCHE DES VIDÉOS DE LA CHAÎNE
       const vRes = await fetch(`https://www.googleapis.com/youtube/v3/search?key=${YOUTUBE_API_KEY}&channelId=${cid}&part=snippet,id&order=date&maxResults=15&type=video`);
       const vData = await vRes.json();
-      if (!vData.items || vData.items.length === 0) throw new Error("Aucune vidéo trouvée.");
+      
+      if (vData.error) throw new Error(`Erreur API YouTube : ${vData.error.message}`);
+      if (!vData.items || vData.items.length === 0) throw new Error("La chaîne a été trouvée, mais elle ne contient aucune vidéo publique.");
 
       const videoIds = vData.items.map(v => v.id.videoId).join(',');
       const detailsRes = await fetch(`https://www.googleapis.com/youtube/v3/videos?key=${YOUTUBE_API_KEY}&id=${videoIds}&part=contentDetails`);
@@ -136,7 +152,7 @@ export default function AdminPanel({ user, userData, customThemes = [], onClose 
         return detail && parseDuration(detail.contentDetails.duration) >= 180;
       }).slice(0, 5); 
 
-      if (longVideos.length === 0) throw new Error("Aucune vidéo de plus de 3 minutes trouvée.");
+      if (longVideos.length === 0) throw new Error("Aucune vidéo de plus de 3 minutes trouvée sur les 15 dernières publiées.");
       
       const promises = longVideos.map(v => {
         const newDocRef = doc(collection(db, 'artifacts', FIREBASE_APP_ID, 'public', 'data', 'programs'));
@@ -157,10 +173,11 @@ export default function AdminPanel({ user, userData, customThemes = [], onClose 
       await Promise.all(promises); 
       alert(`✅ Succès ! ${longVideos.length} vidéos ajoutées.`);
       setChannelInput('');
-    } catch (e) { alert(`❌ ERREUR : ${e.message}`); }
+    } catch (e) { 
+      alert(`❌ ERREUR :\n${e.message}`); 
+    }
     finally { setLoading(false); }
   };
-
   return (
     <div className="fixed inset-0 z-[100] bg-slate-950/95 backdrop-blur-xl flex items-center justify-center p-4">
       <div className="bg-slate-900 border border-slate-800 w-full max-w-lg rounded-[2rem] overflow-hidden shadow-2xl flex flex-col max-h-[90vh]">
