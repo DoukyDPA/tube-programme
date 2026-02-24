@@ -6,12 +6,12 @@ import { collection, onSnapshot, doc, getDoc, setDoc, deleteDoc } from 'firebase
 import Auth from './components/Auth';
 import AdminPanel from './components/AdminPanel';
 import ProgramRow from './components/ProgramRow';
-import ProgramCard from './components/ProgramCard'; // On utilise aussi la carte dans la grille
+import ProgramCard from './components/ProgramCard';
 import VideoModal from './components/VideoModal'; 
 
 import { Sparkles, Home, Settings, Loader2, RefreshCw, LogOut, Cpu, BookOpen, Trophy, Mic2 } from 'lucide-react';
 
-const ADMIN_EMAIL = "daniel.p.angelini@gmail.com"; // ⚠️ N'oubliez pas de remettre votre e-mail ici
+const ADMIN_EMAIL = "daniel.p.angelini@gmail.com";
 
 const CATEGORIES = [
   { id: 'ia', label: 'IA & Tech Scope', icon: <Cpu size={18}/> },
@@ -30,12 +30,6 @@ const getIconForCustomTheme = (iconId) => {
   }
 };
 
-const decodeHTML = (html) => {
-  if (!html) return "";
-  const doc = new DOMParser().parseFromString(html, "text/html");
-  return doc.documentElement.textContent;
-};
-
 const parseDuration = (duration) => {
   const match = duration.match(/PT(?:(\d+)H)?(?:(\d+)M)?(?:(\d+)S)?/);
   if (!match) return 0;
@@ -48,7 +42,10 @@ export default function App() {
 
   const [userData, setUserData] = useState(null);
   const [loading, setLoading] = useState(true);
-  const [programs, setPrograms] = useState([]);
+  
+  const [programs, setPrograms] = useState([]); // Données brutes de Firebase
+  const [hydratedPrograms, setHydratedPrograms] = useState([]); // Données hydratées avec YouTube
+  
   const [customThemes, setCustomThemes] = useState([]);
   const [activeTab, setActiveTab] = useState('accueil');
   const [isAdminOpen, setIsAdminOpen] = useState(false);
@@ -78,9 +75,51 @@ export default function App() {
     const q = collection(db, 'artifacts', FIREBASE_APP_ID, 'public', 'data', 'programs');
     return onSnapshot(q, (snap) => {
       const data = snap.docs.map(d => ({ id: d.id, ...d.data() }));
-      setPrograms(data.sort((a,b) => (b.publishedAt || b.createdAt || 0) - (a.publishedAt || a.createdAt || 0)));
+      setPrograms(data); // On ne trie pas encore, on le fera après hydratation
     });
   }, [user]);
+
+  // NOUVEAU USE-EFFECT : Hydratation des données avec l'API YouTube (Conformité ToS)
+  useEffect(() => {
+    const fetchYoutubeData = async () => {
+      if (!programs.length || !YOUTUBE_API_KEY) return;
+      
+      const uniqueIds = [...new Set(programs.map(p => p.youtubeId))];
+      let fetchedData = {};
+      
+      // On groupe les requêtes par lot de 50 (limite de l'API YouTube)
+      for (let i = 0; i < uniqueIds.length; i += 50) {
+        const chunk = uniqueIds.slice(i, i + 50).join(',');
+        try {
+          const res = await fetch(`https://www.googleapis.com/youtube/v3/videos?key=${YOUTUBE_API_KEY}&id=${chunk}&part=snippet`);
+          const data = await res.json();
+          if (data.items) {
+            data.items.forEach(item => {
+              fetchedData[item.id] = {
+                title: item.snippet.title,
+                creatorName: item.snippet.channelTitle,
+                publishedAt: new Date(item.snippet.publishedAt).getTime(),
+              };
+            });
+          }
+        } catch (e) {
+          console.error("Erreur hydratation API YouTube:", e);
+        }
+      }
+      
+      // On fusionne les données Firebase avec les données fraîches de YouTube
+      const merged = programs.map(p => ({
+        ...p,
+        title: fetchedData[p.youtubeId]?.title || "Vidéo indisponible",
+        creatorName: fetchedData[p.youtubeId]?.creatorName || "Créateur inconnu",
+        publishedAt: fetchedData[p.youtubeId]?.publishedAt || p.createdAt,
+      }));
+      
+      setHydratedPrograms(merged.sort((a,b) => b.publishedAt - a.publishedAt));
+    };
+
+    fetchYoutubeData();
+  }, [programs]);
 
   useEffect(() => {
     if (!user) return;
@@ -99,28 +138,21 @@ export default function App() {
       const existingVideoIds = new Set(programs.map(p => p.youtubeId));
       const channelsToUpdate = new Map();
       
+      // Utilisation des identifiants de chaînes (Conformité ToS)
       for (const p of programs) {
         if (p.channelId && p.categoryId) {
-          channelsToUpdate.set(p.channelId, { id: p.channelId, category: p.categoryId, name: p.creatorName });
-        } else if (p.creatorName && p.categoryId) {
-          channelsToUpdate.set(p.creatorName, { name: p.creatorName, category: p.categoryId, needsIdFetch: true });
+          channelsToUpdate.set(p.channelId, { id: p.channelId, category: p.categoryId });
         }
       }
 
       const channels = Array.from(channelsToUpdate.values());
       if (channels.length === 0) {
         setIsSyncing(false);
-        return alert("Aucune chaîne trouvée.");
+        return alert("Aucune chaîne trouvée (Assurez-vous qu'elles aient un channelId).");
       }
 
       for (const channel of channels) {
         let cid = channel.id;
-        if (channel.needsIdFetch) {
-          const res = await fetch(`https://www.googleapis.com/youtube/v3/search?key=${YOUTUBE_API_KEY}&q=${encodeURIComponent(channel.name)}&type=channel&part=snippet`);
-          const data = await res.json();
-          if (data.items && data.items.length > 0) cid = data.items[0].snippet.channelId;
-          else continue;
-        }
 
         const playlistId = cid.replace(/^UC/, 'UU');
         const pRes = await fetch(`https://www.googleapis.com/youtube/v3/playlistItems?key=${YOUTUBE_API_KEY}&playlistId=${playlistId}&part=snippet,contentDetails&maxResults=15`);
@@ -148,13 +180,10 @@ export default function App() {
             id: newDocRef.id,
             youtubeId: vidId,
             channelId: cid,
-            title: decodeHTML(v.snippet.title),
-            creatorName: decodeHTML(v.snippet.channelTitle),
             categoryId: channel.category,
-            addedBy: user.uid, // On tagge la vidéo comme vous appartenant
+            addedBy: user.uid,
             pitch: "",
             createdAt: Date.now(),
-            publishedAt: new Date(v.snippet.publishedAt).getTime(),
             avgScore: 0
           }));
           addedCount++;
@@ -169,7 +198,6 @@ export default function App() {
   };
 
   const removeProgram = async (prog) => {
-    // SÉCURITÉ ANTI-HACK : on vérifie que l'utilisateur a le droit
     if (!isAdmin && prog.addedBy !== user.uid) {
         return alert("❌ Action refusée : Vous ne pouvez supprimer que les vidéos que vous avez vous-même ajoutées.");
     }
@@ -295,20 +323,20 @@ export default function App() {
            )}
         </div>
 
-        {/* VIDEOS */}
+        {/* VIDEOS HYDRATÉES */}
         <div className="px-0 md:px-10">
           {activeTab === 'accueil' ? (
             <>
-              <ProgramRow title="Dernières vidéos" programs={programs.slice(0, 5)} large={true} onSelect={setSelectedProg} onRemove={removeProgram} currentUser={user} isAdmin={isAdmin} />
+              <ProgramRow title="Dernières vidéos" programs={hydratedPrograms.slice(0, 5)} large={true} onSelect={setSelectedProg} onRemove={removeProgram} currentUser={user} isAdmin={isAdmin} />
               {allCategories.map(cat => {
-                const catProgs = programs.filter(p => p.categoryId === cat.id);
+                const catProgs = hydratedPrograms.filter(p => p.categoryId === cat.id);
                 if (catProgs.length === 0) return null;
                 return <ProgramRow key={cat.id} title={cat.label} programs={catProgs} onSelect={setSelectedProg} onRemove={removeProgram} currentUser={user} isAdmin={isAdmin} />;
               })}
             </>
           ) : (
             <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-6 px-4 md:px-0">
-              {programs.filter(p => p.categoryId === activeTab).map(prog => (
+              {hydratedPrograms.filter(p => p.categoryId === activeTab).map(prog => (
                  <ProgramCard 
                     key={prog.id} 
                     prog={prog} 
