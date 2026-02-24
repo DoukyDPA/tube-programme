@@ -12,6 +12,18 @@ const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
 
 const app = express();
+
+// --- NOUVEAU CODE À AJOUTER ---
+// On force une politique de sécurité très souple pour empêcher 
+// les extensions (comme CheckPoint) de bloquer l'affichage.
+app.use((req, res, next) => {
+  res.setHeader(
+    'Content-Security-Policy',
+    "default-src * 'unsafe-inline' 'unsafe-eval' data: blob:;"
+  );
+  next();
+});
+// -----------------------------
 const PORT = process.env.PORT || 3000; // Railway injectera dynamiquement son propre PORT
 
 app.use(cors());
