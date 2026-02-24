@@ -3,7 +3,7 @@ import { Cpu, BookOpen, Trophy, Mic2, X, CheckCircle2, Loader2, Sparkles, Edit2,
 import { db, FIREBASE_APP_ID, YOUTUBE_API_KEY } from '../firebase';
 import { collection, doc, setDoc, updateDoc, deleteDoc } from 'firebase/firestore';
 
-const ADMIN_EMAIL = "daniel.p.angelini@gmail.com"; // ⚠️ N'oubliez pas de remettre votre e-mail ici
+const ADMIN_EMAIL = "daniel.p.angelini@gmail.com";
 
 const ICONS = [
   { id: 'ia', icon: <Cpu size={18}/> },
@@ -19,12 +19,6 @@ const CATEGORIES = [
   { id: 'foot', label: 'Economie Scope' },
   { id: 'interviews', label: 'Talks Scope' },
 ];
-
-const decodeHTML = (html) => {
-  if (!html) return "";
-  const doc = new DOMParser().parseFromString(html, "text/html");
-  return doc.documentElement.textContent;
-};
 
 const parseDuration = (duration) => {
   const match = duration.match(/PT(?:(\d+)H)?(?:(\d+)M)?(?:(\d+)S)?/);
@@ -49,7 +43,7 @@ export default function AdminPanel({ user, userData, customThemes = [], onClose 
 
   const handleCreateTheme = async () => {
     if (!themeName.trim()) return;
-    if (!userData?.isPremium && customThemes.length >= 2) return alert("💎 Limite atteinte.");
+    if (!userData?.isPremium && customThemes.length >= 2) return alert("💎 Limite atteinte. Passez Premium pour plus de thèmes.");
 
     setLoading(true);
     try {
@@ -127,17 +121,16 @@ export default function AdminPanel({ user, userData, customThemes = [], onClose 
       const promises = longVideos.map(v => {
         const vidId = v.contentDetails.videoId;
         const newDocRef = doc(collection(db, 'artifacts', FIREBASE_APP_ID, 'public', 'data', 'programs'));
+        
+        // CONFORMITÉ ToS: Ne pas enregistrer de données statiques (title, nom de chaîne...)
         return setDoc(newDocRef, {
           id: newDocRef.id,
           youtubeId: vidId,
           channelId: cid, 
-          title: decodeHTML(v.snippet.title), 
-          creatorName: decodeHTML(v.snippet.channelTitle), 
           categoryId: category,
-          addedBy: user.uid, // <-- LA SÉCURITÉ COMMENCE ICI : On enregistre le propriétaire
+          addedBy: user.uid,
           pitch: "", 
           createdAt: Date.now(),
-          publishedAt: new Date(v.snippet.publishedAt).getTime(),
           avgScore: 0
         });
       });
