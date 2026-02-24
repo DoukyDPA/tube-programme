@@ -49,7 +49,9 @@ export default function App() {
   const [isAdminOpen, setIsAdminOpen] = useState(false);
   const [selectedProg, setSelectedProg] = useState(null);
   const [isSyncing, setIsSyncing] = useState(false);
-
+  const ADMIN_EMAIL = "daniel.p.angelini@gmail.com"; 
+  const isAdmin = user?.email === ADMIN_EMAIL;
+  
   useEffect(() => {
     return onAuthStateChanged(auth, async (u) => {
       setUser(u);
@@ -253,12 +255,14 @@ export default function App() {
              {activeTab === 'accueil' ? 'À la Une' : allCategories.find(c => c.id === activeTab)?.label}
           </h2>
           
-          {activeTab === 'accueil' && (
+          {/* Le bouton ne s'affiche que si l'onglet est 'accueil' ET que l'utilisateur est admin */}
+          {activeTab === 'accueil' && isAdmin && (
             <button onClick={syncWhatsNew} disabled={isSyncing} className="flex items-center gap-2 bg-indigo-600 hover:bg-indigo-500 text-white px-3 py-2 md:px-4 md:py-2 rounded-xl text-xs md:text-sm font-bold shadow-lg shadow-indigo-500/20 transition-all disabled:opacity-50">
               {isSyncing ? <Loader2 size={16} className="animate-spin"/> : <RefreshCw size={16} />} 
               <span className="hidden md:inline">{isSyncing ? 'Recherche...' : 'Actualiser'}</span>
             </button>
           )}
+          
         </header>
 
         {/* === NOUVEAU : FILTRES / CATÉGORIES (UNIQUEMENT SUR MOBILE) EN GRILLE === */}
