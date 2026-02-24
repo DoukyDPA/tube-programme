@@ -3,6 +3,8 @@ import { Cpu, BookOpen, Trophy, Mic2, X, CheckCircle2, Loader2, Sparkles, Edit2,
 import { db, FIREBASE_APP_ID, YOUTUBE_API_KEY } from '../firebase';
 import { collection, doc, setDoc, updateDoc, deleteDoc } from 'firebase/firestore';
 
+const ADMIN_EMAIL = "votre.email@gmail.com"; // ⚠️ N'oubliez pas de remettre votre e-mail ici
+
 const ICONS = [
   { id: 'ia', icon: <Cpu size={18}/> },
   { id: 'lecture', icon: <BookOpen size={18}/> },
@@ -11,11 +13,10 @@ const ICONS = [
   { id: 'custom', icon: <Sparkles size={18}/> }
 ];
 
-// Si vous souhaitez renommer les catégories de base, faites-le ici (et dans App.jsx)
 const CATEGORIES = [
   { id: 'ia', label: 'IA & Tech' },
   { id: 'lecture', label: 'Culture & Livres' },
-  { id: 'foot', label: 'Sport & Santé' },
+  { id: 'foot', label: 'Analyse Foot' },
   { id: 'interviews', label: 'Talks & Débats' },
 ];
 
@@ -32,51 +33,34 @@ const parseDuration = (duration) => {
 };
 
 export default function AdminPanel({ user, userData, customThemes = [], onClose }) {
-  
-  // === DÉFINISSEZ VOTRE EMAIL ADMIN ICI ===
-  const ADMIN_EMAIL = "daniel.p.angelini@gmail.com"; 
   const isAdmin = user?.email === ADMIN_EMAIL;
 
   const [tab, setTab] = useState('channel');
   const [loading, setLoading] = useState(false);
   
-  // Création Thème
   const [themeName, setThemeName] = useState('');
   const [selectedIcon, setSelectedIcon] = useState('ia');
 
-  // Édition Thème
   const [editingThemeId, setEditingThemeId] = useState(null);
   const [editThemeName, setEditThemeName] = useState('');
 
-  // Ajout Chaîne
   const [channelInput, setChannelInput] = useState('');
-  // Par défaut, l'admin voit "ia", les autres voient leur 1er thème perso (s'il existe)
   const [category, setCategory] = useState(isAdmin ? 'ia' : (customThemes[0]?.id || ''));
-
-  // --- ACTIONS SUR LES THÈMES ---
 
   const handleCreateTheme = async () => {
     if (!themeName.trim()) return;
-    
-    if (!userData?.isPremium && customThemes.length >= 2) {
-      return alert("💎 Version Gratuite : Vous avez atteint la limite de 2 thématiques personnalisées.");
-    }
+    if (!userData?.isPremium && customThemes.length >= 2) return alert("💎 Limite atteinte.");
 
     setLoading(true);
     try {
       const themeRef = doc(collection(db, 'users', user.uid, 'themes'));
       await setDoc(themeRef, { name: themeName, icon: selectedIcon, createdAt: Date.now() });
-      
       const userRef = doc(db, 'users', user.uid);
       await setDoc(userRef, { themeCount: customThemes.length + 1 }, { merge: true });
 
-      alert("Thématique créée avec succès !");
+      alert("Thématique créée !");
       setThemeName('');
-      
-      // Si l'utilisateur n'avait pas de thème, on sélectionne celui-ci par défaut pour l'ajout de chaîne
-      if (!isAdmin && customThemes.length === 0) {
-        setCategory(themeRef.id);
-      }
+      if (!isAdmin && customThemes.length === 0) setCategory(themeRef.id);
     } catch (e) { alert(e.message); }
     finally { setLoading(false); }
   };
@@ -90,13 +74,12 @@ export default function AdminPanel({ user, userData, customThemes = [], onClose 
   };
 
   const handleDeleteTheme = async (themeId) => {
-    if (confirm("Supprimer cette thématique ? (Les vidéos associées ne seront pas supprimées de la base globale)")) {
+    if (confirm("Supprimer cette thématique ?")) {
       try {
         await deleteDoc(doc(db, 'users', user.uid, 'themes', themeId));
         const userRef = doc(db, 'users', user.uid);
         await setDoc(userRef, { themeCount: Math.max(0, customThemes.length - 1) }, { merge: true });
         
-        // Si le thème supprimé était sélectionné, on change la sélection
         if (!isAdmin && category === themeId) {
             const remainingThemes = customThemes.filter(t => t.id !== themeId);
             setCategory(remainingThemes.length > 0 ? remainingThemes[0].id : '');
@@ -105,52 +88,41 @@ export default function AdminPanel({ user, userData, customThemes = [], onClose 
     }
   };
 
-  // --- AJOUT DE CHAÎNE YOUTUBE ---
-
-const fetchAndAutoIntegrate = async () => {
+  const fetchAndAutoIntegrate = async () => {
     if (!YOUTUBE_API_KEY) return alert("❌ Clé API YouTube manquante !");
-    if (!channelInput.trim()) return alert("Veuillez entrer une chaîne (ex: @MonsieurPhi).");
-    if (!category) return alert("Veuillez sélectionner une thématique de destination.");
+    if (!channelInput.trim()) return alert("Entrez une chaîne.");
+    if (!category) return alert("Sélectionnez une thématique.");
     
     setLoading(true);
     try {
       let cid = channelInput.trim();
+      if (!cid.startsWith('@') && !cid.startsWith('UC')) cid = '@' + cid;
       
-      if (!cid.startsWith('@') && !cid.startsWith('UC')) {
-        cid = '@' + cid;
-      }
-      
-      // 1. OBTENIR L'ID DE LA CHAINE (Coût : 1 point)
       if (cid.startsWith('@')) {
         const res = await fetch(`https://www.googleapis.com/youtube/v3/channels?key=${YOUTUBE_API_KEY}&forHandle=${cid}&part=id`);
         const data = await res.json();
-        if (data.error) throw new Error(`API YouTube : ${data.error.message}`);
+        if (data.error) throw new Error(data.error.message);
         if (data.items?.length > 0) cid = data.items[0].id;
-        else throw new Error(`Chaîne introuvable sur YouTube.`);
+        else throw new Error("Chaîne introuvable.");
       }
       
-      // L'ASTUCE MAGIQUE : Remplacer "UC" par "UU" pour cibler la playlist "Uploads" !
       const playlistId = cid.replace(/^UC/, 'UU');
-
-      // 2. OBTENIR LES DERNIÈRES VIDÉOS VIA LA PLAYLIST (Coût : 1 point au lieu de 100 !)
       const pRes = await fetch(`https://www.googleapis.com/youtube/v3/playlistItems?key=${YOUTUBE_API_KEY}&playlistId=${playlistId}&part=snippet,contentDetails&maxResults=15`);
       const pData = await pRes.json();
       
-      if (pData.error) throw new Error(`API YouTube : ${pData.error.message}`);
-      if (!pData.items || pData.items.length === 0) throw new Error("La chaîne ne contient aucune vidéo publique.");
+      if (pData.error) throw new Error(pData.error.message);
+      if (!pData.items || pData.items.length === 0) throw new Error("Aucune vidéo publique.");
 
-      // 3. OBTENIR LA DURÉE DES VIDÉOS (Coût : 1 point)
       const videoIds = pData.items.map(v => v.contentDetails.videoId).join(',');
       const detailsRes = await fetch(`https://www.googleapis.com/youtube/v3/videos?key=${YOUTUBE_API_KEY}&id=${videoIds}&part=contentDetails`);
       const detailsData = await detailsRes.json();
 
       const longVideos = pData.items.filter(v => {
-        const vidId = v.contentDetails.videoId;
-        const detail = detailsData.items?.find(d => d.id === vidId);
+        const detail = detailsData.items?.find(d => d.id === v.contentDetails.videoId);
         return detail && parseDuration(detail.contentDetails.duration) >= 180;
       }).slice(0, 5); 
 
-      if (longVideos.length === 0) throw new Error("Aucune vidéo de plus de 3 minutes trouvée.");
+      if (longVideos.length === 0) throw new Error("Aucune vidéo de plus de 3 min.");
       
       const promises = longVideos.map(v => {
         const vidId = v.contentDetails.videoId;
@@ -162,6 +134,7 @@ const fetchAndAutoIntegrate = async () => {
           title: decodeHTML(v.snippet.title), 
           creatorName: decodeHTML(v.snippet.channelTitle), 
           categoryId: category,
+          addedBy: user.uid, // <-- LA SÉCURITÉ COMMENCE ICI : On enregistre le propriétaire
           pitch: "", 
           createdAt: Date.now(),
           publishedAt: new Date(v.snippet.publishedAt).getTime(),
@@ -170,13 +143,12 @@ const fetchAndAutoIntegrate = async () => {
       });
 
       await Promise.all(promises); 
-      alert(`✅ Succès ! ${longVideos.length} vidéos ajoutées.`);
+      alert(`✅ ${longVideos.length} vidéos ajoutées.`);
       setChannelInput('');
-    } catch (e) { 
-      alert(`❌ ERREUR :\n${e.message}`); 
-    }
+    } catch (e) { alert(`❌ ERREUR : ${e.message}`); }
     finally { setLoading(false); }
   };
+
   return (
     <div className="fixed inset-0 z-[100] bg-slate-950/95 backdrop-blur-xl flex items-center justify-center p-4">
       <div className="bg-slate-900 border border-slate-800 w-full max-w-lg rounded-[2rem] overflow-hidden shadow-2xl flex flex-col max-h-[90vh]">
@@ -189,7 +161,6 @@ const fetchAndAutoIntegrate = async () => {
         <div className="p-8 overflow-y-auto">
           {tab === 'theme' ? (
             <div className="space-y-8">
-              {/* Formulaire de création */}
               <div className="space-y-4">
                 <div>
                   <label className="text-[10px] font-bold text-slate-500 uppercase tracking-widest block mb-2">Nouvelle thématique</label>
@@ -205,12 +176,8 @@ const fetchAndAutoIntegrate = async () => {
                 <button onClick={handleCreateTheme} disabled={loading} className="w-full bg-indigo-600 py-3 rounded-xl font-bold text-sm text-white hover:bg-indigo-500 disabled:opacity-50">
                   {loading ? <Loader2 className="animate-spin mx-auto" size={18}/> : 'Créer'}
                 </button>
-                {!userData?.isPremium && (
-                  <p className="text-center text-[11px] font-medium text-slate-500">Utilisés : {customThemes.length}/2 (Version Gratuite)</p>
-                )}
               </div>
 
-              {/* Liste des thèmes modifiables */}
               {customThemes.length > 0 && (
                 <div className="border-t border-slate-800 pt-6">
                   <h3 className="text-[10px] font-bold text-slate-500 uppercase tracking-widest mb-4">Mes Thématiques Créées</h3>
@@ -219,15 +186,9 @@ const fetchAndAutoIntegrate = async () => {
                       <div key={ct.id} className="flex items-center justify-between bg-slate-800/50 p-3 rounded-xl border border-slate-700/50">
                         {editingThemeId === ct.id ? (
                           <div className="flex items-center gap-2 flex-1">
-                            <input 
-                              value={editThemeName} 
-                              onChange={e => setEditThemeName(e.target.value)}
-                              className="flex-1 bg-slate-900 px-3 py-1.5 rounded-lg text-sm font-semibold text-white outline-none border border-slate-700 focus:border-indigo-500"
-                              autoFocus
-                              onKeyDown={(e) => e.key === 'Enter' && handleUpdateTheme(ct.id)}
-                            />
-                            <button onClick={() => handleUpdateTheme(ct.id)} className="p-2 text-emerald-400 hover:bg-emerald-400/10 rounded-lg transition-colors"><Check size={16}/></button>
-                            <button onClick={() => setEditingThemeId(null)} className="p-2 text-slate-400 hover:bg-slate-700 rounded-lg transition-colors"><X size={16}/></button>
+                            <input value={editThemeName} onChange={e => setEditThemeName(e.target.value)} className="flex-1 bg-slate-900 px-3 py-1.5 rounded-lg text-sm text-white outline-none border focus:border-indigo-500" autoFocus onKeyDown={(e) => e.key === 'Enter' && handleUpdateTheme(ct.id)} />
+                            <button onClick={() => handleUpdateTheme(ct.id)} className="p-2 text-emerald-400 hover:bg-emerald-400/10 rounded-lg"><Check size={16}/></button>
+                            <button onClick={() => setEditingThemeId(null)} className="p-2 text-slate-400 hover:bg-slate-700 rounded-lg"><X size={16}/></button>
                           </div>
                         ) : (
                           <>
@@ -236,12 +197,8 @@ const fetchAndAutoIntegrate = async () => {
                               <span className="text-sm font-semibold text-slate-200">{ct.name}</span>
                             </div>
                             <div className="flex items-center gap-1">
-                              <button onClick={() => { setEditingThemeId(ct.id); setEditThemeName(ct.name); }} className="p-2 text-slate-400 hover:text-indigo-400 hover:bg-indigo-400/10 rounded-lg transition-colors" title="Renommer">
-                                <Edit2 size={14}/>
-                              </button>
-                              <button onClick={() => handleDeleteTheme(ct.id)} className="p-2 text-slate-400 hover:text-red-400 hover:bg-red-400/10 rounded-lg transition-colors" title="Supprimer">
-                                <Trash2 size={14}/>
-                              </button>
+                              <button onClick={() => { setEditingThemeId(ct.id); setEditThemeName(ct.name); }} className="p-2 text-slate-400 hover:text-indigo-400 rounded-lg"><Edit2 size={14}/></button>
+                              <button onClick={() => handleDeleteTheme(ct.id)} className="p-2 text-slate-400 hover:text-red-400 rounded-lg"><Trash2 size={14}/></button>
                             </div>
                           </>
                         )}
@@ -254,38 +211,19 @@ const fetchAndAutoIntegrate = async () => {
           ) : (
             <div className="space-y-6">
               {!isAdmin && customThemes.length === 0 ? (
-                <div className="p-6 bg-amber-500/10 border border-amber-500/20 rounded-xl text-amber-400 text-sm text-center font-medium">
-                  Créez d'abord une thématique dans l'onglet "Mes Thèmes" pour pouvoir y ajouter vos propres chaînes YouTube.
-                </div>
+                <div className="p-6 bg-amber-500/10 border border-amber-500/20 rounded-xl text-amber-400 text-sm text-center">Créez d'abord une thématique.</div>
               ) : (
                 <>
                   <div className="space-y-2">
-                    <label className="text-xs font-bold text-slate-500 uppercase tracking-wider">
-                      Thématique de destination
-                    </label>
-                    <select 
-                      className="w-full bg-slate-800 p-4 rounded-xl text-sm border-none outline-none text-white focus:ring-2 focus:ring-indigo-500" 
-                      value={category} 
-                      onChange={e => setCategory(e.target.value)}
-                    >
-                      {/* L'ADMIN VOIT LES CATÉGORIES GLOBALES */}
-                      {isAdmin && (
-                        <optgroup label="Catégories TubeMag (Admin)">
-                          {CATEGORIES.map(c => <option key={c.id} value={c.id}>{c.label}</option>)}
-                        </optgroup>
-                      )}
-                      
-                      {/* TOUT LE MONDE VOIT SES PROPRES THÈMES */}
-                      {customThemes.length > 0 && (
-                        <optgroup label="Mes Thématiques Personnelles">
-                          {customThemes.map(c => <option key={c.id} value={c.id}>{c.name}</option>)}
-                        </optgroup>
-                      )}
+                    <label className="text-xs font-bold text-slate-500 uppercase tracking-wider">Destination</label>
+                    <select className="w-full bg-slate-800 p-4 rounded-xl text-sm border-none text-white focus:ring-2 focus:ring-indigo-500" value={category} onChange={e => setCategory(e.target.value)}>
+                      {isAdmin && <optgroup label="Catégories TubeMag">{CATEGORIES.map(c => <option key={c.id} value={c.id}>{c.label}</option>)}</optgroup>}
+                      {customThemes.length > 0 && <optgroup label="Mes Thématiques">{customThemes.map(c => <option key={c.id} value={c.id}>{c.name}</option>)}</optgroup>}
                     </select>
                   </div>
                   <div className="space-y-2">
-                    <label className="text-xs font-bold text-slate-500 uppercase tracking-wider">Nouvelle Chaîne YouTube</label>
-                    <input className="w-full bg-slate-800 p-4 rounded-xl text-sm outline-none text-white focus:ring-2 focus:ring-indigo-500" placeholder="ex: @MonsieurPhi" value={channelInput} onChange={e => setChannelInput(e.target.value)} />
+                    <label className="text-xs font-bold text-slate-500 uppercase tracking-wider">Chaîne YouTube</label>
+                    <input className="w-full bg-slate-800 p-4 rounded-xl text-sm text-white focus:ring-2 focus:ring-indigo-500" placeholder="@MonsieurPhi" value={channelInput} onChange={e => setChannelInput(e.target.value)} />
                   </div>
                   <button onClick={fetchAndAutoIntegrate} disabled={loading} className="w-full bg-emerald-600 py-4 rounded-xl font-bold text-white flex justify-center items-center gap-2 hover:bg-emerald-500 disabled:opacity-50">
                     {loading ? <Loader2 className="animate-spin" size={18}/> : <><CheckCircle2 size={18} /> Ajouter la chaîne</>}
