@@ -14,10 +14,10 @@ const ICONS = [
 ];
 
 const CATEGORIES = [
-  { id: 'ia', label: 'IA & Tech Mag' },
-  { id: 'lecture', label: 'Culture Mag' },
-  { id: 'foot', label: 'Economie Mag' },
-  { id: 'interviews', label: 'Talks Mag' },
+  { id: 'ia', label: 'IA & Tech Scope' },
+  { id: 'lecture', label: 'Culture Scope' },
+  { id: 'foot', label: 'Economie Scope' },
+  { id: 'interviews', label: 'Talks Scope' },
 ];
 
 const decodeHTML = (html) => {
