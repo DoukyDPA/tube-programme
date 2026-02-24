@@ -2,13 +2,6 @@ import { initializeApp } from 'firebase/app';
 import { getAuth, signInAnonymously } from 'firebase/auth';
 import { getFirestore, collection, getDocs, doc, setDoc } from 'firebase/firestore';
 
-// Comme nous sommes côté serveur (Node.js), nous n'avons pas de DOMParser. 
-// On utilise une fonction de remplacement classique pour nettoyer les titres.
-const decodeHTML = (str) => {
-  if (!str) return "";
-  return str.replace(/&amp;/g, '&').replace(/&lt;/g, '<').replace(/&gt;/g, '>').replace(/&quot;/g, '"').replace(/&#39;/g, "'");
-};
-
 const parseDuration = (duration) => {
   const match = duration.match(/PT(?:(\d+)H)?(?:(\d+)M)?(?:(\d+)S)?/);
   if (!match) return 0;
@@ -33,7 +26,6 @@ export default async function handler(req, res) {
   const FIREBASE_APP_ID = "tube-prog-v0";
 
   // 1. LA LISTE DES CHAÎNES À SURVEILLER AUTOMATIQUEMENT
-  // Ajoutez autant de chaînes que vous le souhaitez ici :
   const CHANNELS_TO_MONITOR = [
     { handle: "@MonsieurPhi", category: "ia" },
     { handle: "@NotaBene", category: "lecture" },
@@ -82,15 +74,15 @@ export default async function handler(req, res) {
 
         // Nouvelle vidéo longue détectée ! Ajout à la base.
         const newDocRef = doc(collection(db, 'artifacts', FIREBASE_APP_ID, 'public', 'data', 'programs'));
+        
+        // CONFORMITÉ ToS: Suppression des métadonnées (title, creatorName, publishedAt)
         await setDoc(newDocRef, {
           id: newDocRef.id,
           youtubeId: v.id.videoId,
-          title: decodeHTML(v.snippet.title),
-          creatorName: decodeHTML(v.snippet.channelTitle),
+          channelId: cid,
           categoryId: channel.category,
           pitch: "",
           createdAt: Date.now(),
-          publishedAt: new Date(v.snippet.publishedAt).getTime(),
           avgScore: 0
         });
         
