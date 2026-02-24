@@ -210,7 +210,7 @@ export default function AdminPanel({ user, userData, customThemes = [], onClose 
                   <div className="space-y-2">
                     <label className="text-xs font-bold text-slate-500 uppercase tracking-wider">Destination</label>
                     <select className="w-full bg-slate-800 p-4 rounded-xl text-sm border-none text-white focus:ring-2 focus:ring-indigo-500" value={category} onChange={e => setCategory(e.target.value)}>
-                      {isAdmin && <optgroup label="Catégories TubeMag">{CATEGORIES.map(c => <option key={c.id} value={c.id}>{c.label}</option>)}</optgroup>}
+                      {isAdmin && <optgroup label="Catégories TubiScope">{CATEGORIES.map(c => <option key={c.id} value={c.id}>{c.label}</option>)}</optgroup>}
                       {customThemes.length > 0 && <optgroup label="Mes Thématiques">{customThemes.map(c => <option key={c.id} value={c.id}>{c.name}</option>)}</optgroup>}
                     </select>
                   </div>
