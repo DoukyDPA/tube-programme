@@ -215,6 +215,15 @@ export default function App() {
     ...customThemes.map(ct => ({ id: ct.id, label: ct.name }))
   ];
 
+  // --- FILTRAGE DES DERNIÈRES VIDÉOS ---
+  // On récupère les identifiants des catégories globales (publiques)
+  const globalCategoryIds = CATEGORIES.map(c => c.id);
+  
+  // On filtre le flux pour la section "Dernières vidéos"
+  const personalizedLatestPrograms = hydratedPrograms.filter(prog => 
+    globalCategoryIds.includes(prog.categoryId) || prog.addedBy === user?.uid
+  );
+
   if (loading) return <div className="h-screen bg-slate-950 flex items-center justify-center"><Loader2 className="animate-spin text-indigo-500" size={40} /></div>;
   if (!user) return <Auth />;
 
@@ -306,7 +315,9 @@ export default function App() {
         <div className="px-0 md:px-10">
           {activeTab === 'accueil' ? (
             <>
-              <ProgramRow title="Dernières vidéos" programs={hydratedPrograms.slice(0, 5)} large={true} onSelect={setSelectedProg} onRemove={removeProgram} currentUser={user} isAdmin={isAdmin} />
+              {/* Utilisation de notre liste personnalisée pour les "Dernières vidéos" */}
+              <ProgramRow title="Dernières vidéos" programs={personalizedLatestPrograms.slice(0, 5)} large={true} onSelect={setSelectedProg} onRemove={removeProgram} currentUser={user} isAdmin={isAdmin} />
+              
               {allCategories.map(cat => {
                 const catProgs = hydratedPrograms.filter(p => p.categoryId === cat.id);
                 if (catProgs.length === 0) return null;
