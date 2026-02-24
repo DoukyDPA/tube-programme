@@ -23,6 +23,16 @@ export default function VideoModal({ prog, onClose }) {
           {prog.creatorName}
         </span>
         <h2 className="text-2xl md:text-4xl font-bold text-white leading-tight mb-6">{prog.title}</h2>
+        
+        {/* LIEN OBLIGATOIRE YOUTUBE */}
+        <a 
+          href={`https://www.youtube.com/watch?v=${prog.youtubeId}`} 
+          target="_blank" 
+          rel="noopener noreferrer"
+          className="inline-flex items-center gap-2 px-4 py-2 bg-slate-800 hover:bg-slate-700 text-slate-200 rounded-lg text-sm font-semibold transition-colors"
+        >
+          Regarder sur YouTube
+        </a>
       </div>
     </div>
   );
