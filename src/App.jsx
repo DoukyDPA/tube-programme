@@ -87,7 +87,7 @@ export default function App() {
     });
   }, [user]);
 
-  const syncWhatsNew = async () => {
+const syncWhatsNew = async () => {
     if (!YOUTUBE_API_KEY) return alert("❌ Clé API manquante !");
     setIsSyncing(true);
     let addedCount = 0;
@@ -112,6 +112,8 @@ export default function App() {
 
       for (const channel of channels) {
         let cid = channel.id;
+        
+        // Sécurité pour les très anciennes vidéos sans ID
         if (channel.needsIdFetch) {
           const res = await fetch(`https://www.googleapis.com/youtube/v3/search?key=${YOUTUBE_API_KEY}&q=${encodeURIComponent(channel.name)}&type=channel&part=snippet`);
           const data = await res.json();
@@ -119,28 +121,33 @@ export default function App() {
           else continue;
         }
 
-        const vRes = await fetch(`https://www.googleapis.com/youtube/v3/search?key=${YOUTUBE_API_KEY}&channelId=${cid}&part=snippet,id&order=date&maxResults=15&type=video`);
-        const vData = await vRes.json();
-        if (!vData.items) continue;
+        // L'ASTUCE MAGIQUE ICI AUSSI (1 point au lieu de 100)
+        const playlistId = cid.replace(/^UC/, 'UU');
 
-        const videoIds = vData.items.map(v => v.id.videoId).join(',');
+        const pRes = await fetch(`https://www.googleapis.com/youtube/v3/playlistItems?key=${YOUTUBE_API_KEY}&playlistId=${playlistId}&part=snippet,contentDetails&maxResults=15`);
+        const pData = await pRes.json();
+        if (!pData.items) continue;
+
+        const videoIds = pData.items.map(v => v.contentDetails.videoId).join(',');
         const detailsRes = await fetch(`https://www.googleapis.com/youtube/v3/videos?key=${YOUTUBE_API_KEY}&id=${videoIds}&part=contentDetails`);
         const detailsData = await detailsRes.json();
 
         const promises = [];
         let channelAddedVideos = 0;
 
-        for (const v of vData.items) {
+        for (const v of pData.items) {
           if (channelAddedVideos >= 5) break; 
-          if (existingVideoIds.has(v.id.videoId)) continue; 
+          
+          const vidId = v.contentDetails.videoId;
+          if (existingVideoIds.has(vidId)) continue; 
 
-          const detail = detailsData.items?.find(d => d.id === v.id.videoId);
+          const detail = detailsData.items?.find(d => d.id === vidId);
           if (!detail || parseDuration(detail.contentDetails.duration) < 180) continue; 
 
           const newDocRef = doc(collection(db, 'artifacts', FIREBASE_APP_ID, 'public', 'data', 'programs'));
           promises.push(setDoc(newDocRef, {
             id: newDocRef.id,
-            youtubeId: v.id.videoId,
+            youtubeId: vidId,
             channelId: cid,
             title: decodeHTML(v.snippet.title),
             creatorName: decodeHTML(v.snippet.channelTitle),
@@ -152,7 +159,7 @@ export default function App() {
           }));
           addedCount++;
           channelAddedVideos++; 
-          existingVideoIds.add(v.id.videoId); 
+          existingVideoIds.add(vidId); 
         }
         await Promise.all(promises);
       }
