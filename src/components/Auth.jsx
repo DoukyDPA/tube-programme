@@ -1,7 +1,6 @@
 import React, { useState } from 'react';
 import { auth } from '../firebase';
 import { signInWithEmailAndPassword, createUserWithEmailAndPassword } from 'firebase/auth';
-import { Lock, Mail, Key } from 'lucide-react';
 
 export default function Auth() {
   const [isLogin, setIsLogin] = useState(true);
@@ -28,6 +27,10 @@ export default function Auth() {
           <button className="w-full py-4 bg-indigo-600 hover:bg-indigo-500 text-white rounded-xl font-bold transition-all">
             {isLogin ? 'Se connecter' : "S'inscrire"}
           </button>
+          
+          <p className="text-xs text-slate-500 text-center mt-4">
+            En vous connectant, vous acceptez nos <a href="#" className="underline hover:text-indigo-400">Conditions Générales</a> et notre <a href="#" className="underline hover:text-indigo-400">Politique de confidentialité</a>.
+          </p>
         </form>
         <button onClick={() => setIsLogin(!isLogin)} className="w-full mt-6 text-slate-400 text-sm hover:text-white">
           {isLogin ? "Pas encore de compte ? S'inscrire" : "Déjà un compte ? Se connecter"}
