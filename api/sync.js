@@ -3,12 +3,10 @@ import { getAuth, signInAnonymously } from 'firebase/auth';
 import { getFirestore, collection, getDocs, doc, setDoc } from 'firebase/firestore';
 
 const parseDuration = (duration) => {
+  if (!duration) return 0;
   const match = duration.match(/PT(?:(\d+)H)?(?:(\d+)M)?(?:(\d+)S)?/);
   if (!match) return 0;
-  const h = parseInt(match[1] || 0, 10);
-  const m = parseInt(match[2] || 0, 10);
-  const s = parseInt(match[3] || 0, 10);
-  return h * 3600 + m * 60 + s;
+  return (parseInt(match[1] || 0, 10) * 3600) + (parseInt(match[2] || 0, 10) * 60) + parseInt(match[3] || 0, 10);
 };
 
 export default async function handler(req, res) {
