@@ -1,6 +1,6 @@
 import { initializeApp } from 'firebase/app';
 import { getAuth, signInAnonymously } from 'firebase/auth';
-import { getFirestore, collection, getDocs, doc, setDoc } from 'firebase/firestore';
+import { getFirestore, collection, getDocs, doc, setDoc, deleteDoc } from 'firebase/firestore'; 
 
 const parseDuration = (duration) => {
   if (!duration) return 0;
@@ -29,31 +29,38 @@ export default async function handler(req, res) {
 
     await signInAnonymously(auth);
 
-    // 1. Récupérer TOUTES les vidéos existantes pour extraire les chaînes à surveiller
     const programsRef = collection(db, 'artifacts', FIREBASE_APP_ID, 'public', 'data', 'programs');
     const existingDocs = await getDocs(programsRef);
     
     const existingIds = new Set();
-    const channelsToMonitor = new Map(); // Utilise une Map pour l'unicité des IDs de chaîne
+    const channelsToMonitor = new Map();
+    const videosByChannel = {}; // Dictionnaire pour regrouper les vidéos par chaîne
 
     existingDocs.forEach(d => {
       const data = d.data();
       existingIds.add(data.youtubeId);
-      // On stocke l'ID de la chaîne et sa catégorie associée
-      if (data.channelId && data.categoryId) {
-        channelsToMonitor.set(data.channelId, { 
-          id: data.channelId, 
-          category: data.categoryId,
-          addedBy: data.addedBy || "system" 
-        });
+      
+      if (data.channelId) {
+        // Grouper les vidéos existantes par chaîne
+        if (!videosByChannel[data.channelId]) videosByChannel[data.channelId] = [];
+        videosByChannel[data.channelId].push({ docId: d.id, createdAt: data.createdAt });
+
+        // Identifier les chaînes à surveiller
+        if (data.categoryId) {
+          channelsToMonitor.set(data.channelId, { 
+            id: data.channelId, 
+            category: data.categoryId,
+            addedBy: data.addedBy || "system" 
+          });
+        }
       }
     });
 
     let addedCount = 0;
+    let deletedCount = 0;
 
-    // 2. Scanner chaque chaîne identifiée
+    // 1. Scanner chaque chaîne pour ajouter les nouveautés
     for (const [channelId, channelInfo] of channelsToMonitor) {
-      // Récupérer les dernières vidéos via la playlist "uploads" (ID de chaîne UC... devient UU...)
       const playlistId = channelId.replace(/^UC/, 'UU');
       const vRes = await fetch(`https://www.googleapis.com/youtube/v3/playlistItems?key=${YOUTUBE_API_KEY}&playlistId=${playlistId}&part=contentDetails&maxResults=5`);
       const vData = await vRes.json();
@@ -70,12 +77,11 @@ export default async function handler(req, res) {
 
         const detail = detailsData.items?.find(d => d.id === vidId);
         if (!detail) continue;
-        
-        // On garde le critère de durée (> 3 min) pour éviter les Shorts
         if (parseDuration(detail.contentDetails.duration) < 180) continue; 
 
         const newDocRef = doc(collection(db, 'artifacts', FIREBASE_APP_ID, 'public', 'data', 'programs'));
-        
+        const now = Date.now();
+
         await setDoc(newDocRef, {
           id: newDocRef.id,
           youtubeId: vidId,
@@ -83,18 +89,39 @@ export default async function handler(req, res) {
           categoryId: channelInfo.category,
           addedBy: channelInfo.addedBy,
           pitch: "",
-          createdAt: Date.now(),
+          createdAt: now,
           avgScore: 0
         });
         
         addedCount++;
         existingIds.add(vidId);
+
+        // Ajouter la nouvelle vidéo à notre liste de suivi pour le nettoyage
+        if (!videosByChannel[channelId]) videosByChannel[channelId] = [];
+        videosByChannel[channelId].push({ docId: newDocRef.id, createdAt: now });
+      }
+    }
+
+    // 2. NETTOYAGE : Ne garder que les 5 vidéos les plus récentes par chaîne
+    for (const channelId in videosByChannel) {
+      const videos = videosByChannel[channelId];
+      
+      // Trier du plus récent au plus ancien
+      videos.sort((a, b) => b.createdAt - a.createdAt);
+
+      // Si on a plus de 5 vidéos, on supprime tout ce qui dépasse
+      if (videos.length > 5) {
+        const videosToDelete = videos.slice(5); // On garde de 0 à 4, on prend le reste
+        for (const v of videosToDelete) {
+          await deleteDoc(doc(db, 'artifacts', FIREBASE_APP_ID, 'public', 'data', 'programs', v.docId));
+          deletedCount++;
+        }
       }
     }
 
     return res.status(200).json({ 
       success: true, 
-      message: `Synchronisation terminée. ${addedCount} nouvelles vidéos ajoutées pour ${channelsToMonitor.size} chaînes surveillées.` 
+      message: `Synchronisation terminée. ${addedCount} nouveautés, ${deletedCount} anciennes supprimées.` 
     });
 
   } catch (error) {
