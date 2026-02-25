@@ -138,18 +138,25 @@ export default function App() {
     });
   }, [user]);
 
-  const syncWhatsNew = async () => {
+const syncWhatsNew = async () => {
     if (!YOUTUBE_API_KEY) return alert("❌ Clé API manquante !");
     setIsSyncing(true);
     let addedCount = 0;
+    let deletedCount = 0; // Ajout du compteur de suppression
 
     try {
       const existingVideoIds = new Set(programs.map(p => p.youtubeId));
       const channelsToUpdate = new Map();
-      
+      const videosByChannel = {}; // Suivi pour le nettoyage
+
       for (const p of programs) {
-        if (p.channelId && p.categoryId) {
-          channelsToUpdate.set(p.channelId, { id: p.channelId, category: p.categoryId });
+        if (p.channelId) {
+          if (!videosByChannel[p.channelId]) videosByChannel[p.channelId] = [];
+          videosByChannel[p.channelId].push({ docId: p.id, createdAt: p.createdAt });
+
+          if (p.categoryId) {
+            channelsToUpdate.set(p.channelId, { id: p.channelId, category: p.categoryId });
+          }
         }
       }
 
@@ -158,6 +165,8 @@ export default function App() {
         setIsSyncing(false);
         return alert("Aucune chaîne trouvée.");
       }
+
+      const addPromises = [];
 
       for (const channel of channels) {
         let cid = channel.id;
@@ -170,7 +179,6 @@ export default function App() {
         const detailsRes = await fetch(`https://www.googleapis.com/youtube/v3/videos?key=${YOUTUBE_API_KEY}&id=${videoIds}&part=contentDetails`);
         const detailsData = await detailsRes.json();
 
-        const promises = [];
         let channelAddedVideos = 0;
 
         for (const v of pData.items) {
@@ -181,23 +189,49 @@ export default function App() {
           if (!detail || parseDuration(detail.contentDetails.duration) < 180) continue; 
 
           const newDocRef = doc(collection(db, 'artifacts', FIREBASE_APP_ID, 'public', 'data', 'programs'));
-          promises.push(setDoc(newDocRef, {
+          const now = Date.now();
+          
+          addPromises.push(setDoc(newDocRef, {
             id: newDocRef.id,
             youtubeId: vidId,
             channelId: cid,
             categoryId: channel.category,
             addedBy: user.uid,
             pitch: "",
-            createdAt: Date.now(),
+            createdAt: now,
             avgScore: 0
           }));
+          
           addedCount++;
           channelAddedVideos++; 
           existingVideoIds.add(vidId); 
+          
+          if (!videosByChannel[cid]) videosByChannel[cid] = [];
+          videosByChannel[cid].push({ docId: newDocRef.id, createdAt: now });
         }
-        await Promise.all(promises);
       }
-      alert(addedCount > 0 ? `✅ C'est tout frais ! ${addedCount} nouvelles vidéos ajoutées.` : `ℹ️ Tout est à jour.`);
+      
+      await Promise.all(addPromises); // On attend que toutes les vidéos soient ajoutées
+
+      // --- NETTOYAGE PARALLÈLE ---
+      const deletePromises = [];
+      for (const channelId in videosByChannel) {
+        const videos = videosByChannel[channelId];
+        videos.sort((a, b) => b.createdAt - a.createdAt); // Les plus récentes en premier
+        
+        if (videos.length > 5) {
+          const videosToDelete = videos.slice(5); // Les anciennes
+          for (const v of videosToDelete) {
+            deletePromises.push(deleteDoc(doc(db, 'artifacts', FIREBASE_APP_ID, 'public', 'data', 'programs', v.docId)));
+            deletedCount++;
+          }
+        }
+      }
+      await Promise.all(deletePromises); // Exécution rapide de toutes les suppressions
+
+      alert(addedCount > 0 || deletedCount > 0 
+        ? `✅ Fait ! ${addedCount} vidéos ajoutées et ${deletedCount} anciennes vidéos supprimées.` 
+        : `ℹ️ Tout est à jour, rien à nettoyer.`);
     } catch (e) { alert(`❌ Erreur : ${e.message}`); } 
     finally { setIsSyncing(false); }
   };
