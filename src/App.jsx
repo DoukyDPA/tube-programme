@@ -155,7 +155,15 @@ const syncWhatsNew = async () => {
           videosByChannel[p.channelId].push(p);
 
           if (p.categoryId) {
-            channelsToUpdate.set(p.channelId, { id: p.channelId, category: p.categoryId });
+            // CORRECTION 1 : On identifie et on conserve le vrai propriétaire de la chaîne
+            const existingAddedBy = channelsToUpdate.get(p.channelId)?.addedBy;
+            const owner = (existingAddedBy && existingAddedBy !== user.uid) ? existingAddedBy : (p.addedBy || user.uid);
+            
+            channelsToUpdate.set(p.channelId, { 
+              id: p.channelId, 
+              category: p.categoryId,
+              addedBy: owner 
+            });
           }
         }
       }
@@ -173,7 +181,6 @@ const syncWhatsNew = async () => {
         let cid = channel.id;
         const playlistId = cid.replace(/^UC/, 'UU');
         
-        // On récupère EXACTEMENT les 5 dernières vidéos de la chaîne
         const pRes = await fetch(`https://www.googleapis.com/youtube/v3/playlistItems?key=${YOUTUBE_API_KEY}&playlistId=${playlistId}&part=snippet,contentDetails&maxResults=5`);
         const pData = await pRes.json();
         if (!pData.items) continue;
@@ -186,7 +193,6 @@ const syncWhatsNew = async () => {
         for (const v of pData.items) {
           const vidId = v.contentDetails.videoId;
           const detail = detailsData.items?.find(d => d.id === vidId);
-          // On valide la vidéo (plus de 3 min) et on l'ajoute au top 5
           if (detail && parseDuration(detail.contentDetails.duration) >= 180) {
              top5Ids.push(vidId);
           }
@@ -195,7 +201,6 @@ const syncWhatsNew = async () => {
         const existingForChannel = videosByChannel[cid] || [];
         const existingIdsForChannel = existingForChannel.map(v => v.youtubeId);
 
-        // 1. AJOUT : Ajouter les vidéos du Top 5 qui ne sont pas encore dans l'app
         for (const vidId of top5Ids) {
           if (!existingIdsForChannel.includes(vidId)) {
             const newDocRef = doc(collection(db, 'artifacts', FIREBASE_APP_ID, 'public', 'data', 'programs'));
@@ -204,7 +209,7 @@ const syncWhatsNew = async () => {
               youtubeId: vidId,
               channelId: cid,
               categoryId: channel.category,
-              addedBy: user.uid,
+              addedBy: channel.addedBy, // CORRECTION 2 : On affecte la vidéo au vrai propriétaire
               pitch: "",
               createdAt: Date.now(),
               avgScore: 0
@@ -212,6 +217,24 @@ const syncWhatsNew = async () => {
             addedCount++;
           }
         }
+
+        for (const existingVid of existingForChannel) {
+          if (!top5Ids.includes(existingVid.youtubeId)) {
+            deletePromises.push(deleteDoc(doc(db, 'artifacts', FIREBASE_APP_ID, 'public', 'data', 'programs', existingVid.id)));
+            deletedCount++;
+          }
+        }
+      }
+
+      await Promise.all(addPromises);
+      await Promise.all(deletePromises);
+
+      alert(addedCount > 0 || deletedCount > 0 
+        ? `✅ Fait ! ${addedCount} vidéos ajoutées et ${deletedCount} anciennes vidéos supprimées.` 
+        : `ℹ️ Tout est à jour, rien à nettoyer.`);
+    } catch (e) { alert(`❌ Erreur : ${e.message}`); } 
+    finally { setIsSyncing(false); }
+  };
 
         // 2. NETTOYAGE : Supprimer de l'app toutes les vidéos qui NE SONT PLUS dans le Top 5
         for (const existingVid of existingForChannel) {
