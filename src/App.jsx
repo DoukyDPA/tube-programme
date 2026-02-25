@@ -42,6 +42,7 @@ const getIconForCustomTheme = (iconId) => {
 };
 
 const parseDuration = (duration) => {
+  if (!duration) return 0; // <-- LA LIGNE MAGIQUE QUI CORRIGE LE BUG
   const match = duration.match(/PT(?:(\d+)H)?(?:(\d+)M)?(?:(\d+)S)?/);
   if (!match) return 0;
   return (parseInt(match[1] || 0, 10) * 3600) + (parseInt(match[2] || 0, 10) * 60) + parseInt(match[3] || 0, 10);
