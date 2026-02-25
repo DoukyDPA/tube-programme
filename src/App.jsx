@@ -14,6 +14,7 @@ import { Sparkles, Home, Settings, Loader2, RefreshCw, LogOut, Cpu, BookOpen, Tr
 const ADMIN_EMAIL = "daniel.p.angelini@gmail.com";
 
 const CATEGORIES = [
+  { id: 'divertissement', label: 'Divertissement Scope', icon: <Clapperboard size={18}/> }, 
   { id: 'ia', label: 'IA & Tech Scope', icon: <Cpu size={18}/> },
   { id: 'lecture', label: 'Culture Scope', icon: <BookOpen size={18}/> },
   { id: 'foot', label: 'Economie Scope', icon: <Trophy size={18}/> },
