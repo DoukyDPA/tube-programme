@@ -142,17 +142,17 @@ const syncWhatsNew = async () => {
     if (!YOUTUBE_API_KEY) return alert("❌ Clé API manquante !");
     setIsSyncing(true);
     let addedCount = 0;
-    let deletedCount = 0; // Ajout du compteur de suppression
+    let deletedCount = 0;
 
     try {
-      const existingVideoIds = new Set(programs.map(p => p.youtubeId));
       const channelsToUpdate = new Map();
-      const videosByChannel = {}; // Suivi pour le nettoyage
+      const videosByChannel = {};
 
+      // Grouper les vidéos existantes par chaîne
       for (const p of programs) {
         if (p.channelId) {
           if (!videosByChannel[p.channelId]) videosByChannel[p.channelId] = [];
-          videosByChannel[p.channelId].push({ docId: p.id, createdAt: p.createdAt });
+          videosByChannel[p.channelId].push(p);
 
           if (p.categoryId) {
             channelsToUpdate.set(p.channelId, { id: p.channelId, category: p.categoryId });
@@ -167,67 +167,63 @@ const syncWhatsNew = async () => {
       }
 
       const addPromises = [];
+      const deletePromises = [];
 
       for (const channel of channels) {
         let cid = channel.id;
         const playlistId = cid.replace(/^UC/, 'UU');
-        const pRes = await fetch(`https://www.googleapis.com/youtube/v3/playlistItems?key=${YOUTUBE_API_KEY}&playlistId=${playlistId}&part=snippet,contentDetails&maxResults=15`);
+        
+        // On récupère EXACTEMENT les 5 dernières vidéos de la chaîne
+        const pRes = await fetch(`https://www.googleapis.com/youtube/v3/playlistItems?key=${YOUTUBE_API_KEY}&playlistId=${playlistId}&part=snippet,contentDetails&maxResults=5`);
         const pData = await pRes.json();
         if (!pData.items) continue;
 
+        const top5Ids = [];
         const videoIds = pData.items.map(v => v.contentDetails.videoId).join(',');
         const detailsRes = await fetch(`https://www.googleapis.com/youtube/v3/videos?key=${YOUTUBE_API_KEY}&id=${videoIds}&part=contentDetails`);
         const detailsData = await detailsRes.json();
 
-        let channelAddedVideos = 0;
-
         for (const v of pData.items) {
-          if (channelAddedVideos >= 5) break; 
           const vidId = v.contentDetails.videoId;
-          if (existingVideoIds.has(vidId)) continue; 
           const detail = detailsData.items?.find(d => d.id === vidId);
-          if (!detail || parseDuration(detail.contentDetails.duration) < 180) continue; 
-
-          const newDocRef = doc(collection(db, 'artifacts', FIREBASE_APP_ID, 'public', 'data', 'programs'));
-          const now = Date.now();
-          
-          addPromises.push(setDoc(newDocRef, {
-            id: newDocRef.id,
-            youtubeId: vidId,
-            channelId: cid,
-            categoryId: channel.category,
-            addedBy: user.uid,
-            pitch: "",
-            createdAt: now,
-            avgScore: 0
-          }));
-          
-          addedCount++;
-          channelAddedVideos++; 
-          existingVideoIds.add(vidId); 
-          
-          if (!videosByChannel[cid]) videosByChannel[cid] = [];
-          videosByChannel[cid].push({ docId: newDocRef.id, createdAt: now });
+          // On valide la vidéo (plus de 3 min) et on l'ajoute au top 5
+          if (detail && parseDuration(detail.contentDetails.duration) >= 180) {
+             top5Ids.push(vidId);
+          }
         }
-      }
-      
-      await Promise.all(addPromises); // On attend que toutes les vidéos soient ajoutées
 
-      // --- NETTOYAGE PARALLÈLE ---
-      const deletePromises = [];
-      for (const channelId in videosByChannel) {
-        const videos = videosByChannel[channelId];
-        videos.sort((a, b) => b.createdAt - a.createdAt); // Les plus récentes en premier
-        
-        if (videos.length > 5) {
-          const videosToDelete = videos.slice(5); // Les anciennes
-          for (const v of videosToDelete) {
-            deletePromises.push(deleteDoc(doc(db, 'artifacts', FIREBASE_APP_ID, 'public', 'data', 'programs', v.docId)));
+        const existingForChannel = videosByChannel[cid] || [];
+        const existingIdsForChannel = existingForChannel.map(v => v.youtubeId);
+
+        // 1. AJOUT : Ajouter les vidéos du Top 5 qui ne sont pas encore dans l'app
+        for (const vidId of top5Ids) {
+          if (!existingIdsForChannel.includes(vidId)) {
+            const newDocRef = doc(collection(db, 'artifacts', FIREBASE_APP_ID, 'public', 'data', 'programs'));
+            addPromises.push(setDoc(newDocRef, {
+              id: newDocRef.id,
+              youtubeId: vidId,
+              channelId: cid,
+              categoryId: channel.category,
+              addedBy: user.uid,
+              pitch: "",
+              createdAt: Date.now(),
+              avgScore: 0
+            }));
+            addedCount++;
+          }
+        }
+
+        // 2. NETTOYAGE : Supprimer de l'app toutes les vidéos qui NE SONT PLUS dans le Top 5
+        for (const existingVid of existingForChannel) {
+          if (!top5Ids.includes(existingVid.youtubeId)) {
+            deletePromises.push(deleteDoc(doc(db, 'artifacts', FIREBASE_APP_ID, 'public', 'data', 'programs', existingVid.id)));
             deletedCount++;
           }
         }
       }
-      await Promise.all(deletePromises); // Exécution rapide de toutes les suppressions
+
+      await Promise.all(addPromises);
+      await Promise.all(deletePromises);
 
       alert(addedCount > 0 || deletedCount > 0 
         ? `✅ Fait ! ${addedCount} vidéos ajoutées et ${deletedCount} anciennes vidéos supprimées.` 
@@ -235,7 +231,7 @@ const syncWhatsNew = async () => {
     } catch (e) { alert(`❌ Erreur : ${e.message}`); } 
     finally { setIsSyncing(false); }
   };
-
+  
   const removeProgram = async (prog) => {
     if (!isAdmin && prog.addedBy !== user.uid) {
         return alert("❌ Action refusée.");
