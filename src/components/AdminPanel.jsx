@@ -14,6 +14,7 @@ const ICONS = [
 ];
 
 const CATEGORIES = [
+  { id: 'divertissement', label: 'Divertissement Scope' },
   { id: 'ia', label: 'IA & Tech Scope' },
   { id: 'lecture', label: 'Culture Scope' },
   { id: 'foot', label: 'Economie Scope' },
