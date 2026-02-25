@@ -9,16 +9,16 @@ import ProgramRow from './components/ProgramRow';
 import ProgramCard from './components/ProgramCard';
 import VideoModal from './components/VideoModal'; 
 
-import { Sparkles, Home, Settings, Loader2, RefreshCw, LogOut, Cpu, BookOpen, Trophy, Mic2 } from 'lucide-react';
+import { Sparkles, Home, Settings, Loader2, RefreshCw, LogOut, Cpu, BookOpen, Trophy, Mic2, Clapperboard } from 'lucide-react';
 
 const ADMIN_EMAIL = "daniel.p.angelini@gmail.com";
 
 const CATEGORIES = [
-  { id: 'divertissement', label: 'Divertissement Scope', icon: <Clapperboard size={18}/> }, 
   { id: 'ia', label: 'IA & Tech Scope', icon: <Cpu size={18}/> },
   { id: 'lecture', label: 'Culture Scope', icon: <BookOpen size={18}/> },
   { id: 'foot', label: 'Economie Scope', icon: <Trophy size={18}/> },
   { id: 'interviews', label: 'Talks Scope', icon: <Mic2 size={18}/> },
+  { id: 'divertissement', label: 'Divertissement Scope', icon: <Clapperboard size={18}/> },
 ];
 
 // Nouveau composant d'icône TubiScope
