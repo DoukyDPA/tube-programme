@@ -27,6 +27,7 @@ export default async function handler(req, res) {
 
   // 1. LA LISTE DES CHAÎNES À SURVEILLER AUTOMATIQUEMENT
   const CHANNELS_TO_MONITOR = [
+    { handle: "@ExempleChaineDivertissement", category: "divertissement" }
     { handle: "@MonsieurPhi", category: "ia" },
     { handle: "@NotaBene", category: "lecture" },
     { handle: "@Wiloo", category: "foot" }
