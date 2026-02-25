@@ -32,20 +32,15 @@ export default async function handler(req, res) {
     const programsRef = collection(db, 'artifacts', FIREBASE_APP_ID, 'public', 'data', 'programs');
     const existingDocs = await getDocs(programsRef);
     
-    const existingIds = new Set();
     const channelsToMonitor = new Map();
-    const videosByChannel = {}; // Dictionnaire pour regrouper les vidéos par chaîne
+    const videosByChannel = {}; 
 
     existingDocs.forEach(d => {
       const data = d.data();
-      existingIds.add(data.youtubeId);
-      
       if (data.channelId) {
-        // Grouper les vidéos existantes par chaîne
         if (!videosByChannel[data.channelId]) videosByChannel[data.channelId] = [];
-        videosByChannel[data.channelId].push({ docId: d.id, createdAt: data.createdAt });
+        videosByChannel[data.channelId].push({ docId: d.id, youtubeId: data.youtubeId });
 
-        // Identifier les chaînes à surveiller
         if (data.categoryId) {
           channelsToMonitor.set(data.channelId, { 
             id: data.channelId, 
@@ -59,7 +54,6 @@ export default async function handler(req, res) {
     let addedCount = 0;
     let deletedCount = 0;
 
-    // 1. Scanner chaque chaîne pour ajouter les nouveautés
     for (const [channelId, channelInfo] of channelsToMonitor) {
       const playlistId = channelId.replace(/^UC/, 'UU');
       const vRes = await fetch(`https://www.googleapis.com/youtube/v3/playlistItems?key=${YOUTUBE_API_KEY}&playlistId=${playlistId}&part=contentDetails&maxResults=5`);
@@ -67,53 +61,43 @@ export default async function handler(req, res) {
       
       if (!vData.items) continue;
 
+      const top5Ids = [];
       const videoIds = vData.items.map(v => v.contentDetails.videoId).join(',');
       const detailsRes = await fetch(`https://www.googleapis.com/youtube/v3/videos?key=${YOUTUBE_API_KEY}&id=${videoIds}&part=contentDetails`);
       const detailsData = await detailsRes.json();
 
       for (const v of vData.items) {
         const vidId = v.contentDetails.videoId;
-        if (existingIds.has(vidId)) continue; 
-
         const detail = detailsData.items?.find(d => d.id === vidId);
-        if (!detail) continue;
-        if (parseDuration(detail.contentDetails.duration) < 180) continue; 
-
-        const newDocRef = doc(collection(db, 'artifacts', FIREBASE_APP_ID, 'public', 'data', 'programs'));
-        const now = Date.now();
-
-        await setDoc(newDocRef, {
-          id: newDocRef.id,
-          youtubeId: vidId,
-          channelId: channelId,
-          categoryId: channelInfo.category,
-          addedBy: channelInfo.addedBy,
-          pitch: "",
-          createdAt: now,
-          avgScore: 0
-        });
         
-        addedCount++;
-        existingIds.add(vidId);
-
-        // Ajouter la nouvelle vidéo à notre liste de suivi pour le nettoyage
-        if (!videosByChannel[channelId]) videosByChannel[channelId] = [];
-        videosByChannel[channelId].push({ docId: newDocRef.id, createdAt: now });
+        if (detail && parseDuration(detail.contentDetails.duration) >= 180) {
+           top5Ids.push(vidId);
+        }
       }
-    }
 
-    // 2. NETTOYAGE : Ne garder que les 5 vidéos les plus récentes par chaîne
-    for (const channelId in videosByChannel) {
-      const videos = videosByChannel[channelId];
-      
-      // Trier du plus récent au plus ancien
-      videos.sort((a, b) => b.createdAt - a.createdAt);
+      const existingForChannel = videosByChannel[channelId] || [];
+      const existingIdsForChannel = existingForChannel.map(v => v.youtubeId);
 
-      // Si on a plus de 5 vidéos, on supprime tout ce qui dépasse
-      if (videos.length > 5) {
-        const videosToDelete = videos.slice(5); // On garde de 0 à 4, on prend le reste
-        for (const v of videosToDelete) {
-          await deleteDoc(doc(db, 'artifacts', FIREBASE_APP_ID, 'public', 'data', 'programs', v.docId));
+      for (const vidId of top5Ids) {
+        if (!existingIdsForChannel.includes(vidId)) {
+          const newDocRef = doc(collection(db, 'artifacts', FIREBASE_APP_ID, 'public', 'data', 'programs'));
+          await setDoc(newDocRef, {
+            id: newDocRef.id,
+            youtubeId: vidId,
+            channelId: channelId,
+            categoryId: channelInfo.category,
+            addedBy: channelInfo.addedBy,
+            pitch: "",
+            createdAt: Date.now(),
+            avgScore: 0
+          });
+          addedCount++;
+        }
+      }
+
+      for (const existingVid of existingForChannel) {
+        if (!top5Ids.includes(existingVid.youtubeId)) {
+          await deleteDoc(doc(db, 'artifacts', FIREBASE_APP_ID, 'public', 'data', 'programs', existingVid.docId));
           deletedCount++;
         }
       }
