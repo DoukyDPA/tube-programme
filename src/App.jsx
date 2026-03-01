@@ -235,25 +235,6 @@ const syncWhatsNew = async () => {
     } catch (e) { alert(`❌ Erreur : ${e.message}`); } 
     finally { setIsSyncing(false); }
   };
-
-        // 2. NETTOYAGE : Supprimer de l'app toutes les vidéos qui NE SONT PLUS dans le Top 5
-        for (const existingVid of existingForChannel) {
-          if (!top5Ids.includes(existingVid.youtubeId)) {
-            deletePromises.push(deleteDoc(doc(db, 'artifacts', FIREBASE_APP_ID, 'public', 'data', 'programs', existingVid.id)));
-            deletedCount++;
-          }
-        }
-      }
-
-      await Promise.all(addPromises);
-      await Promise.all(deletePromises);
-
-      alert(addedCount > 0 || deletedCount > 0 
-        ? `✅ Fait ! ${addedCount} vidéos ajoutées et ${deletedCount} anciennes vidéos supprimées.` 
-        : `ℹ️ Tout est à jour, rien à nettoyer.`);
-    } catch (e) { alert(`❌ Erreur : ${e.message}`); } 
-    finally { setIsSyncing(false); }
-  };
   
   const removeProgram = async (prog) => {
     if (!isAdmin && prog.addedBy !== user.uid) {
