@@ -45,8 +45,7 @@ export default function AdminPanel({ user, userData, customThemes = [], onClose 
 
   const handleCreateTheme = async () => {
     if (!themeName.trim()) return;
-    if (!userData?.isPremium && customThemes.length >= 2) return alert("💎 Limite atteinte. Passez Premium pour plus de thèmes.");
-
+    if (!userData?.isPremium && customThemes.length >= 2) return alert("💎 Limite atteinte. Passez Premium pour débloquer des outils d'organisation et des dossiers supplémentaires.");
     setLoading(true);
     try {
       const themeRef = doc(collection(db, 'users', user.uid, 'themes'));
