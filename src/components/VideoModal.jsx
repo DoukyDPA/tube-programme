@@ -13,8 +13,11 @@ export default function VideoModal({ prog, onClose }) {
       <div className="w-full h-[30vh] md:h-[80vh] md:w-[70vw] bg-black md:rounded-2xl overflow-hidden shadow-2xl flex-shrink-0">
         <iframe 
           width="100%" height="100%" 
-          src={`https://www.youtube.com/embed/${prog.youtubeId}?autoplay=1`} 
-          frameBorder="0" allowFullScreen title="YouTube"
+          src={`https://www.youtube.com/embed/${prog.youtubeId}?autoplay=1&enablejsapi=1&controls=1`} 
+          frameBorder="0" 
+          allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture" 
+          allowFullScreen 
+          title="YouTube"
         />
       </div>
       
