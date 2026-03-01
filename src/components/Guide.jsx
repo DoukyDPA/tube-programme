@@ -42,7 +42,21 @@ export default function Guide() {
         </div>
 
         {/* Vision Premium */}
-        if (!userData?.isPremium && customThemes.length >= 2) return alert("💎 Limite atteinte. Passez Premium pour débloquer des outils d'organisation et des dossiers supplémentaires.");
+        <div className="bg-gradient-to-br from-indigo-900/20 to-slate-900/50 border border-indigo-500/20 rounded-2xl p-6 md:p-8">
+          <div className="w-12 h-12 bg-indigo-500/20 rounded-xl flex items-center justify-center mb-6">
+            <Sparkles className="text-indigo-400" size={24} />
+          </div>
+          <h3 className="text-xl font-bold text-white mb-3">Bientôt : TubiScope Premium</h3>
+          <p className="text-slate-400 text-sm mb-4">
+            TubiScope est actuellement un service personnel en phase bêta. 
+            À l'avenir, une offre <b>Premium</b> verra le jour pour vous offrir des outils d'interface avancés (l'accès aux vidéos reste gratuit via YouTube) :
+          </p>
+          <ul className="space-y-2 text-indigo-200/70 text-sm">
+            <li>✨ Création illimitée de dossiers de thématiques</li>
+            <li>✨ Suivi illimité de chaînes dans votre interface</li>
+            <li>✨ Filtres avancés pour organiser vos découvertes</li>
+          </ul>
+        </div>
       </div>
 
       {/* Informations Légales */}
