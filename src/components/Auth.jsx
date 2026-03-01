@@ -28,9 +28,10 @@ export default function Auth() {
             {isLogin ? 'Se connecter' : "S'inscrire"}
           </button>
           
-          <p className="text-xs text-slate-500 text-center mt-4">
-            En vous connectant, vous acceptez nos <a href="#" className="underline hover:text-indigo-400">Conditions Générales</a> et notre <a href="#" className="underline hover:text-indigo-400">Politique de confidentialité</a>.
+          <p className="text-xs text-slate-500 text-center mt-4 px-2">
+            En vous connectant, vous acceptez les <a href="https://www.youtube.com/t/terms" target="_blank" rel="noopener noreferrer" className="underline hover:text-indigo-400">Conditions d'utilisation de YouTube</a> ainsi que les <a href="http://www.google.com/policies/privacy" target="_blank" rel="noopener noreferrer" className="underline hover:text-indigo-400">Règles de confidentialité de Google</a>.
           </p>
+          
         </form>
         <button onClick={() => setIsLogin(!isLogin)} className="w-full mt-6 text-slate-400 text-sm hover:text-white">
           {isLogin ? "Pas encore de compte ? S'inscrire" : "Déjà un compte ? Se connecter"}
