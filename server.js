@@ -3,9 +3,8 @@ import cors from 'cors';
 import path from 'path';
 import { fileURLToPath } from 'url';
 import cron from 'node-cron';
-import 'dotenv/config'; // Pour charger les variables d'environnement en local
+import 'dotenv/config'; 
 
-// Importer votre fonction sync existante
 import syncHandler from './api/sync.js';
 
 const __filename = fileURLToPath(import.meta.url);
@@ -13,9 +12,6 @@ const __dirname = path.dirname(__filename);
 
 const app = express();
 
-// --- NOUVEAU CODE À AJOUTER ---
-// On force une politique de sécurité très souple pour empêcher 
-// les extensions (comme CheckPoint) de bloquer l'affichage.
 app.use((req, res, next) => {
   res.setHeader(
     'Content-Security-Policy',
@@ -23,21 +19,75 @@ app.use((req, res, next) => {
   );
   next();
 });
-// -----------------------------
-const PORT = process.env.PORT || 3000; // Railway injectera dynamiquement son propre PORT
+
+const PORT = process.env.PORT || 3000;
 
 app.use(cors());
 app.use(express.json());
 
-// 1. Définition de la route API
+// --- NOUVEAU : SYSTÈME DE CACHE EN MÉMOIRE ---
+const CACHE_TTL = 24 * 60 * 60 * 1000; // Durée de vie du cache : 24 heures
+let youtubeCache = {}; // Format: { "videoId": { data: {...}, timestamp: 123456789 } }
+
+app.post('/api/hydrate', async (req, res) => {
+  try {
+    const { videoIds } = req.body;
+    if (!videoIds || !Array.isArray(videoIds)) {
+      return res.status(400).json({ error: 'Liste videoIds invalide' });
+    }
+
+    const now = Date.now();
+    const idsToFetch = [];
+    const result = {};
+
+    // 1. On vérifie ce qui est déjà dans le cache
+    for (const id of videoIds) {
+      if (youtubeCache[id] && (now - youtubeCache[id].timestamp < CACHE_TTL)) {
+        result[id] = youtubeCache[id].data;
+      } else {
+        idsToFetch.push(id);
+      }
+    }
+
+    // 2. S'il manque des vidéos, on interroge l'API YouTube
+    if (idsToFetch.length > 0) {
+      // Utilisez la clé API stockée de manière sécurisée côté serveur
+      const YOUTUBE_API_KEY = process.env.VITE_YOUTUBE_API_KEY; 
+      
+      // On regroupe les appels par paquets de 50 (limite de l'API YouTube)
+      for (let i = 0; i < idsToFetch.length; i += 50) {
+        const chunk = idsToFetch.slice(i, i + 50).join(',');
+        const ytRes = await fetch(`https://www.googleapis.com/youtube/v3/videos?key=${YOUTUBE_API_KEY}&id=${chunk}&part=snippet`);
+        const ytData = await ytRes.json();
+        
+        if (ytData.items) {
+          ytData.items.forEach(item => {
+            const data = {
+              title: item.snippet.title,
+              creatorName: item.snippet.channelTitle,
+              publishedAt: new Date(item.snippet.publishedAt).getTime(),
+            };
+            result[item.id] = data; // On l'ajoute à la réponse
+            youtubeCache[item.id] = { data, timestamp: now }; // On le sauvegarde dans le cache
+          });
+        }
+      }
+    }
+
+    // 3. On retourne les données (mélange de cache et de données fraîches)
+    return res.json({ success: true, data: result });
+  } catch (error) {
+    console.error('Erreur hydratation Serveur:', error);
+    return res.status(500).json({ success: false, error: error.message });
+  }
+});
+// ----------------------------------------------
+
 app.get('/api/sync', syncHandler);
 
-// 2. Remplacement du vercel.json (CRON job)
-// Exécution tous les jours à 08:00
 cron.schedule('0 8 * * *', async () => {
   console.log('⏰ Exécution du CRON : Synchronisation YouTube');
   try {
-    // On simule req et res pour réutiliser votre fonction existante
     const req = {};
     const res = { 
         status: (code) => ({ json: (data) => console.log(`CRON Terminé [${code}]:`, data) }) 
@@ -48,10 +98,8 @@ cron.schedule('0 8 * * *', async () => {
   }
 });
 
-// 3. Servir les fichiers statiques du frontend (dossier dist généré par Vite)
 app.use(express.static(path.join(__dirname, 'dist')));
 
-// Rediriger toutes les autres requêtes vers l'index.html (pour le routing React)
 app.get('*', (req, res) => {
   res.sendFile(path.join(__dirname, 'dist', 'index.html'));
 });
