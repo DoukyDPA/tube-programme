@@ -8,8 +8,9 @@ import AdminPanel from './components/AdminPanel';
 import ProgramRow from './components/ProgramRow';
 import ProgramCard from './components/ProgramCard';
 import VideoModal from './components/VideoModal'; 
+import Guide from './components/Guide';
 
-import { Sparkles, Home, Settings, Loader2, RefreshCw, LogOut, Cpu, BookOpen, Trophy, Mic2, Clapperboard } from 'lucide-react';
+import { Sparkles, Home, Settings, Loader2, RefreshCw, LogOut, Cpu, BookOpen, Trophy, Mic2, Clapperboard, Info } from 'lucide-react';
 
 const ADMIN_EMAIL = "daniel.p.angelini@gmail.com";
 
@@ -21,7 +22,6 @@ const CATEGORIES = [
   { id: 'divertissement', label: 'Divertissement Scope', icon: <Clapperboard size={18}/> },
 ];
 
-// Nouveau composant d'icône TubiScope
 const AppIcon = () => (
   <div className="w-10 h-10 bg-gradient-to-br from-indigo-500 to-indigo-700 rounded-xl flex items-center justify-center shadow-lg shadow-indigo-500/20 shrink-0">
     <svg viewBox="0 0 24 24" fill="none" stroke="white" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round" className="w-6 h-6">
@@ -42,7 +42,7 @@ const getIconForCustomTheme = (iconId) => {
 };
 
 const parseDuration = (duration) => {
-  if (!duration) return 0; // <-- LA LIGNE MAGIQUE QUI CORRIGE LE BUG
+  if (!duration) return 0;
   const match = duration.match(/PT(?:(\d+)H)?(?:(\d+)M)?(?:(\d+)S)?/);
   if (!match) return 0;
   return (parseInt(match[1] || 0, 10) * 3600) + (parseInt(match[2] || 0, 10) * 60) + parseInt(match[3] || 0, 10);
@@ -138,7 +138,7 @@ export default function App() {
     });
   }, [user]);
 
-const syncWhatsNew = async () => {
+  const syncWhatsNew = async () => {
     if (!YOUTUBE_API_KEY) return alert("❌ Clé API manquante !");
     setIsSyncing(true);
     let addedCount = 0;
@@ -148,14 +148,12 @@ const syncWhatsNew = async () => {
       const channelsToUpdate = new Map();
       const videosByChannel = {};
 
-      // Grouper les vidéos existantes par chaîne
       for (const p of programs) {
         if (p.channelId) {
           if (!videosByChannel[p.channelId]) videosByChannel[p.channelId] = [];
           videosByChannel[p.channelId].push(p);
 
           if (p.categoryId) {
-            // CORRECTION 1 : On identifie et on conserve le vrai propriétaire de la chaîne
             const existingAddedBy = channelsToUpdate.get(p.channelId)?.addedBy;
             const owner = (existingAddedBy && existingAddedBy !== user.uid) ? existingAddedBy : (p.addedBy || user.uid);
             
@@ -209,7 +207,7 @@ const syncWhatsNew = async () => {
               youtubeId: vidId,
               channelId: cid,
               categoryId: channel.category,
-              addedBy: channel.addedBy, // CORRECTION 2 : On affecte la vidéo au vrai propriétaire
+              addedBy: channel.addedBy, 
               pitch: "",
               createdAt: Date.now(),
               avgScore: 0
@@ -251,11 +249,8 @@ const syncWhatsNew = async () => {
     ...customThemes.map(ct => ({ id: ct.id, label: ct.name }))
   ];
 
-  // --- FILTRAGE DES DERNIÈRES VIDÉOS ---
-  // On récupère les identifiants des catégories globales (publiques)
   const globalCategoryIds = CATEGORIES.map(c => c.id);
   
-  // On filtre le flux pour la section "Dernières vidéos"
   const personalizedLatestPrograms = hydratedPrograms.filter(prog => 
     globalCategoryIds.includes(prog.categoryId) || prog.addedBy === user?.uid
   );
@@ -303,7 +298,13 @@ const syncWhatsNew = async () => {
           </button>
         </nav>
 
-        <div className="p-6 mt-auto border-t border-slate-800/50">
+        <div className="p-6 mt-auto border-t border-slate-800/50 space-y-4">
+          <button 
+            onClick={() => setActiveTab('guide')} 
+            className={`w-full flex items-center gap-2 transition-colors text-sm font-semibold ${activeTab === 'guide' ? 'text-indigo-400' : 'text-slate-500 hover:text-white'}`}
+          >
+            <Info size={16} /> Mode d'emploi
+          </button>
           <button onClick={() => signOut(auth)} className="w-full flex items-center gap-2 text-slate-500 hover:text-red-400 transition-colors text-sm font-semibold">
             <LogOut size={16} /> Déconnexion
           </button>
@@ -321,6 +322,11 @@ const syncWhatsNew = async () => {
           <Settings size={22} />
           <span className="text-[10px] font-bold">Config</span>
         </button>
+
+        <button onClick={() => setActiveTab('guide')} className={`flex flex-col items-center gap-1 p-2 transition-colors ${activeTab === 'guide' ? 'text-indigo-400' : 'text-slate-500 hover:text-slate-300'}`}>
+          <Info size={22} />
+          <span className="text-[10px] font-bold">Aide</span>
+        </button>
         
         <button onClick={() => signOut(auth)} className="flex flex-col items-center gap-1 p-2 text-slate-500 hover:text-red-400 transition-colors">
           <LogOut size={22} />
@@ -337,7 +343,7 @@ const syncWhatsNew = async () => {
           </div>
           
           <h2 className="hidden md:block text-2xl md:text-3xl font-bold text-white tracking-tight">
-             {activeTab === 'accueil' ? 'À la Une' : allCategories.find(c => c.id === activeTab)?.label}
+             {activeTab === 'accueil' ? 'À la Une' : activeTab === 'guide' ? "Mode d'emploi" : allCategories.find(c => c.id === activeTab)?.label}
           </h2>
           
           {activeTab === 'accueil' && isAdmin && (
@@ -349,9 +355,10 @@ const syncWhatsNew = async () => {
         </header>
 
         <div className="px-0 md:px-10">
-          {activeTab === 'accueil' ? (
+          {activeTab === 'guide' ? (
+            <Guide />
+          ) : activeTab === 'accueil' ? (
             <>
-              {/* Utilisation de notre liste personnalisée pour les "Dernières vidéos" */}
               <ProgramRow title="Dernières vidéos" programs={personalizedLatestPrograms.slice(0, 5)} large={true} onSelect={setSelectedProg} onRemove={removeProgram} currentUser={user} isAdmin={isAdmin} />
               
               {allCategories.map(cat => {
