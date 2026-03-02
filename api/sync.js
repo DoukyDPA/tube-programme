@@ -56,7 +56,7 @@ export default async function handler(req, res) {
 
     for (const [channelId, channelInfo] of channelsToMonitor) {
       const playlistId = channelId.replace(/^UC/, 'UU');
-      const vRes = await fetch(`https://www.googleapis.com/youtube/v3/playlistItems?key=${YOUTUBE_API_KEY}&playlistId=${playlistId}&part=contentDetails&maxResults=5`);
+      const vRes = await fetch(`https://www.googleapis.com/youtube/v3/playlistItems?key=${YOUTUBE_API_KEY}&playlistId=${playlistId}&part=contentDetails&maxResults=50`);
       const vData = await vRes.json();
       
       if (!vData.items) continue;
@@ -72,6 +72,8 @@ export default async function handler(req, res) {
         
         if (detail && parseDuration(detail.contentDetails.duration) >= 180) {
            top5Ids.push(vidId);
+           // On s'arrête dès qu'on a trouvé 5 vidéos de format "long"
+           if (top5Ids.length === 5) break; 
         }
       }
 
