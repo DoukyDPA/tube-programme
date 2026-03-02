@@ -85,9 +85,13 @@ export default function Guide() {
           
           <div>
             <h4 className="font-semibold text-slate-300 mb-1">Utilisation de l'API YouTube</h4>
-            <p>
-              TubiScope utilise l'API officielle de YouTube (YouTube Data API v3). Toutes les vidéos diffusées via ce service restent hébergées par YouTube. Les vues générées depuis TubiScope sont comptabilisées directement au profit des créateurs originaux. TubiScope ne stocke aucune vidéo sur ses propres serveurs. En utilisant TubiScope, vous acceptez également les Conditions d'Utilisation de YouTube.
+            <div>
+            <h4 className="font-semibold text-slate-300 mb-1">Utilisation de l'API YouTube</h4>
+            <p className="leading-relaxed">
+              TubiScope est un client API qui utilise les services de l'API YouTube (YouTube Data API v3). Toutes les vidéos diffusées via ce service restent hébergées par YouTube et TubiScope ne stocke aucune vidéo sur ses serveurs. 
+              En utilisant TubiScope, vous acceptez d'être lié par les <a href="https://www.youtube.com/t/terms" target="_blank" rel="noopener noreferrer" className="text-indigo-400 hover:underline">Conditions d'utilisation de YouTube</a> ainsi que par les <a href="http://www.google.com/policies/privacy" target="_blank" rel="noopener noreferrer" className="text-indigo-400 hover:underline">Règles de confidentialité de Google</a>.
             </p>
+          </div>
           </div>
 
           <div>
