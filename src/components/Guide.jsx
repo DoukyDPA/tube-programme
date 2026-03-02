@@ -1,5 +1,5 @@
 import React from 'react';
-import { BookOpen, Sparkles, Scale, ShieldCheck } from 'lucide-react';
+import { BookOpen, Sparkles, Scale, ShieldCheck, Clock } from 'lucide-react';
 
 export default function Guide() {
   return (
@@ -25,18 +25,25 @@ export default function Guide() {
             <BookOpen className="text-indigo-400" size={24} />
           </div>
           <h3 className="text-xl font-bold text-white mb-3">Comment ça marche ?</h3>
-          <ul className="space-y-3 text-slate-400 text-sm">
+          <ul className="space-y-4 text-slate-400 text-sm">
             <li className="flex items-start gap-2">
-              <span className="text-indigo-500 font-bold">1.</span>
-              Allez dans <b>Configurer</b> pour ajouter vos chaînes YouTube favorites.
+              <span className="text-indigo-500 font-bold shrink-0">1.</span>
+              <span>Allez dans <b>Configurer</b> pour ajouter vos chaînes YouTube favorites.</span>
             </li>
             <li className="flex items-start gap-2">
-              <span className="text-indigo-500 font-bold">2.</span>
-              Classez-les dans nos catégories pré-existantes ou créez vos propres thématiques.
+              <span className="text-indigo-500 font-bold shrink-0">2.</span>
+              <span>Classez-les dans nos catégories pré-existantes ou créez vos propres thématiques.</span>
             </li>
             <li className="flex items-start gap-2">
-              <span className="text-indigo-500 font-bold">3.</span>
-              TubiScope synchronise automatiquement les dernières vidéos (de plus de 3 minutes) pour vous garantir un flux de qualité.
+              <span className="text-indigo-500 font-bold shrink-0">3.</span>
+              <span>TubiScope synchronise automatiquement les dernières vidéos (de plus de 3 minutes) pour vous garantir un flux de qualité.</span>
+            </li>
+            <li className="flex items-start gap-2 bg-slate-800/50 p-3 rounded-lg border border-slate-700/50">
+              <span className="text-indigo-500 font-bold shrink-0">4.</span>
+              <span>
+                <b>Sauvegardez vos découvertes :</b> Survolez une vidéo et cliquez sur l'icône <Clock size={14} className="inline mx-1 text-slate-300" /> 
+                pour l'ajouter à votre ligne <b>À regarder plus tard</b> (10 vidéos max). Ces vidéos y resteront stockées en sécurité et survivront au nettoyage quotidien !
+              </span>
             </li>
           </ul>
         </div>
