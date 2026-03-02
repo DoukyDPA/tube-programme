@@ -102,7 +102,7 @@ export default function AdminPanel({ user, userData, customThemes = [], onClose 
       }
       
       const playlistId = cid.replace(/^UC/, 'UU');
-      const pRes = await fetch(`https://www.googleapis.com/youtube/v3/playlistItems?key=${YOUTUBE_API_KEY}&playlistId=${playlistId}&part=snippet,contentDetails&maxResults=15`);
+      const pRes = await fetch(`https://www.googleapis.com/youtube/v3/playlistItems?key=${YOUTUBE_API_KEY}&playlistId=${playlistId}&part=snippet,contentDetails&maxResults=50`);
       const pData = await pRes.json();
       
       if (pData.error) throw new Error(pData.error.message);
