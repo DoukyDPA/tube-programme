@@ -263,9 +263,15 @@ export default function App() {
       
       {/* SIDEBAR PC */}
       <aside className="hidden md:flex w-[260px] bg-slate-950/95 border-r border-slate-800/50 flex-col z-50 overflow-y-auto shadow-2xl">
-        <div className="p-8 flex items-center gap-3">
-          <AppIcon />
-          <h1 className="text-xl font-black text-white tracking-tight">Tubi<span className="text-indigo-500">Scope</span></h1>
+        
+        <div className="p-8 pb-4 flex flex-col gap-2">
+          <div className="flex items-center gap-3">
+            <AppIcon />
+            <h1 className="text-xl font-black text-white tracking-tight">Tubi<span className="text-indigo-500">Scope</span></h1>
+          </div>
+          <p className="text-xs text-slate-400 font-medium leading-relaxed pl-1">
+            Organisez vous-même votre programme Youtube !
+          </p>
         </div>
         
         <nav className="flex-1 px-4 py-4 space-y-1">
@@ -337,9 +343,14 @@ export default function App() {
       {/* ZONE PRINCIPALE */}
       <main className="flex-1 overflow-y-auto h-screen pb-24 md:pb-0 relative">
         <header className="flex justify-between items-center p-4 md:p-10 pb-4 md:pb-8">
-          <div className="flex items-center gap-3 md:hidden">
-            <AppIcon />
-            <h1 className="text-xl font-black text-white tracking-tight">Tubi<span className="text-indigo-500">Scope</span></h1>
+          <div className="flex flex-col md:hidden">
+            <div className="flex items-center gap-3">
+              <AppIcon />
+              <h1 className="text-xl font-black text-white tracking-tight">Tubi<span className="text-indigo-500">Scope</span></h1>
+            </div>
+            <p className="text-[10px] text-slate-400 font-medium mt-1">
+              Organisez vous-même votre programme Youtube !
+            </p>
           </div>
           
           <h2 className="hidden md:block text-2xl md:text-3xl font-bold text-white tracking-tight">
