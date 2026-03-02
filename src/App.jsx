@@ -178,8 +178,7 @@ export default function App() {
       for (const channel of channels) {
         let cid = channel.id;
         const playlistId = cid.replace(/^UC/, 'UU');
-        
-        const pRes = await fetch(`https://www.googleapis.com/youtube/v3/playlistItems?key=${YOUTUBE_API_KEY}&playlistId=${playlistId}&part=snippet,contentDetails&maxResults=5`);
+        const pRes = await fetch(`https://www.googleapis.com/youtube/v3/playlistItems?key=${YOUTUBE_API_KEY}&playlistId=${playlistId}&part=snippet,contentDetails&maxResults=50`);
         const pData = await pRes.json();
         if (!pData.items) continue;
 
@@ -193,6 +192,7 @@ export default function App() {
           const detail = detailsData.items?.find(d => d.id === vidId);
           if (detail && parseDuration(detail.contentDetails.duration) >= 180) {
              top5Ids.push(vidId);
+             if (top5Ids.length === 5) break; // Arrêt à 5 vidéos longues
           }
         }
 
