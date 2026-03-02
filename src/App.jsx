@@ -1,7 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import { auth, db, FIREBASE_APP_ID, YOUTUBE_API_KEY } from './firebase'; 
 import { onAuthStateChanged, signOut } from 'firebase/auth';
-import { collection, onSnapshot, doc, getDoc, setDoc, deleteDoc } from 'firebase/firestore';
+import { collection, onSnapshot, doc, getDoc, setDoc, deleteDoc, arrayUnion, arrayRemove } from 'firebase/firestore';
 
 import Auth from './components/Auth';
 import AdminPanel from './components/AdminPanel';
@@ -57,6 +57,7 @@ export default function App() {
   
   const [programs, setPrograms] = useState([]); 
   const [hydratedPrograms, setHydratedPrograms] = useState([]); 
+  const [hydratedWatchLater, setHydratedWatchLater] = useState([]); 
   
   const [customThemes, setCustomThemes] = useState([]);
   const [activeTab, setActiveTab] = useState('accueil');
@@ -73,7 +74,7 @@ export default function App() {
         if (snap.exists()) {
           setUserData(snap.data());
         } else {
-          const initData = { isPremium: false, themeCount: 0 };
+          const initData = { isPremium: false, themeCount: 0, watchLater: [] };
           await setDoc(userRef, initData);
           setUserData(initData);
         }
@@ -93,9 +94,12 @@ export default function App() {
 
   useEffect(() => {
     const fetchYoutubeData = async () => {
-      if (!programs.length || !YOUTUBE_API_KEY) return;
+      if (!YOUTUBE_API_KEY) return;
       
-      const uniqueIds = [...new Set(programs.map(p => p.youtubeId))];
+      const watchLaterIds = userData?.watchLater || [];
+      const uniqueIds = [...new Set([...programs.map(p => p.youtubeId), ...watchLaterIds])];
+      if (uniqueIds.length === 0) return;
+
       let fetchedData = {};
       
       for (let i = 0; i < uniqueIds.length; i += 50) {
@@ -123,12 +127,22 @@ export default function App() {
         creatorName: fetchedData[p.youtubeId]?.creatorName || "Créateur inconnu",
         publishedAt: fetchedData[p.youtubeId]?.publishedAt || p.createdAt,
       }));
-      
       setHydratedPrograms(merged.sort((a,b) => b.publishedAt - a.publishedAt));
+
+      const wlMerged = watchLaterIds.map(id => {
+        const existing = programs.find(p => p.youtubeId === id) || { id: `wl-${id}`, youtubeId: id, createdAt: Date.now() };
+        return {
+          ...existing,
+          title: fetchedData[id]?.title || "Vidéo supprimée ou privée",
+          creatorName: fetchedData[id]?.creatorName || "Inconnu",
+          publishedAt: fetchedData[id]?.publishedAt || existing.createdAt,
+        };
+      });
+      setHydratedWatchLater(wlMerged);
     };
 
     fetchYoutubeData();
-  }, [programs]);
+  }, [programs, userData?.watchLater]);
 
   useEffect(() => {
     if (!user) return;
@@ -137,6 +151,26 @@ export default function App() {
       setCustomThemes(snap.docs.map(d => ({ id: d.id, ...d.data() })));
     });
   }, [user]);
+
+  const toggleWatchLater = async (prog) => {
+    if (!user) return alert("Connectez-vous pour utiliser cette fonction.");
+    const userRef = doc(db, 'users', user.uid);
+    const currentWl = userData?.watchLater || [];
+    const isWl = currentWl.includes(prog.youtubeId);
+    
+    try {
+      if (isWl) {
+        await setDoc(userRef, { watchLater: arrayRemove(prog.youtubeId) }, { merge: true });
+        setUserData({...userData, watchLater: currentWl.filter(id => id !== prog.youtubeId)});
+      } else {
+        if (currentWl.length >= 10) return alert("Vous avez atteint la limite de 10 vidéos 'À regarder plus tard'.");
+        await setDoc(userRef, { watchLater: arrayUnion(prog.youtubeId) }, { merge: true });
+        setUserData({...userData, watchLater: [...currentWl, prog.youtubeId]});
+      }
+    } catch(e) {
+      alert("Erreur lors de l'enregistrement : " + e.message);
+    }
+  };
 
   const syncWhatsNew = async () => {
     if (!YOUTUBE_API_KEY) return alert("❌ Clé API manquante !");
@@ -178,6 +212,8 @@ export default function App() {
       for (const channel of channels) {
         let cid = channel.id;
         const playlistId = cid.replace(/^UC/, 'UU');
+        
+        // MODIFICATION ICI: maxResults passe à 50
         const pRes = await fetch(`https://www.googleapis.com/youtube/v3/playlistItems?key=${YOUTUBE_API_KEY}&playlistId=${playlistId}&part=snippet,contentDetails&maxResults=50`);
         const pData = await pRes.json();
         if (!pData.items) continue;
@@ -192,7 +228,8 @@ export default function App() {
           const detail = detailsData.items?.find(d => d.id === vidId);
           if (detail && parseDuration(detail.contentDetails.duration) >= 180) {
              top5Ids.push(vidId);
-             if (top5Ids.length === 5) break; // Arrêt à 5 vidéos longues
+             // MODIFICATION ICI: on s'arrête une fois qu'on a trouvé 5 vidéos longues
+             if (top5Ids.length === 5) break; 
           }
         }
 
@@ -263,7 +300,6 @@ export default function App() {
       
       {/* SIDEBAR PC */}
       <aside className="hidden md:flex w-[260px] bg-slate-950/95 border-r border-slate-800/50 flex-col z-50 overflow-y-auto shadow-2xl">
-        
         <div className="p-8 pb-4 flex flex-col gap-2">
           <div className="flex items-center gap-3">
             <AppIcon />
@@ -370,18 +406,65 @@ export default function App() {
             <Guide />
           ) : activeTab === 'accueil' ? (
             <>
-              <ProgramRow title="Dernières vidéos" programs={personalizedLatestPrograms.slice(0, 5)} large={true} onSelect={setSelectedProg} onRemove={removeProgram} currentUser={user} isAdmin={isAdmin} />
+              <ProgramRow 
+                title="Dernières vidéos" 
+                programs={personalizedLatestPrograms.slice(0, 5)} 
+                large={true} 
+                onSelect={setSelectedProg} 
+                onRemove={removeProgram} 
+                currentUser={user} 
+                isAdmin={isAdmin} 
+                toggleWatchLater={toggleWatchLater} 
+                watchLaterList={userData?.watchLater || []} 
+              />
+              
+              {hydratedWatchLater.length > 0 && (
+                <div className="bg-slate-800/40 border-y border-indigo-500/20 py-8 my-8 shadow-inner -mx-4 md:-mx-10 px-4 md:px-10">
+                  <ProgramRow 
+                    title="À regarder plus tard" 
+                    programs={hydratedWatchLater} 
+                    small={true} 
+                    onSelect={setSelectedProg} 
+                    onRemove={removeProgram} 
+                    currentUser={user} 
+                    isAdmin={isAdmin} 
+                    toggleWatchLater={toggleWatchLater} 
+                    watchLaterList={userData?.watchLater || []} 
+                  />
+                </div>
+              )}
               
               {allCategories.map(cat => {
                 const catProgs = hydratedPrograms.filter(p => p.categoryId === cat.id);
                 if (catProgs.length === 0) return null;
-                return <ProgramRow key={cat.id} title={cat.label} programs={catProgs} onSelect={setSelectedProg} onRemove={removeProgram} currentUser={user} isAdmin={isAdmin} />;
+                return (
+                  <ProgramRow 
+                    key={cat.id} 
+                    title={cat.label} 
+                    programs={catProgs} 
+                    onSelect={setSelectedProg} 
+                    onRemove={removeProgram} 
+                    currentUser={user} 
+                    isAdmin={isAdmin} 
+                    toggleWatchLater={toggleWatchLater} 
+                    watchLaterList={userData?.watchLater || []} 
+                  />
+                );
               })}
             </>
           ) : (
             <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-6 px-4 md:px-0">
               {hydratedPrograms.filter(p => p.categoryId === activeTab).map(prog => (
-                 <ProgramCard key={prog.id} prog={prog} onSelect={setSelectedProg} onRemove={removeProgram} currentUser={user} isAdmin={isAdmin} />
+                 <ProgramCard 
+                   key={prog.id} 
+                   prog={prog} 
+                   onSelect={setSelectedProg} 
+                   onRemove={removeProgram} 
+                   currentUser={user} 
+                   isAdmin={isAdmin} 
+                   toggleWatchLater={toggleWatchLater} 
+                   isWatchLater={(userData?.watchLater || []).includes(prog.youtubeId)} 
+                 />
               ))}
             </div>
           )}
