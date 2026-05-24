@@ -1,0 +1,121 @@
+rules_version = '2';
+
+// =====================================================================
+// Tubiscope — Règles de sécurité Firestore
+// =====================================================================
+// Modèle de sécurité (état actuel de la base, avant refonte en `scopes`)
+//
+// 1. users/{uid}                    : données privées du user (isPremium, themeCount)
+// 2. users/{uid}/themes/{themeId}   : thèmes custom privés au user
+// 3. artifacts/{appId}/public/data/programs/{progId}
+//                                    : collection publique des vidéos
+//
+// Identification admin : custom claim `admin = true` (PAS d'email hardcodé)
+// =====================================================================
+
+service cloud.firestore {
+  match /databases/{database}/documents {
+
+    // ----- Helpers -----
+    function isSignedIn() {
+      return request.auth != null;
+    }
+
+    function isOwner(uid) {
+      return isSignedIn() && request.auth.uid == uid;
+    }
+
+    function isAdmin() {
+      return isSignedIn() && request.auth.token.admin == true;
+    }
+
+    // Champs autorisés à la création d'un programme
+    function isValidProgramCreate(data) {
+      return data.keys().hasAll(['youtubeId', 'channelId', 'categoryId', 'addedBy', 'createdAt'])
+          && data.youtubeId is string && data.youtubeId.size() > 0 && data.youtubeId.size() < 20
+          && data.channelId is string && data.channelId.size() > 0 && data.channelId.size() < 50
+          && data.categoryId is string && data.categoryId.size() > 0
+          && data.addedBy is string
+          && data.createdAt is number
+          // Le user ne peut créer un programme qu'à son propre nom
+          && data.addedBy == request.auth.uid;
+    }
+
+    // Champs autorisés à la modification d'un programme (pitch, avgScore éventuels)
+    function isValidProgramUpdate(before, after) {
+      // L'identité du document ne peut pas changer
+      return after.youtubeId == before.youtubeId
+          && after.channelId == before.channelId
+          && after.addedBy == before.addedBy
+          && after.createdAt == before.createdAt;
+    }
+
+    // =========================================================
+    // 1. Données utilisateur
+    // =========================================================
+    match /users/{userId} {
+      // Lecture : le user lui-même ou l'admin
+      allow read: if isOwner(userId) || isAdmin();
+
+      // Création : le user crée son propre doc à la première connexion
+      // Le champ isPremium doit rester false à la création (sécurité anti-fraude)
+      allow create: if isOwner(userId)
+                    && (!('isPremium' in request.resource.data) || request.resource.data.isPremium == false);
+
+      // Update : le user peut modifier ses propres champs, MAIS pas isPremium
+      // (isPremium sera modifié uniquement via Cloud Function après paiement Stripe)
+      allow update: if (
+                      isOwner(userId)
+                      && (
+                        !('isPremium' in request.resource.data)
+                        || request.resource.data.isPremium == resource.data.isPremium
+                      )
+                    )
+                    || isAdmin();
+
+      // Suppression : le user lui-même (droit à l'effacement RGPD) ou l'admin
+      allow delete: if isOwner(userId) || isAdmin();
+
+      // -----------------------------------------------------
+      // Sous-collection : thèmes custom du user
+      // -----------------------------------------------------
+      match /themes/{themeId} {
+        // Le user lit et écrit ses propres thèmes
+        allow read: if isOwner(userId) || isAdmin();
+        allow create, update, delete: if isOwner(userId) || isAdmin();
+      }
+    }
+
+    // =========================================================
+    // 2. Collection publique des programmes (vidéos)
+    // =========================================================
+    // Note : structure actuelle conservée pour ne pas casser l'app
+    // La refonte en `scopes` (admin only) + `userPrograms` (user) viendra en semaine 2
+    match /artifacts/{appId}/public/data/programs/{progId} {
+
+      // Lecture : tout user authentifié peut consulter la grille
+      allow read: if isSignedIn();
+
+      // Création : user authentifié, et il ne peut créer qu'à son propre nom
+      allow create: if isSignedIn() && isValidProgramCreate(request.resource.data);
+
+      // Update : seul le créateur ou l'admin peut modifier
+      // Et les champs identitaires ne peuvent pas être altérés
+      allow update: if (
+                      (isOwner(resource.data.addedBy) || isAdmin())
+                      && isValidProgramUpdate(resource.data, request.resource.data)
+                    );
+
+      // Suppression : seul le créateur ou l'admin
+      allow delete: if isOwner(resource.data.addedBy) || isAdmin();
+    }
+
+    // =========================================================
+    // 3. Fallback : tout le reste est interdit par défaut
+    // =========================================================
+    // Toute collection non listée ci-dessus est inaccessible
+    match /{document=**} {
+      allow read, write: if false;
+    }
+  }
+}
