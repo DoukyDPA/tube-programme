@@ -2,17 +2,44 @@ import React, { useState } from 'react';
 import { auth } from '../firebase';
 import { signInWithEmailAndPassword, createUserWithEmailAndPassword } from 'firebase/auth';
 
+const AUTH_ERRORS = {
+  'auth/invalid-credential': "Email ou mot de passe incorrect.",
+  'auth/wrong-password': "Mot de passe incorrect.",
+  'auth/user-not-found': "Aucun compte avec cet email.",
+  'auth/invalid-email': "Format d'email invalide.",
+  'auth/missing-password': "Le mot de passe est vide.",
+  'auth/weak-password': "Mot de passe trop court (6 caractères minimum).",
+  'auth/email-already-in-use': "Un compte existe déjà avec cet email.",
+  'auth/too-many-requests': "Trop d'essais. Réessaie dans quelques minutes.",
+  'auth/network-request-failed': "Pas de connexion réseau.",
+  'auth/user-disabled': "Ce compte a été désactivé.",
+  'auth/operation-not-allowed': "Méthode de connexion désactivée côté Firebase.",
+};
+
 export default function Auth() {
   const [isLogin, setIsLogin] = useState(true);
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
+  const [error, setError] = useState('');
+  const [loading, setLoading] = useState(false);
 
   const handleSubmit = async (e) => {
     e.preventDefault();
+    setError('');
+    setLoading(true);
     try {
       if (isLogin) await signInWithEmailAndPassword(auth, email, password);
       else await createUserWithEmailAndPassword(auth, email, password);
-    } catch (err) { alert(err.message); }
+    } catch (err) {
+      setError(AUTH_ERRORS[err.code] || "Une erreur s'est produite. Réessaie.");
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  const switchMode = () => {
+    setIsLogin(!isLogin);
+    setError('');
   };
 
   return (
@@ -24,16 +51,22 @@ export default function Auth() {
         <form onSubmit={handleSubmit} className="space-y-4">
           <input type="email" placeholder="Email" className="w-full bg-slate-800 p-4 rounded-xl text-white outline-none focus:ring-2 focus:ring-indigo-500" value={email} onChange={e => setEmail(e.target.value)} required />
           <input type="password" placeholder="Mot de passe" className="w-full bg-slate-800 p-4 rounded-xl text-white outline-none focus:ring-2 focus:ring-indigo-500" value={password} onChange={e => setPassword(e.target.value)} required />
-          <button className="w-full py-4 bg-indigo-600 hover:bg-indigo-500 text-white rounded-xl font-bold transition-all">
-            {isLogin ? 'Se connecter' : "S'inscrire"}
+
+          {error && (
+            <div className="bg-red-500/10 border border-red-500/30 text-red-300 text-sm p-3 rounded-xl">
+              {error}
+            </div>
+          )}
+
+          <button disabled={loading} className="w-full py-4 bg-indigo-600 hover:bg-indigo-500 disabled:bg-slate-700 disabled:cursor-not-allowed text-white rounded-xl font-bold transition-all">
+            {loading ? '...' : (isLogin ? 'Se connecter' : "S'inscrire")}
           </button>
           
-          <p className="text-xs text-slate-500 text-center mt-4 px-2">
-            En vous connectant, vous acceptez les <a href="https://www.youtube.com/t/terms" target="_blank" rel="noopener noreferrer" className="underline hover:text-indigo-400">Conditions d'utilisation de YouTube</a> ainsi que les <a href="http://www.google.com/policies/privacy" target="_blank" rel="noopener noreferrer" className="underline hover:text-indigo-400">Règles de confidentialité de Google</a>.
+          <p className="text-xs text-slate-500 text-center mt-4">
+            En vous connectant, vous acceptez nos <a href="#" className="underline hover:text-indigo-400">Conditions Générales</a> et notre <a href="#" className="underline hover:text-indigo-400">Politique de confidentialité</a>.
           </p>
-          
         </form>
-        <button onClick={() => setIsLogin(!isLogin)} className="w-full mt-6 text-slate-400 text-sm hover:text-white">
+        <button onClick={switchMode} className="w-full mt-6 text-slate-400 text-sm hover:text-white">
           {isLogin ? "Pas encore de compte ? S'inscrire" : "Déjà un compte ? Se connecter"}
         </button>
       </div>

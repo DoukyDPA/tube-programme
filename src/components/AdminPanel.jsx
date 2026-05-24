@@ -3,8 +3,6 @@ import { Cpu, BookOpen, Trophy, Mic2, X, CheckCircle2, Loader2, Sparkles, Edit2,
 import { db, FIREBASE_APP_ID, YOUTUBE_API_KEY } from '../firebase';
 import { collection, doc, setDoc, updateDoc, deleteDoc } from 'firebase/firestore';
 
-const ADMIN_EMAIL = "daniel.p.angelini@gmail.com";
-
 const ICONS = [
   { id: 'ia', icon: <Cpu size={18}/> },
   { id: 'lecture', icon: <BookOpen size={18}/> },
@@ -28,9 +26,7 @@ const parseDuration = (duration) => {
   return (parseInt(match[1] || 0, 10) * 3600) + (parseInt(match[2] || 0, 10) * 60) + parseInt(match[3] || 0, 10);
 };
 
-export default function AdminPanel({ user, userData, customThemes = [], onClose }) {
-  const isAdmin = user?.email === ADMIN_EMAIL;
-
+export default function AdminPanel({ user, userData, customThemes = [], isAdmin = false, onClose }) {
   const [tab, setTab] = useState('channel');
   const [loading, setLoading] = useState(false);
   
@@ -45,7 +41,8 @@ export default function AdminPanel({ user, userData, customThemes = [], onClose 
 
   const handleCreateTheme = async () => {
     if (!themeName.trim()) return;
-    if (!userData?.isPremium && customThemes.length >= 2) return alert("💎 Limite atteinte. Passez Premium pour débloquer des outils d'organisation et des dossiers supplémentaires.");
+    if (!userData?.isPremium && customThemes.length >= 2) return alert("💎 Limite atteinte. Passez Premium pour plus de thèmes.");
+
     setLoading(true);
     try {
       const themeRef = doc(collection(db, 'users', user.uid, 'themes'));
@@ -102,7 +99,7 @@ export default function AdminPanel({ user, userData, customThemes = [], onClose 
       }
       
       const playlistId = cid.replace(/^UC/, 'UU');
-      const pRes = await fetch(`https://www.googleapis.com/youtube/v3/playlistItems?key=${YOUTUBE_API_KEY}&playlistId=${playlistId}&part=snippet,contentDetails&maxResults=50`);
+      const pRes = await fetch(`https://www.googleapis.com/youtube/v3/playlistItems?key=${YOUTUBE_API_KEY}&playlistId=${playlistId}&part=snippet,contentDetails&maxResults=15`);
       const pData = await pRes.json();
       
       if (pData.error) throw new Error(pData.error.message);
