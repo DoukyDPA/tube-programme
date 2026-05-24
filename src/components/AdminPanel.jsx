@@ -1,6 +1,6 @@
 import React, { useState } from 'react';
 import { Cpu, BookOpen, Trophy, Mic2, X, CheckCircle2, Loader2, Sparkles, Edit2, Check, Trash2 } from 'lucide-react';
-import { db, FIREBASE_APP_ID, YOUTUBE_API_KEY } from '../firebase';
+import { db, YOUTUBE_API_KEY } from '../firebase';
 import { collection, doc, setDoc, updateDoc, deleteDoc } from 'firebase/firestore';
 
 const ICONS = [
@@ -19,8 +19,11 @@ const CATEGORIES = [
   { id: 'interviews', label: 'Talks Scope' },
 ];
 
+// Set des ids des scopes éditeur, pour discrimination rapide
+const SCOPE_IDS = new Set(CATEGORIES.map(c => c.id));
+
 const parseDuration = (duration) => {
-  if (!duration) return 0; // <-- LA LIGNE MAGIQUE QUI CORRIGE LE BUG
+  if (!duration) return 0;
   const match = duration.match(/PT(?:(\d+)H)?(?:(\d+)M)?(?:(\d+)S)?/);
   if (!match) return 0;
   return (parseInt(match[1] || 0, 10) * 3600) + (parseInt(match[2] || 0, 10) * 60) + parseInt(match[3] || 0, 10);
@@ -29,7 +32,7 @@ const parseDuration = (duration) => {
 export default function AdminPanel({ user, userData, customThemes = [], isAdmin = false, onClose }) {
   const [tab, setTab] = useState('channel');
   const [loading, setLoading] = useState(false);
-  
+
   const [themeName, setThemeName] = useState('');
   const [selectedIcon, setSelectedIcon] = useState('ia');
 
@@ -41,7 +44,9 @@ export default function AdminPanel({ user, userData, customThemes = [], isAdmin 
 
   const handleCreateTheme = async () => {
     if (!themeName.trim()) return;
-    if (!userData?.isPremium && customThemes.length >= 2) return alert("💎 Limite atteinte. Passez Premium pour plus de thèmes.");
+    if (!userData?.isPremium && customThemes.length >= 2) {
+      return alert("💎 Limite atteinte. Passez Studio pour créer plus de thèmes.");
+    }
 
     setLoading(true);
     try {
@@ -66,12 +71,15 @@ export default function AdminPanel({ user, userData, customThemes = [], isAdmin 
   };
 
   const handleDeleteTheme = async (themeId) => {
-    if (confirm("Supprimer cette thématique ?")) {
+    if (confirm("Supprimer cette thématique ? Les vidéos associées seront également supprimées.")) {
       try {
+        // Note : on ne supprime PAS automatiquement les programmes du thème ici.
+        // Firestore ne cascade pas la suppression d'une sous-collection.
+        // Une Cloud Function de cleanup serait l'idéal, à mettre en place plus tard.
         await deleteDoc(doc(db, 'users', user.uid, 'themes', themeId));
         const userRef = doc(db, 'users', user.uid);
         await setDoc(userRef, { themeCount: Math.max(0, customThemes.length - 1) }, { merge: true });
-        
+
         if (!isAdmin && category === themeId) {
             const remainingThemes = customThemes.filter(t => t.id !== themeId);
             setCategory(remainingThemes.length > 0 ? remainingThemes[0].id : '');
@@ -84,12 +92,17 @@ export default function AdminPanel({ user, userData, customThemes = [], isAdmin 
     if (!YOUTUBE_API_KEY) return alert("❌ Clé API YouTube manquante !");
     if (!channelInput.trim()) return alert("Entrez une chaîne.");
     if (!category) return alert("Sélectionnez une thématique.");
-    
+
+    // Si la cible est un scope, seul l'admin peut écrire
+    if (SCOPE_IDS.has(category) && !isAdmin) {
+      return alert("❌ Seul l'admin peut ajouter des chaînes dans les scopes éditeur.");
+    }
+
     setLoading(true);
     try {
       let cid = channelInput.trim();
       if (!cid.startsWith('@') && !cid.startsWith('UC')) cid = '@' + cid;
-      
+
       if (cid.startsWith('@')) {
         const res = await fetch(`https://www.googleapis.com/youtube/v3/channels?key=${YOUTUBE_API_KEY}&forHandle=${cid}&part=id`);
         const data = await res.json();
@@ -97,11 +110,11 @@ export default function AdminPanel({ user, userData, customThemes = [], isAdmin 
         if (data.items?.length > 0) cid = data.items[0].id;
         else throw new Error("Chaîne introuvable.");
       }
-      
+
       const playlistId = cid.replace(/^UC/, 'UU');
       const pRes = await fetch(`https://www.googleapis.com/youtube/v3/playlistItems?key=${YOUTUBE_API_KEY}&playlistId=${playlistId}&part=snippet,contentDetails&maxResults=15`);
       const pData = await pRes.json();
-      
+
       if (pData.error) throw new Error(pData.error.message);
       if (!pData.items || pData.items.length === 0) throw new Error("Aucune vidéo publique.");
 
@@ -112,28 +125,33 @@ export default function AdminPanel({ user, userData, customThemes = [], isAdmin 
       const longVideos = pData.items.filter(v => {
         const detail = detailsData.items?.find(d => d.id === v.contentDetails.videoId);
         return detail && parseDuration(detail.contentDetails.duration) >= 180;
-      }).slice(0, 5); 
+      }).slice(0, 5);
 
       if (longVideos.length === 0) throw new Error("Aucune vidéo de plus de 3 min.");
-      
+
+      const isScopeTarget = SCOPE_IDS.has(category);
+
       const promises = longVideos.map(v => {
         const vidId = v.contentDetails.videoId;
-        const newDocRef = doc(collection(db, 'artifacts', FIREBASE_APP_ID, 'public', 'data', 'programs'));
-        
-        // CONFORMITÉ ToS: Ne pas enregistrer de données statiques (title, nom de chaîne...)
+        // Choix de la collection cible selon le type de catégorie
+        const targetCollection = isScopeTarget
+          ? collection(db, 'scopes', category, 'programs')
+          : collection(db, 'users', user.uid, 'themes', category, 'programs');
+
+        const newDocRef = doc(targetCollection);
+
         return setDoc(newDocRef, {
-          id: newDocRef.id,
           youtubeId: vidId,
-          channelId: cid, 
+          channelId: cid,
           categoryId: category,
           addedBy: user.uid,
-          pitch: "", 
+          pitch: "",
           createdAt: Date.now(),
           avgScore: 0
         });
       });
 
-      await Promise.all(promises); 
+      await Promise.all(promises);
       alert(`✅ ${longVideos.length} vidéos ajoutées.`);
       setChannelInput('');
     } catch (e) { alert(`❌ ERREUR : ${e.message}`); }
@@ -164,6 +182,11 @@ export default function AdminPanel({ user, userData, customThemes = [], isAdmin 
                     ))}
                   </div>
                 </div>
+                {!userData?.isPremium && customThemes.length >= 2 && (
+                  <div className="p-3 bg-amber-500/10 border border-amber-500/20 rounded-xl text-amber-400 text-xs">
+                    💎 Limite atteinte. Passe Studio pour créer plus de thématiques.
+                  </div>
+                )}
                 <button onClick={handleCreateTheme} disabled={loading} className="w-full bg-indigo-600 py-3 rounded-xl font-bold text-sm text-white hover:bg-indigo-500 disabled:opacity-50">
                   {loading ? <Loader2 className="animate-spin mx-auto" size={18}/> : 'Créer'}
                 </button>
@@ -208,7 +231,7 @@ export default function AdminPanel({ user, userData, customThemes = [], isAdmin 
                   <div className="space-y-2">
                     <label className="text-xs font-bold text-slate-500 uppercase tracking-wider">Destination</label>
                     <select className="w-full bg-slate-800 p-4 rounded-xl text-sm border-none text-white focus:ring-2 focus:ring-indigo-500" value={category} onChange={e => setCategory(e.target.value)}>
-                      {isAdmin && <optgroup label="Catégories TubiScope">{CATEGORIES.map(c => <option key={c.id} value={c.id}>{c.label}</option>)}</optgroup>}
+                      {isAdmin && <optgroup label="Scopes éditeur">{CATEGORIES.map(c => <option key={c.id} value={c.id}>{c.label}</option>)}</optgroup>}
                       {customThemes.length > 0 && <optgroup label="Mes Thématiques">{customThemes.map(c => <option key={c.id} value={c.id}>{c.name}</option>)}</optgroup>}
                     </select>
                   </div>

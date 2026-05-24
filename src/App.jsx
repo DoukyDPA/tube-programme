@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import { auth, db, FIREBASE_APP_ID, YOUTUBE_API_KEY } from './firebase'; 
+import { auth, db, YOUTUBE_API_KEY } from './firebase';
 import { onAuthStateChanged, signOut } from 'firebase/auth';
 import { collection, onSnapshot, doc, getDoc, setDoc, deleteDoc } from 'firebase/firestore';
 
@@ -7,7 +7,7 @@ import Auth from './components/Auth';
 import AdminPanel from './components/AdminPanel';
 import ProgramRow from './components/ProgramRow';
 import ProgramCard from './components/ProgramCard';
-import VideoModal from './components/VideoModal'; 
+import VideoModal from './components/VideoModal';
 
 import { Sparkles, Home, Settings, Loader2, RefreshCw, LogOut, Cpu, BookOpen, Trophy, Mic2, Clapperboard } from 'lucide-react';
 
@@ -18,6 +18,9 @@ const CATEGORIES = [
   { id: 'interviews', label: 'Talks Scope', icon: <Mic2 size={18}/> },
   { id: 'divertissement', label: 'Divertissement Scope', icon: <Clapperboard size={18}/> },
 ];
+
+// Ids des scopes éditeur (doivent matcher CATEGORIES ci-dessus)
+const SCOPE_IDS = CATEGORIES.map(c => c.id);
 
 // Nouveau composant d'icône TubiScope
 const AppIcon = () => (
@@ -40,7 +43,7 @@ const getIconForCustomTheme = (iconId) => {
 };
 
 const parseDuration = (duration) => {
-  if (!duration) return 0; // <-- LA LIGNE MAGIQUE QUI CORRIGE LE BUG
+  if (!duration) return 0;
   const match = duration.match(/PT(?:(\d+)H)?(?:(\d+)M)?(?:(\d+)S)?/);
   if (!match) return 0;
   return (parseInt(match[1] || 0, 10) * 3600) + (parseInt(match[2] || 0, 10) * 60) + parseInt(match[3] || 0, 10);
@@ -52,10 +55,14 @@ export default function App() {
 
   const [userData, setUserData] = useState(null);
   const [loading, setLoading] = useState(true);
-  
-  const [programs, setPrograms] = useState([]); 
-  const [hydratedPrograms, setHydratedPrograms] = useState([]); 
-  
+
+  // Programmes scopes éditeur, indexés par scopeId
+  const [scopePrograms, setScopePrograms] = useState({});
+  // Programmes thèmes perso du user, indexés par themeId
+  const [themePrograms, setThemePrograms] = useState({});
+
+  const [hydratedPrograms, setHydratedPrograms] = useState([]);
+
   const [customThemes, setCustomThemes] = useState([]);
   const [activeTab, setActiveTab] = useState('accueil');
   const [isAdminOpen, setIsAdminOpen] = useState(false);
@@ -66,7 +73,6 @@ export default function App() {
     return onAuthStateChanged(auth, async (u) => {
       setUser(u);
       if (u) {
-        // Lecture du custom claim admin sur le token Firebase
         try {
           const tokenResult = await u.getIdTokenResult();
           setIsAdmin(tokenResult.claims?.admin === true);
@@ -87,27 +93,87 @@ export default function App() {
       } else {
         setIsAdmin(false);
         setUserData(null);
+        setScopePrograms({});
+        setThemePrograms({});
       }
       setLoading(false);
     });
   }, []);
 
+  // Listener sur chaque scope éditeur
   useEffect(() => {
     if (!user) return;
-    const q = collection(db, 'artifacts', FIREBASE_APP_ID, 'public', 'data', 'programs');
+    const unsubs = SCOPE_IDS.map(scopeId => {
+      const q = collection(db, 'scopes', scopeId, 'programs');
+      return onSnapshot(q, (snap) => {
+        const docs = snap.docs.map(d => ({
+          id: d.id,
+          ...d.data(),
+          _source: 'scope',
+          _scopeId: scopeId,
+        }));
+        setScopePrograms(prev => ({ ...prev, [scopeId]: docs }));
+      });
+    });
+    return () => unsubs.forEach(u => u());
+  }, [user]);
+
+  // Listener sur les thèmes perso du user
+  useEffect(() => {
+    if (!user) return;
+    const q = collection(db, 'users', user.uid, 'themes');
     return onSnapshot(q, (snap) => {
-      const data = snap.docs.map(d => ({ id: d.id, ...d.data() }));
-      setPrograms(data); 
+      setCustomThemes(snap.docs.map(d => ({ id: d.id, ...d.data() })));
     });
   }, [user]);
 
+  // Listener sur les programmes de chaque thème perso
+  useEffect(() => {
+    if (!user) return;
+    if (customThemes.length === 0) {
+      setThemePrograms({});
+      return;
+    }
+    const unsubs = customThemes.map(theme => {
+      const q = collection(db, 'users', user.uid, 'themes', theme.id, 'programs');
+      return onSnapshot(q, (snap) => {
+        const docs = snap.docs.map(d => ({
+          id: d.id,
+          ...d.data(),
+          _source: 'theme',
+          _themeId: theme.id,
+        }));
+        setThemePrograms(prev => ({ ...prev, [theme.id]: docs }));
+      });
+    });
+
+    // Nettoyage : on enlève les themePrograms qui ne correspondent plus à un thème actuel
+    setThemePrograms(prev => {
+      const next = {};
+      customThemes.forEach(t => { if (prev[t.id]) next[t.id] = prev[t.id]; });
+      return next;
+    });
+
+    return () => unsubs.forEach(u => u());
+  }, [user, customThemes]);
+
+  // Concaténation des deux sources
+  const programs = [
+    ...Object.values(scopePrograms).flat(),
+    ...Object.values(themePrograms).flat(),
+  ];
+
+  // Hydratation YouTube
   useEffect(() => {
     const fetchYoutubeData = async () => {
-      if (!programs.length || !YOUTUBE_API_KEY) return;
-      
+      if (!programs.length || !YOUTUBE_API_KEY) {
+        setHydratedPrograms([]);
+        return;
+      }
+
       const uniqueIds = [...new Set(programs.map(p => p.youtubeId))];
       let fetchedData = {};
-      
+
       for (let i = 0; i < uniqueIds.length; i += 50) {
         const chunk = uniqueIds.slice(i, i + 50).join(',');
         try {
@@ -126,85 +192,78 @@ export default function App() {
           console.error("Erreur hydratation API YouTube:", e);
         }
       }
-      
+
       const merged = programs.map(p => ({
         ...p,
         title: fetchedData[p.youtubeId]?.title || "Vidéo indisponible",
         creatorName: fetchedData[p.youtubeId]?.creatorName || "Créateur inconnu",
         publishedAt: fetchedData[p.youtubeId]?.publishedAt || p.createdAt,
       }));
-      
+
       setHydratedPrograms(merged.sort((a,b) => b.publishedAt - a.publishedAt));
     };
 
     fetchYoutubeData();
-  }, [programs]);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [JSON.stringify(programs.map(p => p.id))]);
 
-  useEffect(() => {
-    if (!user) return;
-    const q = collection(db, 'users', user.uid, 'themes');
-    return onSnapshot(q, (snap) => {
-      setCustomThemes(snap.docs.map(d => ({ id: d.id, ...d.data() })));
-    });
-  }, [user]);
+  // Helper : retourne la ref Firestore d'un programme selon sa source
+  const programRef = (prog) => {
+    if (prog._source === 'scope') {
+      return doc(db, 'scopes', prog._scopeId, 'programs', prog.id);
+    }
+    // _source === 'theme'
+    return doc(db, 'users', user.uid, 'themes', prog._themeId, 'programs', prog.id);
+  };
 
-const syncWhatsNew = async () => {
+  const syncWhatsNew = async () => {
     if (!YOUTUBE_API_KEY) return alert("❌ Clé API manquante !");
+    if (!isAdmin) return alert("❌ Réservé à l'admin.");
     setIsSyncing(true);
     let addedCount = 0;
     let deletedCount = 0;
 
     try {
+      // On ne sync que les scopes éditeur (les thèmes user sont gérés par leurs owners)
+      const scopePrgs = Object.values(scopePrograms).flat();
       const channelsToUpdate = new Map();
       const videosByChannel = {};
 
-      // Grouper les vidéos existantes par chaîne
-      for (const p of programs) {
-        if (p.channelId) {
+      for (const p of scopePrgs) {
+        if (p.channelId && p.categoryId) {
           if (!videosByChannel[p.channelId]) videosByChannel[p.channelId] = [];
           videosByChannel[p.channelId].push(p);
-
-          if (p.categoryId) {
-            // CORRECTION 1 : On identifie et on conserve le vrai propriétaire de la chaîne
-            const existingAddedBy = channelsToUpdate.get(p.channelId)?.addedBy;
-            const owner = (existingAddedBy && existingAddedBy !== user.uid) ? existingAddedBy : (p.addedBy || user.uid);
-            
-            channelsToUpdate.set(p.channelId, { 
-              id: p.channelId, 
-              category: p.categoryId,
-              addedBy: owner 
-            });
-          }
+          channelsToUpdate.set(p.channelId, { id: p.channelId, category: p.categoryId });
         }
       }
 
       const channels = Array.from(channelsToUpdate.values());
       if (channels.length === 0) {
         setIsSyncing(false);
-        return alert("Aucune chaîne trouvée.");
+        return alert("Aucune chaîne trouvée dans les scopes.");
       }
 
       const addPromises = [];
       const deletePromises = [];
 
       for (const channel of channels) {
-        let cid = channel.id;
+        const cid = channel.id;
         const playlistId = cid.replace(/^UC/, 'UU');
-        
+
         const pRes = await fetch(`https://www.googleapis.com/youtube/v3/playlistItems?key=${YOUTUBE_API_KEY}&playlistId=${playlistId}&part=snippet,contentDetails&maxResults=5`);
         const pData = await pRes.json();
         if (!pData.items) continue;
 
-        const top5Ids = [];
         const videoIds = pData.items.map(v => v.contentDetails.videoId).join(',');
         const detailsRes = await fetch(`https://www.googleapis.com/youtube/v3/videos?key=${YOUTUBE_API_KEY}&id=${videoIds}&part=contentDetails`);
         const detailsData = await detailsRes.json();
 
+        const top5Ids = [];
         for (const v of pData.items) {
           const vidId = v.contentDetails.videoId;
           const detail = detailsData.items?.find(d => d.id === vidId);
           if (detail && parseDuration(detail.contentDetails.duration) >= 180) {
-             top5Ids.push(vidId);
+            top5Ids.push(vidId);
           }
         }
 
@@ -213,13 +272,12 @@ const syncWhatsNew = async () => {
 
         for (const vidId of top5Ids) {
           if (!existingIdsForChannel.includes(vidId)) {
-            const newDocRef = doc(collection(db, 'artifacts', FIREBASE_APP_ID, 'public', 'data', 'programs'));
+            const newDocRef = doc(collection(db, 'scopes', channel.category, 'programs'));
             addPromises.push(setDoc(newDocRef, {
-              id: newDocRef.id,
               youtubeId: vidId,
               channelId: cid,
               categoryId: channel.category,
-              addedBy: channel.addedBy, // CORRECTION 2 : On affecte la vidéo au vrai propriétaire
+              addedBy: user.uid,
               pitch: "",
               createdAt: Date.now(),
               avgScore: 0
@@ -230,7 +288,7 @@ const syncWhatsNew = async () => {
 
         for (const existingVid of existingForChannel) {
           if (!top5Ids.includes(existingVid.youtubeId)) {
-            deletePromises.push(deleteDoc(doc(db, 'artifacts', FIREBASE_APP_ID, 'public', 'data', 'programs', existingVid.id)));
+            deletePromises.push(deleteDoc(doc(db, 'scopes', existingVid._scopeId, 'programs', existingVid.id)));
             deletedCount++;
           }
         }
@@ -239,55 +297,51 @@ const syncWhatsNew = async () => {
       await Promise.all(addPromises);
       await Promise.all(deletePromises);
 
-      alert(addedCount > 0 || deletedCount > 0 
-        ? `✅ Fait ! ${addedCount} vidéos ajoutées et ${deletedCount} anciennes vidéos supprimées.` 
+      alert(addedCount > 0 || deletedCount > 0
+        ? `✅ Fait ! ${addedCount} vidéos ajoutées et ${deletedCount} anciennes vidéos supprimées.`
         : `ℹ️ Tout est à jour, rien à nettoyer.`);
     } catch (e) { alert(`❌ Erreur : ${e.message}`); }
     finally { setIsSyncing(false); }
   };
 
   const removeProgram = async (prog) => {
-    if (!isAdmin && prog.addedBy !== user.uid) {
-        return alert("❌ Action refusée.");
+    // Sur un scope, seul l'admin peut supprimer
+    if (prog._source === 'scope' && !isAdmin) {
+      return alert("❌ Action refusée. Seul l'admin peut modifier les scopes éditeur.");
     }
     if (confirm("Supprimer définitivement ce programme ?")) {
-      try { await deleteDoc(doc(db, 'artifacts', FIREBASE_APP_ID, 'public', 'data', 'programs', prog.id)); }
+      try { await deleteDoc(programRef(prog)); }
       catch(e) { alert("❌ Erreur : " + e.message); }
     }
   };
 
   const allCategories = [
-    ...CATEGORIES, 
+    ...CATEGORIES,
     ...customThemes.map(ct => ({ id: ct.id, label: ct.name }))
   ];
 
-  // --- FILTRAGE DES DERNIÈRES VIDÉOS ---
-  // On récupère les identifiants des catégories globales (publiques)
-  const globalCategoryIds = CATEGORIES.map(c => c.id);
-  
-  // On filtre le flux pour la section "Dernières vidéos"
-  const personalizedLatestPrograms = hydratedPrograms.filter(prog => 
-    globalCategoryIds.includes(prog.categoryId) || prog.addedBy === user?.uid
-  );
+  // Avec le nouveau modèle, tous les programmes lus sont déjà personnalisés pour ce user :
+  // ses propres thèmes + les scopes éditeur. Pas de filtrage supplémentaire nécessaire.
+  const personalizedLatestPrograms = hydratedPrograms;
 
   if (loading) return <div className="h-screen bg-slate-950 flex items-center justify-center"><Loader2 className="animate-spin text-indigo-500" size={40} /></div>;
   if (!user) return <Auth />;
 
   return (
     <div className="min-h-screen md:h-screen bg-[#0a0f1c] text-slate-200 flex flex-col md:flex-row font-sans overflow-hidden">
-      
+
       {/* SIDEBAR PC */}
       <aside className="hidden md:flex w-[260px] bg-slate-950/95 border-r border-slate-800/50 flex-col z-50 overflow-y-auto shadow-2xl">
         <div className="p-8 flex items-center gap-3">
           <AppIcon />
           <h1 className="text-xl font-black text-white tracking-tight">Tubi<span className="text-indigo-500">Scope</span></h1>
         </div>
-        
+
         <nav className="flex-1 px-4 py-4 space-y-1">
           <button onClick={() => setActiveTab('accueil')} className={`w-full flex items-center gap-3 px-4 py-3 rounded-xl transition-all ${activeTab === 'accueil' ? 'bg-indigo-600/10 text-indigo-400 font-bold' : 'text-slate-400 hover:text-white hover:bg-slate-800/50'}`}>
             <Home size={18} /> Accueil
           </button>
-          
+
           <div className="mt-8 mb-3 px-4 text-[10px] font-bold text-slate-600 uppercase tracking-widest">Catégories</div>
           {CATEGORIES.map(cat => (
             <button key={cat.id} onClick={() => setActiveTab(cat.id)} className={`w-full flex items-center gap-3 px-4 py-3 rounded-xl transition-all ${activeTab === cat.id ? 'bg-indigo-600/10 text-indigo-400 font-bold' : 'text-slate-400 hover:text-white hover:bg-slate-800/50'}`}>
@@ -307,7 +361,7 @@ const syncWhatsNew = async () => {
               ))}
             </>
           )}
-          
+
           <button onClick={() => setIsAdminOpen(true)} className="w-full flex items-center gap-3 px-4 py-3 rounded-xl text-slate-400 hover:text-white hover:bg-slate-800/50 transition-all mt-4">
             <Settings size={18} /> Configurer
           </button>
@@ -326,18 +380,18 @@ const syncWhatsNew = async () => {
           <Home size={22} />
           <span className="text-[10px] font-bold">Accueil</span>
         </button>
-        
+
         <button onClick={() => setIsAdminOpen(true)} className="flex flex-col items-center gap-1 p-2 text-slate-500 hover:text-indigo-400 transition-colors">
           <Settings size={22} />
           <span className="text-[10px] font-bold">Config</span>
         </button>
-        
+
         <button onClick={() => signOut(auth)} className="flex flex-col items-center gap-1 p-2 text-slate-500 hover:text-red-400 transition-colors">
           <LogOut size={22} />
           <span className="text-[10px] font-bold">Sortir</span>
         </button>
       </div>
-      
+
       {/* ZONE PRINCIPALE */}
       <main className="flex-1 overflow-y-auto h-screen pb-24 md:pb-0 relative">
         <header className="flex justify-between items-center p-4 md:p-10 pb-4 md:pb-8">
@@ -345,14 +399,14 @@ const syncWhatsNew = async () => {
             <AppIcon />
             <h1 className="text-xl font-black text-white tracking-tight">Tubi<span className="text-indigo-500">Scope</span></h1>
           </div>
-          
+
           <h2 className="hidden md:block text-2xl md:text-3xl font-bold text-white tracking-tight">
              {activeTab === 'accueil' ? 'À la Une' : allCategories.find(c => c.id === activeTab)?.label}
           </h2>
-          
+
           {activeTab === 'accueil' && isAdmin && (
             <button onClick={syncWhatsNew} disabled={isSyncing} className="flex items-center gap-2 bg-indigo-600 hover:bg-indigo-500 text-white px-3 py-2 md:px-4 md:py-2 rounded-xl text-xs md:text-sm font-bold shadow-lg shadow-indigo-500/20 transition-all disabled:opacity-50">
-              {isSyncing ? <Loader2 size={16} className="animate-spin"/> : <RefreshCw size={16} />} 
+              {isSyncing ? <Loader2 size={16} className="animate-spin"/> : <RefreshCw size={16} />}
               <span className="hidden md:inline">{isSyncing ? 'Recherche...' : 'Actualiser'}</span>
             </button>
           )}
@@ -361,9 +415,8 @@ const syncWhatsNew = async () => {
         <div className="px-0 md:px-10">
           {activeTab === 'accueil' ? (
             <>
-              {/* Utilisation de notre liste personnalisée pour les "Dernières vidéos" */}
               <ProgramRow title="Dernières vidéos" programs={personalizedLatestPrograms.slice(0, 5)} large={true} onSelect={setSelectedProg} onRemove={removeProgram} currentUser={user} isAdmin={isAdmin} />
-              
+
               {allCategories.map(cat => {
                 const catProgs = hydratedPrograms.filter(p => p.categoryId === cat.id);
                 if (catProgs.length === 0) return null;

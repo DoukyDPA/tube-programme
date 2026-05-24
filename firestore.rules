@@ -1,16 +1,17 @@
 rules_version = '2';
 
 // =====================================================================
-// Tubiscope — Règles de sécurité Firestore
+// Tubiscope — Règles de sécurité Firestore (v2, post refonte data)
 // =====================================================================
-// Modèle de sécurité (état actuel de la base, avant refonte en `scopes`)
+// Modèle de sécurité
 //
-// 1. users/{uid}                    : données privées du user (isPremium, themeCount)
-// 2. users/{uid}/themes/{themeId}   : thèmes custom privés au user
-// 3. artifacts/{appId}/public/data/programs/{progId}
-//                                    : collection publique des vidéos
+// 1. users/{uid}                                     : données privées du user (isPremium, themeCount)
+// 2. users/{uid}/themes/{themeId}                    : thèmes custom du user
+// 3. users/{uid}/themes/{themeId}/programs/{progId}  : vidéos d'un thème custom du user
+// 4. scopes/{scopeId}/programs/{progId}              : vidéos des scopes éditeur (admin only en écriture)
+// 5. artifacts/{appId}/public/data/programs/{progId} : ANCIENNE collection, read-only pendant la migration
 //
-// Identification admin : custom claim `admin = true` (PAS d'email hardcodé)
+// Identification admin : custom claim `admin = true`
 // =====================================================================
 
 service cloud.firestore {
@@ -37,13 +38,11 @@ service cloud.firestore {
           && data.categoryId is string && data.categoryId.size() > 0
           && data.addedBy is string
           && data.createdAt is number
-          // Le user ne peut créer un programme qu'à son propre nom
           && data.addedBy == request.auth.uid;
     }
 
-    // Champs autorisés à la modification d'un programme (pitch, avgScore éventuels)
+    // Champs immutables d'un programme (identité du doc)
     function isValidProgramUpdate(before, after) {
-      // L'identité du document ne peut pas changer
       return after.youtubeId == before.youtubeId
           && after.channelId == before.channelId
           && after.addedBy == before.addedBy
@@ -54,16 +53,13 @@ service cloud.firestore {
     // 1. Données utilisateur
     // =========================================================
     match /users/{userId} {
-      // Lecture : le user lui-même ou l'admin
       allow read: if isOwner(userId) || isAdmin();
 
-      // Création : le user crée son propre doc à la première connexion
-      // Le champ isPremium doit rester false à la création (sécurité anti-fraude)
+      // Création du doc user à la première connexion. isPremium doit valoir false.
       allow create: if isOwner(userId)
                     && (!('isPremium' in request.resource.data) || request.resource.data.isPremium == false);
 
-      // Update : le user peut modifier ses propres champs, MAIS pas isPremium
-      // (isPremium sera modifié uniquement via Cloud Function après paiement Stripe)
+      // Update : owner peut tout sauf isPremium (réservé Cloud Function Stripe). Admin peut tout.
       allow update: if (
                       isOwner(userId)
                       && (
@@ -73,47 +69,69 @@ service cloud.firestore {
                     )
                     || isAdmin();
 
-      // Suppression : le user lui-même (droit à l'effacement RGPD) ou l'admin
       allow delete: if isOwner(userId) || isAdmin();
 
       // -----------------------------------------------------
-      // Sous-collection : thèmes custom du user
+      // 2. Thèmes custom du user
       // -----------------------------------------------------
       match /themes/{themeId} {
-        // Le user lit et écrit ses propres thèmes
         allow read: if isOwner(userId) || isAdmin();
         allow create, update, delete: if isOwner(userId) || isAdmin();
+
+        // -----------------------------------------------------
+        // 3. Programmes d'un thème custom du user
+        // -----------------------------------------------------
+        match /programs/{progId} {
+          // Lecture : le user concerné et l'admin
+          allow read: if isOwner(userId) || isAdmin();
+
+          // Création : owner du thème, validation des champs, addedBy = uid
+          allow create: if isOwner(userId)
+                        && isValidProgramCreate(request.resource.data);
+
+          // Update : owner ou admin, champs identitaires immuables
+          allow update: if (isOwner(userId) || isAdmin())
+                        && isValidProgramUpdate(resource.data, request.resource.data);
+
+          // Suppression : owner ou admin
+          allow delete: if isOwner(userId) || isAdmin();
+        }
       }
     }
 
     // =========================================================
-    // 2. Collection publique des programmes (vidéos)
+    // 4. Scopes éditeur (5 thématiques fixes définies dans App.jsx)
     // =========================================================
-    // Note : structure actuelle conservée pour ne pas casser l'app
-    // La refonte en `scopes` (admin only) + `userPrograms` (user) viendra en semaine 2
-    match /artifacts/{appId}/public/data/programs/{progId} {
-
-      // Lecture : tout user authentifié peut consulter la grille
+    // Le document scopes/{scopeId} n'existe pas forcément (sous-collection orpheline).
+    // On gère uniquement les programmes dedans.
+    match /scopes/{scopeId}/programs/{progId} {
+      // Lecture : tout user authentifié (gratuits et Studio)
       allow read: if isSignedIn();
 
-      // Création : user authentifié, et il ne peut créer qu'à son propre nom
-      allow create: if isSignedIn() && isValidProgramCreate(request.resource.data);
+      // Création : admin uniquement
+      allow create: if isAdmin()
+                    && isValidProgramCreate(request.resource.data);
 
-      // Update : seul le créateur ou l'admin peut modifier
-      // Et les champs identitaires ne peuvent pas être altérés
-      allow update: if (
-                      (isOwner(resource.data.addedBy) || isAdmin())
-                      && isValidProgramUpdate(resource.data, request.resource.data)
-                    );
+      // Update : admin uniquement, champs identitaires immuables
+      allow update: if isAdmin()
+                    && isValidProgramUpdate(resource.data, request.resource.data);
 
-      // Suppression : seul le créateur ou l'admin
-      allow delete: if isOwner(resource.data.addedBy) || isAdmin();
+      // Suppression : admin uniquement
+      allow delete: if isAdmin();
     }
 
     // =========================================================
-    // 3. Fallback : tout le reste est interdit par défaut
+    // 5. Ancienne collection programs (read-only le temps de la migration)
     // =========================================================
-    // Toute collection non listée ci-dessus est inaccessible
+    // À supprimer une fois la migration validée et l'app stabilisée sur la v2.
+    match /artifacts/{appId}/public/data/programs/{progId} {
+      allow read: if isSignedIn();
+      allow write: if false;
+    }
+
+    // =========================================================
+    // 6. Fallback : tout le reste est interdit par défaut
+    // =========================================================
     match /{document=**} {
       allow read, write: if false;
     }
