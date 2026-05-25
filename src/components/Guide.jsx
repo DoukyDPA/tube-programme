@@ -1,10 +1,10 @@
 import React from 'react';
-import { BookOpen, Sparkles, Scale, ShieldCheck, Clock } from 'lucide-react';
+import { BookOpen, Sparkles, Scale, ShieldCheck, Clock, FileText } from 'lucide-react';
 
-export default function Guide() {
+export default function Guide({ onOpenLegal }) {
   return (
     <div className="max-w-4xl mx-auto p-4 md:p-8 space-y-8 animate-in fade-in duration-500">
-      
+
       {/* En-tête */}
       <div className="bg-slate-900 border border-slate-800 rounded-3xl p-8 md:p-12 shadow-2xl relative overflow-hidden">
         <div className="absolute top-0 right-0 p-8 opacity-5 text-indigo-500">
@@ -14,7 +14,7 @@ export default function Guide() {
           Bienvenue sur Tubi<span className="text-indigo-500">Scope</span>
         </h2>
         <p className="text-slate-400 text-lg max-w-2xl relative z-10">
-          Votre curateur vidéo personnel. TubiScope filtre le bruit de YouTube pour ne vous proposer que des contenus longs, pertinents et organisés selon vos propres centres d'intérêt.
+          Votre organisateur vidéo personnel. TubiScope filtre le bruit de YouTube pour ne vous proposer que des contenus longs, pertinents et organisés selon vos propres centres d'intérêt.
         </p>
       </div>
 
@@ -32,7 +32,7 @@ export default function Guide() {
             </li>
             <li className="flex items-start gap-2">
               <span className="text-indigo-500 font-bold shrink-0">2.</span>
-              <span>Classez-les dans nos catégories pré-existantes ou créez vos propres thématiques.</span>
+              <span>Classez-les dans nos scopes éditeur ou créez vos propres thématiques (2 max en gratuit, illimité en Studio).</span>
             </li>
             <li className="flex items-start gap-2">
               <span className="text-indigo-500 font-bold shrink-0">3.</span>
@@ -41,63 +41,79 @@ export default function Guide() {
             <li className="flex items-start gap-2 bg-slate-800/50 p-3 rounded-lg border border-slate-700/50">
               <span className="text-indigo-500 font-bold shrink-0">4.</span>
               <span>
-                <b>Sauvegardez vos découvertes :</b> Survolez une vidéo et cliquez sur l'icône <Clock size={14} className="inline mx-1 text-slate-300" /> 
-                pour l'ajouter à votre ligne <b>À regarder plus tard</b> (10 vidéos max). Ces vidéos y resteront stockées en sécurité et survivront au nettoyage quotidien !
+                <b>Sauvegardez vos découvertes :</b> survolez une vidéo et cliquez sur l'icône <Clock size={14} className="inline mx-1 text-slate-300" />
+                pour l'ajouter à votre ligne <b>À regarder plus tard</b> (10 vidéos max). Ces vidéos y resteront stockées et survivront au nettoyage quotidien.
               </span>
             </li>
           </ul>
         </div>
 
-        {/* Vision Premium */}
+        {/* Vision Studio */}
         <div className="bg-gradient-to-br from-indigo-900/20 to-slate-900/50 border border-indigo-500/20 rounded-2xl p-6 md:p-8">
           <div className="w-12 h-12 bg-indigo-500/20 rounded-xl flex items-center justify-center mb-6">
             <Sparkles className="text-indigo-400" size={24} />
           </div>
-          <h3 className="text-xl font-bold text-white mb-3">Bientôt : TubiScope Premium</h3>
+          <h3 className="text-xl font-bold text-white mb-3">Bientôt : Tubiscope Studio</h3>
           <p className="text-slate-400 text-sm mb-4">
-            TubiScope est actuellement un service personnel en phase bêta. 
-            À l'avenir, une offre <b>Premium</b> verra le jour pour vous offrir des outils d'interface avancés (l'accès aux vidéos reste gratuit via YouTube) :
+            Tubiscope est actuellement un projet personnel en phase bêta, gratuit pour tous.
+            À l'avenir, une offre <b>Studio</b> verra le jour pour vous offrir des outils avancés (l'accès aux vidéos reste gratuit via YouTube) :
           </p>
           <ul className="space-y-2 text-indigo-200/70 text-sm">
-            <li>✨ Création illimitée de dossiers de thématiques</li>
+            <li>✨ Création illimitée de thématiques personnelles</li>
             <li>✨ Suivi illimité de chaînes dans votre interface</li>
-            <li>✨ Filtres avancés pour organiser vos découvertes</li>
+            <li>✨ Votes sur les scopes et chaînes éditeur</li>
+            <li>✨ Parrainage entre membres Studio</li>
           </ul>
         </div>
       </div>
 
-      {/* Informations Légales */}
-      <div className="bg-slate-900/30 border border-slate-800/30 rounded-2xl p-6 md:p-8 mt-12">
-        <div className="flex items-center gap-3 mb-6">
-          <Scale className="text-slate-500" size={24} />
-          <h3 className="text-lg font-bold text-white">Informations Légales & Données</h3>
+      {/* Documents légaux */}
+      <div className="bg-slate-900/50 border border-slate-800/50 rounded-2xl p-6 md:p-8">
+        <div className="flex items-center gap-3 mb-4">
+          <FileText className="text-slate-400" size={20} />
+          <h3 className="text-lg font-bold text-white">Documents légaux</h3>
         </div>
-        
-        <div className="space-y-6 text-sm text-slate-500">
-          <div>
-            <h4 className="font-semibold text-slate-300 mb-1 flex items-center gap-2">
-              <ShieldCheck size={16} /> Statut du projet
-            </h4>
-            <p>
-              Ce service est actuellement un projet personnel à but non lucratif. Il est fourni "en l'état", sans garantie de disponibilité continue.
-            </p>
-          </div>
-          
-          <div>
-            <h4 className="font-semibold text-slate-300 mb-1">Utilisation de l'API YouTube</h4>
-            <p className="leading-relaxed">
-              TubiScope est un client API qui utilise les services de l'API YouTube (YouTube Data API v3). Toutes les vidéos diffusées via ce service restent hébergées par YouTube et TubiScope ne stocke aucune vidéo sur ses serveurs. 
-              En utilisant TubiScope, vous acceptez d'être lié par les <a href="https://www.youtube.com/t/terms" target="_blank" rel="noopener noreferrer" className="text-indigo-400 hover:underline">Conditions d'utilisation de YouTube</a> ainsi que par les <a href="http://www.google.com/policies/privacy" target="_blank" rel="noopener noreferrer" className="text-indigo-400 hover:underline">Règles de confidentialité de Google</a>.
-            </p>
-          </div>
+        <p className="text-sm text-slate-400 mb-4">
+          Vous trouverez ici l'ensemble des informations relatives à l'éditeur, à la protection de vos données et aux règles d'utilisation du service.
+        </p>
+        <div className="grid sm:grid-cols-3 gap-3">
+          <button
+            onClick={() => onOpenLegal?.('mentions')}
+            className="flex items-center gap-2 p-3 bg-slate-800/50 hover:bg-slate-800 border border-slate-700/50 hover:border-indigo-500/50 rounded-xl text-sm text-slate-200 font-semibold transition-all"
+          >
+            <Scale size={16} className="text-indigo-400" /> Mentions légales
+          </button>
+          <button
+            onClick={() => onOpenLegal?.('privacy')}
+            className="flex items-center gap-2 p-3 bg-slate-800/50 hover:bg-slate-800 border border-slate-700/50 hover:border-indigo-500/50 rounded-xl text-sm text-slate-200 font-semibold transition-all"
+          >
+            <ShieldCheck size={16} className="text-indigo-400" /> Confidentialité
+          </button>
+          <button
+            onClick={() => onOpenLegal?.('terms')}
+            className="flex items-center gap-2 p-3 bg-slate-800/50 hover:bg-slate-800 border border-slate-700/50 hover:border-indigo-500/50 rounded-xl text-sm text-slate-200 font-semibold transition-all"
+          >
+            <FileText size={16} className="text-indigo-400" /> CGU
+          </button>
+        </div>
+      </div>
 
-          <div>
-            <h4 className="font-semibold text-slate-300 mb-1">Confidentialité</h4>
-            <p>
-              L'authentification est gérée de manière sécurisée par Firebase (Google). Vos données de configuration (thèmes et chaînes suivies) sont privées et ne sont en aucun cas revendues à des tiers.
-            </p>
-          </div>
+      {/* Rappel API YouTube */}
+      <div className="bg-slate-900/30 border border-slate-800/30 rounded-2xl p-6 md:p-8">
+        <div className="flex items-center gap-3 mb-4">
+          <Scale className="text-slate-500" size={20} />
+          <h3 className="text-base font-bold text-white">Utilisation de l'API YouTube</h3>
         </div>
+        <p className="text-sm text-slate-500 leading-relaxed">
+          Tubiscope est un client de l'API YouTube Data v3. Les vidéos affichées restent hébergées par YouTube et Tubiscope n'en stocke aucune sur ses serveurs. En utilisant Tubiscope, vous acceptez d'être lié par les{' '}
+          <a href="https://www.youtube.com/t/terms" target="_blank" rel="noopener noreferrer" className="text-indigo-400 hover:underline">
+            Conditions d'utilisation YouTube
+          </a>{' '}
+          et la{' '}
+          <a href="https://policies.google.com/privacy" target="_blank" rel="noopener noreferrer" className="text-indigo-400 hover:underline">
+            Politique de confidentialité Google
+          </a>.
+        </p>
       </div>
 
     </div>

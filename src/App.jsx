@@ -8,8 +8,10 @@ import AdminPanel from './components/AdminPanel';
 import ProgramRow from './components/ProgramRow';
 import ProgramCard from './components/ProgramCard';
 import VideoModal from './components/VideoModal';
+import Guide from './components/Guide';
+import Legal from './components/Legal';
 
-import { Sparkles, Home, Settings, Loader2, RefreshCw, LogOut, Cpu, BookOpen, Trophy, Mic2, Clapperboard } from 'lucide-react';
+import { Sparkles, Home, Settings, Loader2, RefreshCw, LogOut, Cpu, BookOpen, Trophy, Mic2, Clapperboard, Info } from 'lucide-react';
 
 const CATEGORIES = [
   { id: 'ia', label: 'IA & Tech Scope', icon: <Cpu size={18}/> },
@@ -68,6 +70,7 @@ export default function App() {
   const [customThemes, setCustomThemes] = useState([]);
   const [activeTab, setActiveTab] = useState('accueil');
   const [isAdminOpen, setIsAdminOpen] = useState(false);
+  const [legalTab, setLegalTab] = useState(null); // null = fermé, sinon 'mentions' | 'privacy' | 'terms'
   const [selectedProg, setSelectedProg] = useState(null);
   const [isSyncing, setIsSyncing] = useState(false);
 
@@ -404,6 +407,9 @@ export default function App() {
           <button onClick={() => setIsAdminOpen(true)} className="w-full flex items-center gap-3 px-4 py-3 rounded-xl text-slate-400 hover:text-white hover:bg-slate-800/50 transition-all mt-4">
             <Settings size={18} /> Configurer
           </button>
+          <button onClick={() => setActiveTab('guide')} className={`w-full flex items-center gap-3 px-4 py-3 rounded-xl transition-all ${activeTab === 'guide' ? 'bg-indigo-600/10 text-indigo-400 font-bold' : 'text-slate-400 hover:text-white hover:bg-slate-800/50'}`}>
+            <Info size={18} /> Guide & légal
+          </button>
         </nav>
 
         <div className="p-6 mt-auto border-t border-slate-800/50">
@@ -440,7 +446,7 @@ export default function App() {
           </div>
 
           <h2 className="hidden md:block text-2xl md:text-3xl font-bold text-white tracking-tight">
-             {activeTab === 'accueil' ? 'À la Une' : allCategories.find(c => c.id === activeTab)?.label}
+             {activeTab === 'accueil' ? 'À la Une' : activeTab === 'guide' ? 'Guide & légal' : allCategories.find(c => c.id === activeTab)?.label}
           </h2>
 
           {activeTab === 'accueil' && isAdmin && (
@@ -452,7 +458,9 @@ export default function App() {
         </header>
 
         <div className="px-0 md:px-10">
-          {activeTab === 'accueil' ? (
+          {activeTab === 'guide' ? (
+            <Guide onOpenLegal={(t) => setLegalTab(t)} />
+          ) : activeTab === 'accueil' ? (
             <>
               <ProgramRow
                 title="Dernières vidéos"
@@ -519,6 +527,7 @@ export default function App() {
 
       {selectedProg && <VideoModal prog={selectedProg} onClose={() => setSelectedProg(null)} />}
       {isAdminOpen && <AdminPanel user={user} userData={userData} customThemes={customThemes} isAdmin={isAdmin} onClose={() => setIsAdminOpen(false)} />}
+      {legalTab && <Legal initialTab={legalTab} onClose={() => setLegalTab(null)} />}
     </div>
   );
 }

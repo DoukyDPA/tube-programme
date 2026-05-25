@@ -184,7 +184,7 @@ export default function AdminPanel({ user, userData, customThemes = [], isAdmin 
                 </div>
                 {!userData?.isPremium && customThemes.length >= 2 && (
                   <div className="p-3 bg-amber-500/10 border border-amber-500/20 rounded-xl text-amber-400 text-xs">
-                    💎 Limite atteinte. Passe Studio pour créer plus de thématiques.
+                    💎 Limite atteinte. Passez à Studio pour créer plus de thématiques.
                   </div>
                 )}
                 <button onClick={handleCreateTheme} disabled={loading} className="w-full bg-indigo-600 py-3 rounded-xl font-bold text-sm text-white hover:bg-indigo-500 disabled:opacity-50">
