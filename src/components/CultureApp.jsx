@@ -1,0 +1,615 @@
+import React, { useState, useEffect, useMemo } from 'react';
+import {
+  collection,
+  doc,
+  onSnapshot,
+  getDoc,
+  setDoc,
+  arrayUnion,
+  arrayRemove,
+} from 'firebase/firestore';
+import { onAuthStateChanged, signOut } from 'firebase/auth';
+import {
+  Loader2,
+  LogOut,
+  Sparkles,
+  Home,
+  UserCircle,
+  ExternalLink,
+  Settings,
+  Info,
+} from 'lucide-react';
+
+import { auth, db, YOUTUBE_API_KEY_CULTURE } from '../firebase';
+import {
+  CULTURE_THEMES,
+  CULTURE_CHANNELS,
+  CULTURE_VIDEOS_PER_THEME,
+} from '../data/cultureChannels';
+import { CultureIcon } from '../data/cultureIcons';
+import { MODE_CULTURE } from '../data/appMode';
+
+import Auth from './Auth';
+import ProgramRow from './ProgramRow';
+import VideoModal from './VideoModal';
+import CultureThemePicker from './CultureThemePicker';
+import DiscoverBanner from './DiscoverBanner';
+import AccountModal from './AccountModal';
+import Guide from './Guide';
+import Legal from './Legal';
+
+// Logo Tubiscope avec sous-titre "Culture"
+const CultureLogo = () => (
+  <div className="flex items-center gap-3">
+    <div className="w-10 h-10 bg-gradient-to-br from-fuchsia-500 to-indigo-700 rounded-xl flex items-center justify-center shadow-lg shadow-fuchsia-500/20 shrink-0">
+      <svg
+        viewBox="0 0 24 24"
+        fill="none"
+        stroke="white"
+        strokeWidth="2.5"
+        strokeLinecap="round"
+        strokeLinejoin="round"
+        className="w-6 h-6"
+      >
+        <circle cx="12" cy="12" r="10" />
+        <polygon points="10 8 16 12 10 16 10 8" fill="white" />
+      </svg>
+    </div>
+    <div className="flex flex-col leading-tight">
+      <h1 className="text-xl font-black text-white tracking-tight">
+        Tubi<span className="text-fuchsia-400">Scope</span>
+      </h1>
+      <span className="text-[10px] font-bold text-fuchsia-300/80 uppercase tracking-widest">
+        Culture
+      </span>
+    </div>
+  </div>
+);
+
+// Récupère un channelId YouTube pour un handle en lisant culture-channels-resolved.json
+// embarqué côté client. Si le mapping n'est pas dispo on tombe sur null (la
+// chaîne sera ignorée).
+const useResolvedChannels = () => {
+  const [map, setMap] = useState(null);
+  useEffect(() => {
+    fetch('/culture-channels-resolved.json')
+      .then((r) => (r.ok ? r.json() : null))
+      .then((j) => setMap(j || {}))
+      .catch(() => setMap({}));
+  }, []);
+  return map;
+};
+
+export default function CultureApp() {
+  const [user, setUser] = useState(null);
+  const [userData, setUserData] = useState(null);
+  const [loading, setLoading] = useState(true);
+
+  // Vidéos par thématique. Indexé par themeId, valeur = array de programmes.
+  const [themePrograms, setThemePrograms] = useState({});
+
+  const [hydrated, setHydrated] = useState({});
+  const [hydratedWatchLater, setHydratedWatchLater] = useState([]);
+
+  const [selectedProg, setSelectedProg] = useState(null);
+  const [showPicker, setShowPicker] = useState(false);
+  const [showAccount, setShowAccount] = useState(false);
+  const [activeTab, setActiveTab] = useState('accueil');
+  const [legalTab, setLegalTab] = useState(null);
+
+  const resolved = useResolvedChannels();
+
+  // -- Auth + chargement userData --
+  useEffect(() => {
+    return onAuthStateChanged(auth, async (u) => {
+      setUser(u);
+      if (u) {
+        const ref = doc(db, 'users', u.uid);
+        const snap = await getDoc(ref);
+        if (snap.exists()) {
+          setUserData(snap.data());
+        } else {
+          const init = { isPremium: false, themeCount: 0, watchLater: [] };
+          await setDoc(ref, init);
+          setUserData(init);
+        }
+      } else {
+        setUserData(null);
+        setThemePrograms({});
+      }
+      setLoading(false);
+    });
+  }, []);
+
+  // Listener live sur le doc user pour synchroniser culturePrefs
+  useEffect(() => {
+    if (!user) return;
+    const ref = doc(db, 'users', user.uid);
+    return onSnapshot(ref, (snap) => {
+      if (snap.exists()) setUserData(snap.data());
+    });
+  }, [user]);
+
+  const userThemeIds = userData?.culturePrefs?.themes || [];
+  const hasConfigured = userThemeIds.length > 0;
+
+  // -- Listener sur les programmes de chaque thématique choisie --
+  useEffect(() => {
+    if (!user || userThemeIds.length === 0) {
+      setThemePrograms({});
+      return;
+    }
+    const unsubs = userThemeIds.map((themeId) => {
+      const q = collection(db, 'scopes', themeId, 'programs');
+      return onSnapshot(q, (snap) => {
+        const docs = snap.docs.map((d) => ({
+          id: d.id,
+          ...d.data(),
+          _source: 'scope',
+          _scopeId: themeId,
+        }));
+        setThemePrograms((prev) => ({ ...prev, [themeId]: docs }));
+      });
+    });
+    return () => unsubs.forEach((u) => u());
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [user, JSON.stringify(userThemeIds)]);
+
+  // Liste plate des programmes pour hydratation
+  const allPrograms = useMemo(
+    () => Object.values(themePrograms).flat(),
+    [themePrograms]
+  );
+
+  // Hydratation YouTube : titres, créateur, dates
+  useEffect(() => {
+    const run = async () => {
+      const watchLaterIds = userData?.watchLater || [];
+      if (!YOUTUBE_API_KEY_CULTURE) return;
+      if (allPrograms.length === 0 && watchLaterIds.length === 0) {
+        setHydrated({});
+        setHydratedWatchLater([]);
+        return;
+      }
+
+      const uniqueIds = [
+        ...new Set([...allPrograms.map((p) => p.youtubeId), ...watchLaterIds]),
+      ];
+      const fetched = {};
+
+      for (let i = 0; i < uniqueIds.length; i += 50) {
+        const chunk = uniqueIds.slice(i, i + 50).join(',');
+        try {
+          const res = await fetch(
+            `https://www.googleapis.com/youtube/v3/videos?key=${YOUTUBE_API_KEY_CULTURE}&id=${chunk}&part=snippet`
+          );
+          const data = await res.json();
+          if (data.items) {
+            data.items.forEach((it) => {
+              fetched[it.id] = {
+                title: it.snippet.title,
+                creatorName: it.snippet.channelTitle,
+                channelId: it.snippet.channelId,
+                publishedAt: new Date(it.snippet.publishedAt).getTime(),
+              };
+            });
+          }
+        } catch (e) {
+          console.error('Hydratation YT échouée:', e);
+        }
+      }
+
+      // Programmes par thématique, triés par date desc et tronqués
+      const byTheme = {};
+      Object.entries(themePrograms).forEach(([themeId, progs]) => {
+        const merged = progs.map((p) => ({
+          ...p,
+          title: fetched[p.youtubeId]?.title || 'Vidéo indisponible',
+          creatorName: fetched[p.youtubeId]?.creatorName || 'Créateur inconnu',
+          channelHandleId: fetched[p.youtubeId]?.channelId || p.channelId,
+          publishedAt:
+            fetched[p.youtubeId]?.publishedAt || p.publishedAt || p.createdAt,
+        }));
+        byTheme[themeId] = merged
+          .sort((a, b) => b.publishedAt - a.publishedAt)
+          .slice(0, CULTURE_VIDEOS_PER_THEME);
+      });
+      setHydrated(byTheme);
+
+      // Watch later
+      const wlMerged = watchLaterIds.map((id) => {
+        const existing =
+          allPrograms.find((p) => p.youtubeId === id) || {
+            id: `wl-${id}`,
+            youtubeId: id,
+            createdAt: Date.now(),
+          };
+        return {
+          ...existing,
+          title: fetched[id]?.title || 'Vidéo supprimée ou privée',
+          creatorName: fetched[id]?.creatorName || 'Inconnu',
+          publishedAt: fetched[id]?.publishedAt || existing.createdAt,
+        };
+      });
+      setHydratedWatchLater(wlMerged);
+    };
+    run();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [
+    JSON.stringify(allPrograms.map((p) => p.id)),
+    JSON.stringify(userData?.watchLater || []),
+  ]);
+
+  // Toggle watch later (partagé avec la version standard)
+  const toggleWatchLater = async (prog) => {
+    if (!user) return;
+    const ref = doc(db, 'users', user.uid);
+    const currentWl = userData?.watchLater || [];
+    const isWl = currentWl.includes(prog.youtubeId);
+    try {
+      if (isWl) {
+        await setDoc(
+          ref,
+          { watchLater: arrayRemove(prog.youtubeId) },
+          { merge: true }
+        );
+      } else {
+        if (currentWl.length >= 10) {
+          alert("Limite atteinte : 10 vidéos maximum dans 'À regarder plus tard'.");
+          return;
+        }
+        await setDoc(
+          ref,
+          { watchLater: arrayUnion(prog.youtubeId) },
+          { merge: true }
+        );
+      }
+    } catch (e) {
+      alert(`Erreur : ${e.message}`);
+    }
+  };
+
+  // Construit l'URL d'une chaîne YouTube depuis le handle stocké côté front
+  const handleToYouTubeUrl = (themeId) => {
+    return null; // placeholder, on construit l'URL au moment du clic via le handle
+  };
+
+  if (loading) {
+    return (
+      <div className="h-screen bg-slate-950 flex items-center justify-center">
+        <Loader2 className="animate-spin text-fuchsia-500" size={40} />
+      </div>
+    );
+  }
+
+  if (!user) return <Auth />;
+
+  // Première connexion : on force le picker
+  if (!hasConfigured) {
+    return (
+      <CultureThemePicker
+        user={user}
+        initialSelected={[]}
+        onSaved={() => {}}
+      />
+    );
+  }
+
+  // Thématiques sélectionnées par l'utilisateur, dans l'ordre canonique
+  const orderedUserThemes = CULTURE_THEMES.filter((t) =>
+    userThemeIds.includes(t.id)
+  );
+
+  return (
+    <div className="min-h-screen md:h-screen bg-[#0a0f1c] text-slate-200 flex flex-col md:flex-row font-sans overflow-hidden">
+      {/* SIDEBAR PC */}
+      <aside className="hidden md:flex w-[260px] bg-slate-950/95 border-r border-slate-800/50 flex-col z-50 overflow-y-auto shadow-2xl">
+        <div className="p-8">
+          <CultureLogo />
+        </div>
+
+        <nav className="flex-1 px-4 py-4 space-y-1">
+          <button
+            onClick={() => setActiveTab('accueil')}
+            className={`w-full flex items-center gap-3 px-4 py-3 rounded-xl transition-all ${
+              activeTab === 'accueil'
+                ? 'bg-fuchsia-600/10 text-fuchsia-300 font-bold'
+                : 'text-slate-400 hover:text-white hover:bg-slate-800/50'
+            }`}
+          >
+            <Home size={18} /> Accueil
+          </button>
+
+          <div className="mt-8 mb-3 px-4 text-[10px] font-bold text-slate-600 uppercase tracking-widest">
+            Vos thématiques
+          </div>
+          {orderedUserThemes.map((t) => {
+            const count = (CULTURE_CHANNELS[t.id] || []).length;
+            const isActive = activeTab === t.id;
+            return (
+              <button
+                key={t.id}
+                onClick={() => setActiveTab(t.id)}
+                className={`w-full flex items-center gap-3 px-4 py-3 rounded-xl transition-all ${
+                  isActive
+                    ? 'bg-fuchsia-600/10 text-fuchsia-300 font-bold'
+                    : 'text-slate-400 hover:text-white hover:bg-slate-800/50'
+                }`}
+              >
+                <span className={isActive ? 'text-fuchsia-300' : 'text-slate-500'}>
+                  <CultureIcon themeId={t.id} size={18} />
+                </span>
+                <span className="text-sm flex-1 text-left truncate">{t.label}</span>
+                <span className="text-[10px] font-bold px-1.5 py-0.5 rounded-full bg-slate-800 text-slate-500">
+                  {count}
+                </span>
+              </button>
+            );
+          })}
+
+          <button
+            onClick={() => setShowPicker(true)}
+            className="w-full flex items-center gap-3 px-4 py-3 rounded-xl text-slate-400 hover:text-white hover:bg-slate-800/50 transition-all mt-4"
+          >
+            <Settings size={18} /> Modifier mes thématiques
+          </button>
+          <button
+            onClick={() => setActiveTab('guide')}
+            className={`w-full flex items-center gap-3 px-4 py-3 rounded-xl transition-all ${
+              activeTab === 'guide'
+                ? 'bg-fuchsia-600/10 text-fuchsia-300 font-bold'
+                : 'text-slate-400 hover:text-white hover:bg-slate-800/50'
+            }`}
+          >
+            <Info size={18} /> Guide & légal
+          </button>
+        </nav>
+
+        <div className="p-6 mt-auto border-t border-slate-800/50 space-y-3">
+          <button
+            onClick={() => setShowAccount(true)}
+            className="w-full flex items-center gap-2 text-slate-400 hover:text-fuchsia-300 transition-colors text-sm font-semibold"
+          >
+            <UserCircle size={16} /> Votre compte
+          </button>
+          <button
+            onClick={() => signOut(auth)}
+            className="w-full flex items-center gap-2 text-slate-500 hover:text-red-400 transition-colors text-sm font-semibold"
+          >
+            <LogOut size={16} /> Déconnexion
+          </button>
+        </div>
+      </aside>
+
+      {/* NAVBAR MOBILE */}
+      <div className="md:hidden fixed bottom-0 left-0 right-0 bg-slate-950/98 backdrop-blur-lg border-t border-slate-800/50 flex justify-around items-center p-3 z-50 pb-safe shadow-[0_-10px_40px_rgba(0,0,0,0.5)]">
+        <button
+          onClick={() => setActiveTab('accueil')}
+          className={`flex flex-col items-center gap-1 p-2 transition-colors ${
+            activeTab === 'accueil' ? 'text-fuchsia-300' : 'text-slate-500 hover:text-slate-300'
+          }`}
+        >
+          <Home size={22} />
+          <span className="text-[10px] font-bold">Accueil</span>
+        </button>
+        <button
+          onClick={() => setShowPicker(true)}
+          className="flex flex-col items-center gap-1 p-2 text-slate-500 hover:text-fuchsia-300 transition-colors"
+        >
+          <Settings size={22} />
+          <span className="text-[10px] font-bold">Thèmes</span>
+        </button>
+        <button
+          onClick={() => setShowAccount(true)}
+          className="flex flex-col items-center gap-1 p-2 text-slate-500 hover:text-fuchsia-300 transition-colors"
+        >
+          <UserCircle size={22} />
+          <span className="text-[10px] font-bold">Compte</span>
+        </button>
+        <button
+          onClick={() => signOut(auth)}
+          className="flex flex-col items-center gap-1 p-2 text-slate-500 hover:text-red-400 transition-colors"
+        >
+          <LogOut size={22} />
+          <span className="text-[10px] font-bold">Sortir</span>
+        </button>
+      </div>
+
+      <main className="flex-1 overflow-y-auto h-screen pb-24 md:pb-0 relative">
+        <DiscoverBanner mode={MODE_CULTURE} />
+
+        <header className="flex justify-between items-center p-4 md:p-10 pb-4 md:pb-8">
+          <div className="md:hidden">
+            <CultureLogo />
+          </div>
+          <h2 className="hidden md:block text-2xl md:text-3xl font-bold text-white tracking-tight">
+            {activeTab === 'accueil'
+              ? 'À la Une'
+              : activeTab === 'guide'
+              ? 'Guide & légal'
+              : CULTURE_THEMES.find((t) => t.id === activeTab)?.label}
+          </h2>
+        </header>
+
+        <div className="px-0 md:px-10">
+          {activeTab === 'guide' ? (
+            <Guide onOpenLegal={(t) => setLegalTab(t)} />
+          ) : activeTab === 'accueil' ? (
+            <>
+              {hydratedWatchLater.length > 0 && (
+                <ProgramRow
+                  title="À regarder plus tard"
+                  programs={hydratedWatchLater}
+                  small={true}
+                  onSelect={setSelectedProg}
+                  onRemove={() => {}}
+                  currentUser={user}
+                  isAdmin={false}
+                  toggleWatchLater={toggleWatchLater}
+                  watchLaterList={userData?.watchLater || []}
+                />
+              )}
+              {orderedUserThemes.map((t) => {
+                const progs = hydrated[t.id] || [];
+                if (progs.length === 0) return null;
+                return (
+                  <ThemeRow
+                    key={t.id}
+                    theme={t}
+                    programs={progs}
+                    onSelect={setSelectedProg}
+                    toggleWatchLater={toggleWatchLater}
+                    watchLaterList={userData?.watchLater || []}
+                    currentUser={user}
+                    resolved={resolved}
+                  />
+                );
+              })}
+              {orderedUserThemes.every((t) => (hydrated[t.id] || []).length === 0) && (
+                <EmptyState onPick={() => setShowPicker(true)} />
+              )}
+            </>
+          ) : (
+            <ThemeDetail
+              theme={CULTURE_THEMES.find((t) => t.id === activeTab)}
+              programs={hydrated[activeTab] || []}
+              onSelect={setSelectedProg}
+              toggleWatchLater={toggleWatchLater}
+              watchLaterList={userData?.watchLater || []}
+              currentUser={user}
+              resolved={resolved}
+            />
+          )}
+        </div>
+      </main>
+
+      {selectedProg && (
+        <VideoModal prog={selectedProg} onClose={() => setSelectedProg(null)} />
+      )}
+      {showPicker && (
+        <CultureThemePicker
+          user={user}
+          initialSelected={userThemeIds}
+          onClose={() => setShowPicker(false)}
+          onSaved={() => setShowPicker(false)}
+        />
+      )}
+      {showAccount && <AccountModal user={user} onClose={() => setShowAccount(false)} />}
+      {legalTab && <Legal initialTab={legalTab} onClose={() => setLegalTab(null)} />}
+    </div>
+  );
+}
+
+// --- Bloc "thématique" sur l'accueil : titre, vidéos, liste de chaînes en bas ---
+function ThemeRow({ theme, programs, onSelect, toggleWatchLater, watchLaterList, currentUser, resolved }) {
+  return (
+    <div className="mb-12">
+      <div className="flex items-center justify-between mb-3 px-4 md:px-0">
+        <h2 className="text-xl md:text-2xl font-bold text-white tracking-tight flex items-center gap-2">
+          <span className="text-fuchsia-300">
+            <CultureIcon themeId={theme.id} size={22} />
+          </span>
+          {theme.label}
+        </h2>
+      </div>
+      <ProgramRow
+        title={null}
+        programs={programs}
+        onSelect={onSelect}
+        onRemove={() => {}}
+        currentUser={currentUser}
+        isAdmin={false}
+        toggleWatchLater={toggleWatchLater}
+        watchLaterList={watchLaterList}
+      />
+    </div>
+  );
+}
+
+// --- Liste verticale des chaînes cliquables vers YouTube ---
+// S'affiche dans la vue détail d'une thématique. Sur grand écran on
+// présente deux ou trois colonnes pour gagner en lisibilité.
+function ChannelList({ channels, resolved }) {
+  return (
+    <div className="px-4 md:px-0 mb-8">
+      <h3 className="text-[11px] font-bold text-slate-500 uppercase tracking-widest mb-3">
+        {channels.length} chaînes de la thématique
+      </h3>
+      <div className="grid grid-cols-1 sm:grid-cols-2 xl:grid-cols-3 gap-2">
+        {channels.map((ch) => {
+          const r = resolved?.[ch.handle];
+          const url = r?.channelId
+            ? `https://www.youtube.com/channel/${r.channelId}`
+            : `https://www.youtube.com/@${ch.handle}`;
+          return (
+            <a
+              key={ch.handle}
+              href={url}
+              target="_blank"
+              rel="noopener noreferrer"
+              className="group flex items-center justify-between gap-3 px-3 py-2.5 rounded-lg bg-slate-900/50 hover:bg-fuchsia-500/10 border border-slate-800 hover:border-fuchsia-500/30 transition-colors"
+              title={`Ouvrir ${ch.name} sur YouTube`}
+            >
+              <span className="text-sm font-semibold text-slate-200 group-hover:text-fuchsia-200 truncate">
+                {ch.name}
+              </span>
+              <ExternalLink
+                size={12}
+                className="text-slate-500 group-hover:text-fuchsia-300 shrink-0"
+              />
+            </a>
+          );
+        })}
+      </div>
+    </div>
+  );
+}
+
+// --- Vue détail d'une thématique : vidéos en haut, chaînes en liste dessous ---
+function ThemeDetail({ theme, programs, onSelect, toggleWatchLater, watchLaterList, currentUser, resolved }) {
+  if (!theme) return null;
+  const channels = CULTURE_CHANNELS[theme.id] || [];
+  return (
+    <>
+      <div className="px-4 md:px-0 mb-6">
+        <p className="text-sm text-slate-400">
+          {channels.length} chaînes, jusqu'à {programs.length} vidéos récentes.
+        </p>
+      </div>
+      <ProgramRow
+        title={null}
+        programs={programs}
+        onSelect={onSelect}
+        onRemove={() => {}}
+        currentUser={currentUser}
+        isAdmin={false}
+        toggleWatchLater={toggleWatchLater}
+        watchLaterList={watchLaterList}
+      />
+      <ChannelList channels={channels} resolved={resolved} />
+    </>
+  );
+}
+
+// --- Empty state quand aucune vidéo n'est encore syncée ---
+function EmptyState({ onPick }) {
+  return (
+    <div className="px-4 md:px-0">
+      <div className="bg-slate-900/50 border border-slate-800 rounded-2xl p-8 text-center">
+        <Sparkles className="mx-auto text-fuchsia-400 mb-3" size={32} />
+        <h3 className="text-lg font-bold text-white mb-2">
+          Les vidéos arrivent
+        </h3>
+        <p className="text-sm text-slate-400 mb-4">
+          La première synchronisation YouTube peut prendre quelques minutes. Revenez dans un instant.
+        </p>
+        <button
+          onClick={onPick}
+          className="bg-fuchsia-600 hover:bg-fuchsia-500 text-white px-4 py-2 rounded-xl text-sm font-bold"
+        >
+          Modifier vos thématiques
+        </button>
+      </div>
+    </div>
+  );
+}

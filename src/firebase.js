@@ -18,3 +18,7 @@ export const auth = getAuth(app);
 export const db = getFirestore(app);
 export const FIREBASE_APP_ID = "tube-prog-v0";
 export const YOUTUBE_API_KEY = import.meta.env.VITE_YOUTUBE_API_KEY;
+// Clé dédiée à Tubiscope Culture (séparation des quotas Culture vs Studio/Gratuit).
+// Si elle n'est pas définie, on retombe sur la clé principale.
+export const YOUTUBE_API_KEY_CULTURE =
+  import.meta.env.VITE_YOUTUBE_API_KEY_CULTURE || import.meta.env.VITE_YOUTUBE_API_KEY;

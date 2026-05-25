@@ -12,8 +12,10 @@ import Guide from './components/Guide';
 import Legal from './components/Legal';
 import PWAPrompt from './components/PWAPrompt';
 import AccountModal from './components/AccountModal';
+import DiscoverBanner from './components/DiscoverBanner';
+import { MODE_STANDARD } from './data/appMode';
 
-import { Sparkles, Home, Settings, Loader2, RefreshCw, LogOut, Cpu, BookOpen, Trophy, Mic2, Clapperboard, Info, UserCircle } from 'lucide-react';
+import { Sparkles, Home, Settings, Loader2, RefreshCw, LogOut, Cpu, BookOpen, Trophy, Mic2, Clapperboard, Info, UserCircle, ChevronDown } from 'lucide-react';
 
 const CATEGORIES = [
   { id: 'ia', label: 'IA & Tech Scope', icon: <Cpu size={18}/> },
@@ -71,6 +73,7 @@ export default function App() {
 
   const [customThemes, setCustomThemes] = useState([]);
   const [activeTab, setActiveTab] = useState('accueil');
+  const [expandedCat, setExpandedCat] = useState(null);
   const [isAdminOpen, setIsAdminOpen] = useState(false);
   const [legalTab, setLegalTab] = useState(null); // null = fermé, sinon 'mentions' | 'privacy' | 'terms'
   const [showAccount, setShowAccount] = useState(false);
@@ -396,13 +399,13 @@ export default function App() {
       <PWAPrompt />
 
       {/* SIDEBAR PC */}
-      <aside className="hidden md:flex w-[260px] bg-slate-950/95 border-r border-slate-800/50 flex-col z-50 overflow-y-auto shadow-2xl">
-        <div className="p-8 flex items-center gap-3">
+      <aside className="hidden md:flex w-[260px] bg-slate-950/95 border-r border-slate-800/50 flex-col z-50 shadow-2xl h-screen">
+        <div className="p-8 flex items-center gap-3 shrink-0">
           <AppIcon />
           <h1 className="text-xl font-black text-white tracking-tight">Tubi<span className="text-indigo-500">Scope</span></h1>
         </div>
 
-        <nav className="flex-1 px-4 py-4 space-y-1">
+        <nav className="flex-1 px-4 py-4 space-y-1 overflow-y-auto overflow-x-visible">
           <button onClick={() => setActiveTab('accueil')} className={`w-full flex items-center gap-3 px-4 py-3 rounded-xl transition-all ${activeTab === 'accueil' ? 'bg-indigo-600/10 text-indigo-400 font-bold' : 'text-slate-400 hover:text-white hover:bg-slate-800/50'}`}>
             <Home size={18} /> Accueil
           </button>
@@ -410,22 +413,40 @@ export default function App() {
           <div className="mt-8 mb-3 px-4 text-[10px] font-bold text-slate-600 uppercase tracking-widest">Catégories</div>
           {CATEGORIES.map(cat => {
             const { count, names } = getChannelsForCategory(cat.id);
+            const isExpanded = expandedCat === cat.id;
+            const isActive = activeTab === cat.id;
             return (
-              <div key={cat.id} className="relative group/cat">
-                <button onClick={() => setActiveTab(cat.id)} className={`w-full flex items-center gap-3 px-4 py-3 rounded-xl transition-all ${activeTab === cat.id ? 'bg-indigo-600/10 text-indigo-400 font-bold' : 'text-slate-400 hover:text-white hover:bg-slate-800/50'}`}>
-                  <span className={activeTab === cat.id ? 'text-indigo-400' : 'text-slate-500'}>{cat.icon}</span>
-                  <span className="text-sm whitespace-nowrap flex-1 text-left">{cat.label}</span>
+              <div key={cat.id}>
+                <div className={`flex items-stretch rounded-xl transition-all ${isActive ? 'bg-indigo-600/10' : 'hover:bg-slate-800/50'}`}>
+                  <button
+                    onClick={() => setActiveTab(cat.id)}
+                    className={`flex-1 flex items-center gap-3 px-4 py-3 rounded-l-xl text-left ${isActive ? 'text-indigo-400 font-bold' : 'text-slate-400 hover:text-white'}`}
+                  >
+                    <span className={isActive ? 'text-indigo-400' : 'text-slate-500'}>{cat.icon}</span>
+                    <span className="text-sm whitespace-nowrap flex-1">{cat.label}</span>
+                    {count > 0 && (
+                      <span className={`text-[10px] font-bold px-1.5 py-0.5 rounded-full ${isActive ? 'bg-indigo-500/20 text-indigo-300' : 'bg-slate-800 text-slate-500'}`}>
+                        {count}
+                      </span>
+                    )}
+                  </button>
                   {count > 0 && (
-                    <span className={`text-[10px] font-bold px-1.5 py-0.5 rounded-full ${activeTab === cat.id ? 'bg-indigo-500/20 text-indigo-300' : 'bg-slate-800 text-slate-500'}`}>
-                      {count}
-                    </span>
+                    <button
+                      onClick={() => setExpandedCat(isExpanded ? null : cat.id)}
+                      className={`px-2 rounded-r-xl ${isActive ? 'text-indigo-400' : 'text-slate-500 hover:text-white'}`}
+                      title={isExpanded ? 'Replier la liste des chaînes' : 'Afficher la liste des chaînes'}
+                    >
+                      <ChevronDown size={14} className={`transition-transform ${isExpanded ? 'rotate-180' : ''}`} />
+                    </button>
                   )}
-                </button>
-                {count > 0 && (
-                  <div className="hidden group-hover/cat:block absolute left-full top-0 ml-2 z-[60] bg-slate-800 border border-slate-700 rounded-xl p-3 min-w-[200px] max-w-[280px] shadow-2xl pointer-events-none">
-                    <div className="text-[9px] font-bold text-indigo-400 uppercase tracking-widest mb-2">{count} chaîne{count > 1 ? 's' : ''}</div>
-                    <ul className="text-xs text-slate-200 space-y-1 max-h-64 overflow-y-auto">
-                      {names.map(n => <li key={n} className="truncate">{n}</li>)}
+                </div>
+                {isExpanded && count > 0 && (
+                  <div className="ml-6 mt-1 mb-2 bg-slate-900/60 border border-slate-800 rounded-lg px-3 py-2">
+                    <div className="text-[9px] font-bold text-indigo-400 uppercase tracking-widest mb-1.5">
+                      {count} chaîne{count > 1 ? 's' : ''}
+                    </div>
+                    <ul className="text-xs text-slate-200 space-y-1 max-h-64 overflow-y-auto pr-1">
+                      {names.map(n => <li key={n} className="truncate" title={n}>{n}</li>)}
                     </ul>
                   </div>
                 )}
@@ -438,22 +459,40 @@ export default function App() {
               <div className="mt-8 mb-3 px-4 text-[10px] font-bold text-slate-600 uppercase tracking-widest">Mes Thématiques</div>
               {customThemes.map(cat => {
                 const { count, names } = getChannelsForCategory(cat.id);
+                const isExpanded = expandedCat === cat.id;
+                const isActive = activeTab === cat.id;
                 return (
-                  <div key={cat.id} className="relative group/cat">
-                    <button onClick={() => setActiveTab(cat.id)} className={`w-full flex items-center gap-3 px-4 py-3 rounded-xl transition-all ${activeTab === cat.id ? 'bg-emerald-600/10 text-emerald-400 font-bold' : 'text-slate-400 hover:text-white hover:bg-slate-800/50'}`}>
-                      <span className={activeTab === cat.id ? 'text-emerald-400' : 'text-slate-500'}>{getIconForCustomTheme(cat.icon)}</span>
-                      <span className="text-sm whitespace-nowrap flex-1 text-left">{cat.name}</span>
+                  <div key={cat.id}>
+                    <div className={`flex items-stretch rounded-xl transition-all ${isActive ? 'bg-emerald-600/10' : 'hover:bg-slate-800/50'}`}>
+                      <button
+                        onClick={() => setActiveTab(cat.id)}
+                        className={`flex-1 flex items-center gap-3 px-4 py-3 rounded-l-xl text-left ${isActive ? 'text-emerald-400 font-bold' : 'text-slate-400 hover:text-white'}`}
+                      >
+                        <span className={isActive ? 'text-emerald-400' : 'text-slate-500'}>{getIconForCustomTheme(cat.icon)}</span>
+                        <span className="text-sm whitespace-nowrap flex-1">{cat.name}</span>
+                        {count > 0 && (
+                          <span className={`text-[10px] font-bold px-1.5 py-0.5 rounded-full ${isActive ? 'bg-emerald-500/20 text-emerald-300' : 'bg-slate-800 text-slate-500'}`}>
+                            {count}
+                          </span>
+                        )}
+                      </button>
                       {count > 0 && (
-                        <span className={`text-[10px] font-bold px-1.5 py-0.5 rounded-full ${activeTab === cat.id ? 'bg-emerald-500/20 text-emerald-300' : 'bg-slate-800 text-slate-500'}`}>
-                          {count}
-                        </span>
+                        <button
+                          onClick={() => setExpandedCat(isExpanded ? null : cat.id)}
+                          className={`px-2 rounded-r-xl ${isActive ? 'text-emerald-400' : 'text-slate-500 hover:text-white'}`}
+                          title={isExpanded ? 'Replier la liste des chaînes' : 'Afficher la liste des chaînes'}
+                        >
+                          <ChevronDown size={14} className={`transition-transform ${isExpanded ? 'rotate-180' : ''}`} />
+                        </button>
                       )}
-                    </button>
-                    {count > 0 && (
-                      <div className="hidden group-hover/cat:block absolute left-full top-0 ml-2 z-[60] bg-slate-800 border border-slate-700 rounded-xl p-3 min-w-[200px] max-w-[280px] shadow-2xl pointer-events-none">
-                        <div className="text-[9px] font-bold text-emerald-400 uppercase tracking-widest mb-2">{count} chaîne{count > 1 ? 's' : ''}</div>
-                        <ul className="text-xs text-slate-200 space-y-1 max-h-64 overflow-y-auto">
-                          {names.map(n => <li key={n} className="truncate">{n}</li>)}
+                    </div>
+                    {isExpanded && count > 0 && (
+                      <div className="ml-6 mt-1 mb-2 bg-slate-900/60 border border-slate-800 rounded-lg px-3 py-2">
+                        <div className="text-[9px] font-bold text-emerald-400 uppercase tracking-widest mb-1.5">
+                          {count} chaîne{count > 1 ? 's' : ''}
+                        </div>
+                        <ul className="text-xs text-slate-200 space-y-1 max-h-64 overflow-y-auto pr-1">
+                          {names.map(n => <li key={n} className="truncate" title={n}>{n}</li>)}
                         </ul>
                       </div>
                     )}
@@ -506,6 +545,7 @@ export default function App() {
 
       {/* ZONE PRINCIPALE */}
       <main className="flex-1 overflow-y-auto h-screen pb-24 md:pb-0 relative">
+        <DiscoverBanner mode={MODE_STANDARD} />
         <header className="flex justify-between items-center p-4 md:p-10 pb-4 md:pb-8">
           <div className="flex items-center gap-3 md:hidden">
             <AppIcon />
