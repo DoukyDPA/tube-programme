@@ -410,17 +410,26 @@ export default function App() {
           <div className="mt-8 mb-3 px-4 text-[10px] font-bold text-slate-600 uppercase tracking-widest">Catégories</div>
           {CATEGORIES.map(cat => {
             const { count, names } = getChannelsForCategory(cat.id);
-            const tooltip = count > 0 ? names.join('\n') : 'Aucune chaîne';
             return (
-              <button key={cat.id} onClick={() => setActiveTab(cat.id)} title={tooltip} className={`w-full flex items-center gap-3 px-4 py-3 rounded-xl transition-all ${activeTab === cat.id ? 'bg-indigo-600/10 text-indigo-400 font-bold' : 'text-slate-400 hover:text-white hover:bg-slate-800/50'}`}>
-                <span className={activeTab === cat.id ? 'text-indigo-400' : 'text-slate-500'}>{cat.icon}</span>
-                <span className="text-sm whitespace-nowrap flex-1 text-left">{cat.label}</span>
+              <div key={cat.id} className="relative group/cat">
+                <button onClick={() => setActiveTab(cat.id)} className={`w-full flex items-center gap-3 px-4 py-3 rounded-xl transition-all ${activeTab === cat.id ? 'bg-indigo-600/10 text-indigo-400 font-bold' : 'text-slate-400 hover:text-white hover:bg-slate-800/50'}`}>
+                  <span className={activeTab === cat.id ? 'text-indigo-400' : 'text-slate-500'}>{cat.icon}</span>
+                  <span className="text-sm whitespace-nowrap flex-1 text-left">{cat.label}</span>
+                  {count > 0 && (
+                    <span className={`text-[10px] font-bold px-1.5 py-0.5 rounded-full ${activeTab === cat.id ? 'bg-indigo-500/20 text-indigo-300' : 'bg-slate-800 text-slate-500'}`}>
+                      {count}
+                    </span>
+                  )}
+                </button>
                 {count > 0 && (
-                  <span className={`text-[10px] font-bold px-1.5 py-0.5 rounded-full ${activeTab === cat.id ? 'bg-indigo-500/20 text-indigo-300' : 'bg-slate-800 text-slate-500'}`}>
-                    {count}
-                  </span>
+                  <div className="hidden group-hover/cat:block absolute left-full top-0 ml-2 z-[60] bg-slate-800 border border-slate-700 rounded-xl p-3 min-w-[200px] max-w-[280px] shadow-2xl pointer-events-none">
+                    <div className="text-[9px] font-bold text-indigo-400 uppercase tracking-widest mb-2">{count} chaîne{count > 1 ? 's' : ''}</div>
+                    <ul className="text-xs text-slate-200 space-y-1 max-h-64 overflow-y-auto">
+                      {names.map(n => <li key={n} className="truncate">{n}</li>)}
+                    </ul>
+                  </div>
                 )}
-              </button>
+              </div>
             );
           })}
 
@@ -429,17 +438,26 @@ export default function App() {
               <div className="mt-8 mb-3 px-4 text-[10px] font-bold text-slate-600 uppercase tracking-widest">Mes Thématiques</div>
               {customThemes.map(cat => {
                 const { count, names } = getChannelsForCategory(cat.id);
-                const tooltip = count > 0 ? names.join('\n') : 'Aucune chaîne';
                 return (
-                  <button key={cat.id} onClick={() => setActiveTab(cat.id)} title={tooltip} className={`w-full flex items-center gap-3 px-4 py-3 rounded-xl transition-all ${activeTab === cat.id ? 'bg-emerald-600/10 text-emerald-400 font-bold' : 'text-slate-400 hover:text-white hover:bg-slate-800/50'}`}>
-                    <span className={activeTab === cat.id ? 'text-emerald-400' : 'text-slate-500'}>{getIconForCustomTheme(cat.icon)}</span>
-                    <span className="text-sm whitespace-nowrap flex-1 text-left">{cat.name}</span>
+                  <div key={cat.id} className="relative group/cat">
+                    <button onClick={() => setActiveTab(cat.id)} className={`w-full flex items-center gap-3 px-4 py-3 rounded-xl transition-all ${activeTab === cat.id ? 'bg-emerald-600/10 text-emerald-400 font-bold' : 'text-slate-400 hover:text-white hover:bg-slate-800/50'}`}>
+                      <span className={activeTab === cat.id ? 'text-emerald-400' : 'text-slate-500'}>{getIconForCustomTheme(cat.icon)}</span>
+                      <span className="text-sm whitespace-nowrap flex-1 text-left">{cat.name}</span>
+                      {count > 0 && (
+                        <span className={`text-[10px] font-bold px-1.5 py-0.5 rounded-full ${activeTab === cat.id ? 'bg-emerald-500/20 text-emerald-300' : 'bg-slate-800 text-slate-500'}`}>
+                          {count}
+                        </span>
+                      )}
+                    </button>
                     {count > 0 && (
-                      <span className={`text-[10px] font-bold px-1.5 py-0.5 rounded-full ${activeTab === cat.id ? 'bg-emerald-500/20 text-emerald-300' : 'bg-slate-800 text-slate-500'}`}>
-                        {count}
-                      </span>
+                      <div className="hidden group-hover/cat:block absolute left-full top-0 ml-2 z-[60] bg-slate-800 border border-slate-700 rounded-xl p-3 min-w-[200px] max-w-[280px] shadow-2xl pointer-events-none">
+                        <div className="text-[9px] font-bold text-emerald-400 uppercase tracking-widest mb-2">{count} chaîne{count > 1 ? 's' : ''}</div>
+                        <ul className="text-xs text-slate-200 space-y-1 max-h-64 overflow-y-auto">
+                          {names.map(n => <li key={n} className="truncate">{n}</li>)}
+                        </ul>
+                      </div>
                     )}
-                  </button>
+                  </div>
                 );
               })}
             </>
