@@ -6,6 +6,7 @@ import cron from 'node-cron';
 import 'dotenv/config'; 
 
 import syncHandler from './api/sync.js';
+import syncCultureHandler from './api/sync-culture.js';
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
@@ -84,17 +85,30 @@ app.post('/api/hydrate', async (req, res) => {
 // ----------------------------------------------
 
 app.get('/api/sync', syncHandler);
+app.get('/api/sync-culture', syncCultureHandler);
 
 cron.schedule('0 8 * * *', async () => {
-  console.log('⏰ Exécution du CRON : Synchronisation YouTube');
+  console.log('⏰ CRON : Synchronisation YouTube (standard)');
   try {
     const req = {};
-    const res = { 
-        status: (code) => ({ json: (data) => console.log(`CRON Terminé [${code}]:`, data) }) 
+    const res = {
+      status: (code) => ({ json: (data) => console.log(`CRON sync [${code}]:`, data) })
     };
     await syncHandler(req, res);
   } catch (err) {
-    console.error('Erreur lors du CRON:', err);
+    console.error('Erreur lors du CRON sync:', err);
+  }
+
+  // Sync Culture juste après, dans la même fenêtre nocturne
+  console.log('⏰ CRON : Synchronisation YouTube (Culture)');
+  try {
+    const req = {};
+    const res = {
+      status: (code) => ({ json: (data) => console.log(`CRON sync-culture [${code}]:`, data) })
+    };
+    await syncCultureHandler(req, res);
+  } catch (err) {
+    console.error('Erreur lors du CRON sync-culture:', err);
   }
 });
 
