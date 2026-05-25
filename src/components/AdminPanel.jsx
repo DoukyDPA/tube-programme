@@ -29,7 +29,7 @@ const parseDuration = (duration) => {
   return (parseInt(match[1] || 0, 10) * 3600) + (parseInt(match[2] || 0, 10) * 60) + parseInt(match[3] || 0, 10);
 };
 
-export default function AdminPanel({ user, userData, customThemes = [], isAdmin = false, scopePrograms = {}, themePrograms = {}, onClose }) {
+export default function AdminPanel({ user, userData, customThemes = [], isAdmin = false, hydratedPrograms = [], onClose }) {
   const [tab, setTab] = useState('channel');
   const [loading, setLoading] = useState(false);
   const [removingChannel, setRemovingChannel] = useState(null);
@@ -160,11 +160,11 @@ export default function AdminPanel({ user, userData, customThemes = [], isAdmin 
   };
 
   // Liste des chaînes uniques pour la catégorie sélectionnée
-  // Regroupe les programmes par channelId pour pouvoir tout supprimer d'un coup
+  // On lit hydratedPrograms qui contient le creatorName récupéré depuis l'API YouTube.
+  // Les docs Firestore bruts ne stockent que channelId et youtubeId.
   const channelsInCategory = useMemo(() => {
     if (!category) return [];
-    const isScope = SCOPE_IDS.has(category);
-    const programs = isScope ? (scopePrograms[category] || []) : (themePrograms[category] || []);
+    const programs = hydratedPrograms.filter(p => p.categoryId === category);
     const map = new Map(); // channelId → { creatorName, programIds: [] }
     programs.forEach(p => {
       if (!p.channelId) return;
@@ -176,7 +176,7 @@ export default function AdminPanel({ user, userData, customThemes = [], isAdmin 
     return Array.from(map.entries())
       .map(([channelId, data]) => ({ channelId, ...data }))
       .sort((a, b) => a.creatorName.localeCompare(b.creatorName, 'fr'));
-  }, [category, scopePrograms, themePrograms]);
+  }, [category, hydratedPrograms]);
 
   // Supprime toutes les vidéos d'une chaîne dans la catégorie sélectionnée.
   // Utilise un batch Firestore pour rester atomique (max 500 docs, on est très loin).

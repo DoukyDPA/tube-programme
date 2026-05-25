@@ -366,10 +366,10 @@ export default function App() {
   ];
 
   // Compte des chaînes uniques par catégorie (scope éditeur ou thème perso).
-  // Retourne { count, names: [...] } pour pouvoir nourrir un tooltip.
+  // On utilise hydratedPrograms qui contient le creatorName récupéré via l'API YouTube.
+  // Les programmes bruts de Firestore ne stockent que channelId et youtubeId.
   const getChannelsForCategory = (catId) => {
-    const isScope = SCOPE_IDS.includes(catId);
-    const programs = isScope ? (scopePrograms[catId] || []) : (themePrograms[catId] || []);
+    const programs = hydratedPrograms.filter(p => p.categoryId === catId);
     const channels = new Map(); // channelId → creatorName
     programs.forEach(p => {
       if (p.channelId && !channels.has(p.channelId)) {
@@ -378,7 +378,7 @@ export default function App() {
     });
     return {
       count: channels.size,
-      names: Array.from(channels.values()).sort((a, b) => a.localeCompare(b, 'fr'))
+      names: Array.from(channels.values()).filter(Boolean).sort((a, b) => a.localeCompare(b, 'fr'))
     };
   };
 
@@ -593,7 +593,7 @@ export default function App() {
       </main>
 
       {selectedProg && <VideoModal prog={selectedProg} onClose={() => setSelectedProg(null)} />}
-      {isAdminOpen && <AdminPanel user={user} userData={userData} customThemes={customThemes} isAdmin={isAdmin} scopePrograms={scopePrograms} themePrograms={themePrograms} onClose={() => setIsAdminOpen(false)} />}
+      {isAdminOpen && <AdminPanel user={user} userData={userData} customThemes={customThemes} isAdmin={isAdmin} hydratedPrograms={hydratedPrograms} onClose={() => setIsAdminOpen(false)} />}
       {legalTab && <Legal initialTab={legalTab} onClose={() => setLegalTab(null)} />}
       {showAccount && <AccountModal user={user} onClose={() => setShowAccount(false)} />}
     </div>
