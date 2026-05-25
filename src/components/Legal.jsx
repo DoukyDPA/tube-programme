@@ -76,8 +76,7 @@ function MentionsLegales() {
           Tubiscope est un projet personnel non lucratif édité à titre privé par&nbsp;:
         </p>
         <p className="mt-2">
-          [NOM_PRENOM]<br />
-          [ADRESSE_COMPLETE]<br />
+          Daniel Pigeon-Angelini<br />
           France<br />
           Contact&nbsp;: <a href={`mailto:${EMAIL_CONTACT}`} className="text-indigo-400 hover:underline">{EMAIL_CONTACT}</a>
         </p>
@@ -88,7 +87,7 @@ function MentionsLegales() {
 
       <section>
         <h3 className="text-base font-semibold text-white mb-2">Directeur de la publication</h3>
-        <p>[NOM_PRENOM], en sa qualité d'éditeur.</p>
+        <p>Daniel Pigeon-Angelini, en sa qualité d'éditeur.</p>
       </section>
 
       <section>
@@ -158,7 +157,7 @@ function Privacy() {
       <section>
         <h3 className="text-base font-semibold text-white mb-2">Responsable du traitement</h3>
         <p>
-          Le responsable du traitement des données est [NOM_PRENOM], éditeur de Tubiscope, joignable à&nbsp;
+          Le responsable du traitement des données est Daniel Pigeon-Angelini, éditeur de Tubiscope, joignable à&nbsp;
           <a href={`mailto:${EMAIL_CONTACT}`} className="text-indigo-400 hover:underline">{EMAIL_CONTACT}</a>.
         </p>
         <p className="mt-2 text-xs text-slate-400">
