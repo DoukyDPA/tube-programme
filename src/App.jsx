@@ -10,8 +10,10 @@ import ProgramCard from './components/ProgramCard';
 import VideoModal from './components/VideoModal';
 import Guide from './components/Guide';
 import Legal from './components/Legal';
+import PWAPrompt from './components/PWAPrompt';
+import AccountModal from './components/AccountModal';
 
-import { Sparkles, Home, Settings, Loader2, RefreshCw, LogOut, Cpu, BookOpen, Trophy, Mic2, Clapperboard, Info } from 'lucide-react';
+import { Sparkles, Home, Settings, Loader2, RefreshCw, LogOut, Cpu, BookOpen, Trophy, Mic2, Clapperboard, Info, UserCircle } from 'lucide-react';
 
 const CATEGORIES = [
   { id: 'ia', label: 'IA & Tech Scope', icon: <Cpu size={18}/> },
@@ -71,6 +73,7 @@ export default function App() {
   const [activeTab, setActiveTab] = useState('accueil');
   const [isAdminOpen, setIsAdminOpen] = useState(false);
   const [legalTab, setLegalTab] = useState(null); // null = fermé, sinon 'mentions' | 'privacy' | 'terms'
+  const [showAccount, setShowAccount] = useState(false);
   const [selectedProg, setSelectedProg] = useState(null);
   const [isSyncing, setIsSyncing] = useState(false);
 
@@ -362,6 +365,23 @@ export default function App() {
     ...customThemes.map(ct => ({ id: ct.id, label: ct.name }))
   ];
 
+  // Compte des chaînes uniques par catégorie (scope éditeur ou thème perso).
+  // Retourne { count, names: [...] } pour pouvoir nourrir un tooltip.
+  const getChannelsForCategory = (catId) => {
+    const isScope = SCOPE_IDS.includes(catId);
+    const programs = isScope ? (scopePrograms[catId] || []) : (themePrograms[catId] || []);
+    const channels = new Map(); // channelId → creatorName
+    programs.forEach(p => {
+      if (p.channelId && !channels.has(p.channelId)) {
+        channels.set(p.channelId, p.creatorName || '');
+      }
+    });
+    return {
+      count: channels.size,
+      names: Array.from(channels.values()).sort((a, b) => a.localeCompare(b, 'fr'))
+    };
+  };
+
   // Avec le nouveau modèle, tous les programmes lus sont déjà personnalisés pour ce user :
   // ses propres thèmes + les scopes éditeur. Pas de filtrage supplémentaire nécessaire.
   const personalizedLatestPrograms = hydratedPrograms;
@@ -371,6 +391,9 @@ export default function App() {
 
   return (
     <div className="min-h-screen md:h-screen bg-[#0a0f1c] text-slate-200 flex flex-col md:flex-row font-sans overflow-hidden">
+
+      {/* Bandeaux PWA : nouvelle version + état hors ligne */}
+      <PWAPrompt />
 
       {/* SIDEBAR PC */}
       <aside className="hidden md:flex w-[260px] bg-slate-950/95 border-r border-slate-800/50 flex-col z-50 overflow-y-auto shadow-2xl">
@@ -385,22 +408,40 @@ export default function App() {
           </button>
 
           <div className="mt-8 mb-3 px-4 text-[10px] font-bold text-slate-600 uppercase tracking-widest">Catégories</div>
-          {CATEGORIES.map(cat => (
-            <button key={cat.id} onClick={() => setActiveTab(cat.id)} className={`w-full flex items-center gap-3 px-4 py-3 rounded-xl transition-all ${activeTab === cat.id ? 'bg-indigo-600/10 text-indigo-400 font-bold' : 'text-slate-400 hover:text-white hover:bg-slate-800/50'}`}>
-              <span className={activeTab === cat.id ? 'text-indigo-400' : 'text-slate-500'}>{cat.icon}</span>
-              <span className="text-sm whitespace-nowrap">{cat.label}</span>
-            </button>
-          ))}
+          {CATEGORIES.map(cat => {
+            const { count, names } = getChannelsForCategory(cat.id);
+            const tooltip = count > 0 ? names.join('\n') : 'Aucune chaîne';
+            return (
+              <button key={cat.id} onClick={() => setActiveTab(cat.id)} title={tooltip} className={`w-full flex items-center gap-3 px-4 py-3 rounded-xl transition-all ${activeTab === cat.id ? 'bg-indigo-600/10 text-indigo-400 font-bold' : 'text-slate-400 hover:text-white hover:bg-slate-800/50'}`}>
+                <span className={activeTab === cat.id ? 'text-indigo-400' : 'text-slate-500'}>{cat.icon}</span>
+                <span className="text-sm whitespace-nowrap flex-1 text-left">{cat.label}</span>
+                {count > 0 && (
+                  <span className={`text-[10px] font-bold px-1.5 py-0.5 rounded-full ${activeTab === cat.id ? 'bg-indigo-500/20 text-indigo-300' : 'bg-slate-800 text-slate-500'}`}>
+                    {count}
+                  </span>
+                )}
+              </button>
+            );
+          })}
 
           {customThemes.length > 0 && (
             <>
               <div className="mt-8 mb-3 px-4 text-[10px] font-bold text-slate-600 uppercase tracking-widest">Mes Thématiques</div>
-              {customThemes.map(cat => (
-                <button key={cat.id} onClick={() => setActiveTab(cat.id)} className={`w-full flex items-center gap-3 px-4 py-3 rounded-xl transition-all ${activeTab === cat.id ? 'bg-emerald-600/10 text-emerald-400 font-bold' : 'text-slate-400 hover:text-white hover:bg-slate-800/50'}`}>
-                  <span className={activeTab === cat.id ? 'text-emerald-400' : 'text-slate-500'}>{getIconForCustomTheme(cat.icon)}</span>
-                  <span className="text-sm whitespace-nowrap">{cat.name}</span>
-                </button>
-              ))}
+              {customThemes.map(cat => {
+                const { count, names } = getChannelsForCategory(cat.id);
+                const tooltip = count > 0 ? names.join('\n') : 'Aucune chaîne';
+                return (
+                  <button key={cat.id} onClick={() => setActiveTab(cat.id)} title={tooltip} className={`w-full flex items-center gap-3 px-4 py-3 rounded-xl transition-all ${activeTab === cat.id ? 'bg-emerald-600/10 text-emerald-400 font-bold' : 'text-slate-400 hover:text-white hover:bg-slate-800/50'}`}>
+                    <span className={activeTab === cat.id ? 'text-emerald-400' : 'text-slate-500'}>{getIconForCustomTheme(cat.icon)}</span>
+                    <span className="text-sm whitespace-nowrap flex-1 text-left">{cat.name}</span>
+                    {count > 0 && (
+                      <span className={`text-[10px] font-bold px-1.5 py-0.5 rounded-full ${activeTab === cat.id ? 'bg-emerald-500/20 text-emerald-300' : 'bg-slate-800 text-slate-500'}`}>
+                        {count}
+                      </span>
+                    )}
+                  </button>
+                );
+              })}
             </>
           )}
 
@@ -412,7 +453,10 @@ export default function App() {
           </button>
         </nav>
 
-        <div className="p-6 mt-auto border-t border-slate-800/50">
+        <div className="p-6 mt-auto border-t border-slate-800/50 space-y-3">
+          <button onClick={() => setShowAccount(true)} className="w-full flex items-center gap-2 text-slate-400 hover:text-indigo-400 transition-colors text-sm font-semibold">
+            <UserCircle size={16} /> Mon compte
+          </button>
           <button onClick={() => signOut(auth)} className="w-full flex items-center gap-2 text-slate-500 hover:text-red-400 transition-colors text-sm font-semibold">
             <LogOut size={16} /> Déconnexion
           </button>
@@ -429,6 +473,11 @@ export default function App() {
         <button onClick={() => setIsAdminOpen(true)} className="flex flex-col items-center gap-1 p-2 text-slate-500 hover:text-indigo-400 transition-colors">
           <Settings size={22} />
           <span className="text-[10px] font-bold">Config</span>
+        </button>
+
+        <button onClick={() => setShowAccount(true)} className="flex flex-col items-center gap-1 p-2 text-slate-500 hover:text-indigo-400 transition-colors">
+          <UserCircle size={22} />
+          <span className="text-[10px] font-bold">Compte</span>
         </button>
 
         <button onClick={() => signOut(auth)} className="flex flex-col items-center gap-1 p-2 text-slate-500 hover:text-red-400 transition-colors">
@@ -526,8 +575,9 @@ export default function App() {
       </main>
 
       {selectedProg && <VideoModal prog={selectedProg} onClose={() => setSelectedProg(null)} />}
-      {isAdminOpen && <AdminPanel user={user} userData={userData} customThemes={customThemes} isAdmin={isAdmin} onClose={() => setIsAdminOpen(false)} />}
+      {isAdminOpen && <AdminPanel user={user} userData={userData} customThemes={customThemes} isAdmin={isAdmin} scopePrograms={scopePrograms} themePrograms={themePrograms} onClose={() => setIsAdminOpen(false)} />}
       {legalTab && <Legal initialTab={legalTab} onClose={() => setLegalTab(null)} />}
+      {showAccount && <AccountModal user={user} onClose={() => setShowAccount(false)} />}
     </div>
   );
 }

@@ -1,7 +1,7 @@
-import React, { useState } from 'react';
-import { Cpu, BookOpen, Trophy, Mic2, X, CheckCircle2, Loader2, Sparkles, Edit2, Check, Trash2 } from 'lucide-react';
+import React, { useState, useMemo } from 'react';
+import { Cpu, BookOpen, Trophy, Mic2, X, CheckCircle2, Loader2, Sparkles, Edit2, Check, Trash2, Tv2 } from 'lucide-react';
 import { db, YOUTUBE_API_KEY } from '../firebase';
-import { collection, doc, setDoc, updateDoc, deleteDoc } from 'firebase/firestore';
+import { collection, doc, setDoc, updateDoc, deleteDoc, writeBatch } from 'firebase/firestore';
 
 const ICONS = [
   { id: 'ia', icon: <Cpu size={18}/> },
@@ -29,9 +29,10 @@ const parseDuration = (duration) => {
   return (parseInt(match[1] || 0, 10) * 3600) + (parseInt(match[2] || 0, 10) * 60) + parseInt(match[3] || 0, 10);
 };
 
-export default function AdminPanel({ user, userData, customThemes = [], isAdmin = false, onClose }) {
+export default function AdminPanel({ user, userData, customThemes = [], isAdmin = false, scopePrograms = {}, themePrograms = {}, onClose }) {
   const [tab, setTab] = useState('channel');
   const [loading, setLoading] = useState(false);
+  const [removingChannel, setRemovingChannel] = useState(null);
 
   const [themeName, setThemeName] = useState('');
   const [selectedIcon, setSelectedIcon] = useState('ia');
@@ -158,6 +159,52 @@ export default function AdminPanel({ user, userData, customThemes = [], isAdmin 
     finally { setLoading(false); }
   };
 
+  // Liste des chaînes uniques pour la catégorie sélectionnée
+  // Regroupe les programmes par channelId pour pouvoir tout supprimer d'un coup
+  const channelsInCategory = useMemo(() => {
+    if (!category) return [];
+    const isScope = SCOPE_IDS.has(category);
+    const programs = isScope ? (scopePrograms[category] || []) : (themePrograms[category] || []);
+    const map = new Map(); // channelId → { creatorName, programIds: [] }
+    programs.forEach(p => {
+      if (!p.channelId) return;
+      if (!map.has(p.channelId)) {
+        map.set(p.channelId, { creatorName: p.creatorName || '(sans nom)', programIds: [] });
+      }
+      map.get(p.channelId).programIds.push(p.id);
+    });
+    return Array.from(map.entries())
+      .map(([channelId, data]) => ({ channelId, ...data }))
+      .sort((a, b) => a.creatorName.localeCompare(b.creatorName, 'fr'));
+  }, [category, scopePrograms, themePrograms]);
+
+  // Supprime toutes les vidéos d'une chaîne dans la catégorie sélectionnée.
+  // Utilise un batch Firestore pour rester atomique (max 500 docs, on est très loin).
+  const handleRemoveChannel = async (channelId, creatorName, programIds) => {
+    if (!confirm(`Retirer la chaîne "${creatorName}" de cette catégorie ? Les ${programIds.length} vidéo(s) associée(s) seront supprimées.`)) return;
+
+    const isScope = SCOPE_IDS.has(category);
+    if (isScope && !isAdmin) {
+      return alert("Seul l'admin peut retirer une chaîne d'un scope éditeur.");
+    }
+
+    setRemovingChannel(channelId);
+    try {
+      const batch = writeBatch(db);
+      programIds.forEach(pid => {
+        const ref = isScope
+          ? doc(db, 'scopes', category, 'programs', pid)
+          : doc(db, 'users', user.uid, 'themes', category, 'programs', pid);
+        batch.delete(ref);
+      });
+      await batch.commit();
+    } catch (e) {
+      alert(`Erreur lors de la suppression : ${e.message}`);
+    } finally {
+      setRemovingChannel(null);
+    }
+  };
+
   return (
     <div className="fixed inset-0 z-[100] bg-slate-950/95 backdrop-blur-xl flex items-center justify-center p-4">
       <div className="bg-slate-900 border border-slate-800 w-full max-w-lg rounded-[2rem] overflow-hidden shadow-2xl flex flex-col max-h-[90vh]">
@@ -242,6 +289,47 @@ export default function AdminPanel({ user, userData, customThemes = [], isAdmin 
                   <button onClick={fetchAndAutoIntegrate} disabled={loading} className="w-full bg-emerald-600 py-4 rounded-xl font-bold text-white flex justify-center items-center gap-2 hover:bg-emerald-500 disabled:opacity-50">
                     {loading ? <Loader2 className="animate-spin" size={18}/> : <><CheckCircle2 size={18} /> Ajouter la chaîne</>}
                   </button>
+
+                  {/* Liste des chaînes déjà présentes dans la catégorie sélectionnée */}
+                  <div className="border-t border-slate-800 pt-5 mt-2">
+                    <div className="flex items-center justify-between mb-3">
+                      <h3 className="text-[10px] font-bold text-slate-500 uppercase tracking-widest flex items-center gap-2">
+                        <Tv2 size={12} /> Chaînes de cette catégorie
+                      </h3>
+                      <span className="text-xs text-slate-600">{channelsInCategory.length}</span>
+                    </div>
+
+                    {channelsInCategory.length === 0 ? (
+                      <p className="text-xs text-slate-600 italic py-3">
+                        Aucune chaîne pour le moment. Ajoutez-en une avec le formulaire ci-dessus.
+                      </p>
+                    ) : (
+                      <div className="space-y-2 max-h-64 overflow-y-auto pr-1">
+                        {channelsInCategory.map(ch => {
+                          const canRemove = isAdmin || !SCOPE_IDS.has(category);
+                          const busy = removingChannel === ch.channelId;
+                          return (
+                            <div key={ch.channelId} className="flex items-center justify-between bg-slate-800/50 px-3 py-2.5 rounded-lg border border-slate-700/50">
+                              <div className="flex-1 min-w-0">
+                                <div className="text-sm font-semibold text-slate-200 truncate">{ch.creatorName}</div>
+                                <div className="text-[10px] text-slate-500 truncate">{ch.programIds.length} vidéo(s)</div>
+                              </div>
+                              {canRemove && (
+                                <button
+                                  onClick={() => handleRemoveChannel(ch.channelId, ch.creatorName, ch.programIds)}
+                                  disabled={busy}
+                                  className="p-2 text-slate-400 hover:text-red-400 hover:bg-red-500/10 rounded-lg disabled:opacity-50 shrink-0"
+                                  title="Retirer cette chaîne de la catégorie"
+                                >
+                                  {busy ? <Loader2 className="animate-spin" size={14}/> : <Trash2 size={14}/>}
+                                </button>
+                              )}
+                            </div>
+                          );
+                        })}
+                      </div>
+                    )}
+                  </div>
                 </>
               )}
             </div>
