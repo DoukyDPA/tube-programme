@@ -569,16 +569,47 @@ export default function CultureApp() {
     const themeLabel = (id) =>
       CULTURE_THEMES.find((t) => t.id === id)?.label || id;
 
-    const entries = Object.entries(resolvedMap).filter(
-      ([, info]) => info?.channelId
+    // 1) Construit la liste complète des handles déclarés
+    const declared = [];
+    for (const theme of CULTURE_THEMES) {
+      const list = CULTURE_CHANNELS[theme.id] || [];
+      for (const ch of list) {
+        declared.push({ handle: ch.handle, name: ch.name, themeId: theme.id });
+      }
+    }
+
+    // 2) Sépare les résolus (à auditer en interrogeant YouTube) des non résolus
+    const resolvedEntries = declared.filter(
+      (d) => resolvedMap[d.handle]?.channelId
     );
-    if (entries.length === 0) {
+    const unresolvedEntries = declared.filter(
+      (d) => !resolvedMap[d.handle]?.channelId
+    );
+
+    if (declared.length === 0) {
       setIsSyncing(false);
-      return alert('Aucune chaîne résolue à auditer. Lance d\'abord la synchronisation.');
+      return alert('Aucune chaîne déclarée à auditer.');
     }
 
     const results = [];
+
+    // Les non résolues vont directement dans le CSV avec statut "unresolved"
+    for (const d of unresolvedEntries) {
+      results.push({
+        handle: d.handle,
+        name: d.name || '',
+        themeId: d.themeId || '',
+        themeLabel: themeLabel(d.themeId),
+        channelId: '',
+        lastVideoTitle: '',
+        lastVideoDate: '',
+        daysSinceLast: '',
+        status: 'unresolved',
+      });
+    }
+
     let i = 0;
+    const entries = resolvedEntries.map((d) => [d.handle, { ...resolvedMap[d.handle], name: d.name, themeId: d.themeId }]);
     for (const [handle, info] of entries) {
       i++;
       if (i % 10 === 0 || i === entries.length) {
@@ -686,9 +717,11 @@ export default function CultureApp() {
     const dead = results.filter((r) => r.status === 'dead').length;
     const silent = results.filter((r) => r.status === 'silent').length;
     const noVid = results.filter((r) => r.status === 'no_videos').length;
+    const unresolved = results.filter((r) => r.status === 'unresolved').length;
     setIsSyncing(false);
     alert(
       `Audit terminé. ${results.length} chaînes analysées.\n` +
+        `Handle introuvable sur YouTube : ${unresolved}\n` +
         `Mortes (>3 ans) : ${dead}\n` +
         `Silencieuses (>1 an) : ${silent}\n` +
         `Aucune vidéo : ${noVid}\n\n` +
