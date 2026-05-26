@@ -190,6 +190,22 @@ export default function CultureApp() {
     [themePrograms]
   );
 
+  // Dernières vidéos toutes thématiques confondues (affichage "À la Une")
+  const latestPrograms = useMemo(() => {
+    const seen = new Set();
+    const flat = [];
+    for (const list of Object.values(hydrated)) {
+      for (const p of list) {
+        if (seen.has(p.youtubeId)) continue;
+        seen.add(p.youtubeId);
+        flat.push(p);
+      }
+    }
+    return flat
+      .sort((a, b) => (b.publishedAt || 0) - (a.publishedAt || 0))
+      .slice(0, 5);
+  }, [hydrated]);
+
   // Hydratation YouTube : titres, créateur, dates
   useEffect(() => {
     const run = async () => {
@@ -586,6 +602,9 @@ export default function CultureApp() {
           >
             <Settings size={18} /> Modifier mes thématiques
           </button>
+
+          <div className="my-4 border-t border-slate-800/60" />
+
           <button
             onClick={() => setActiveTab('guide')}
             className={`w-full flex items-center gap-3 px-4 py-3 rounded-xl transition-all ${
@@ -685,6 +704,20 @@ export default function CultureApp() {
             <Guide onOpenLegal={(t) => setLegalTab(t)} />
           ) : activeTab === 'accueil' ? (
             <>
+              {latestPrograms.length > 0 && (
+                <ProgramRow
+                  title="Dernières vidéos"
+                  programs={latestPrograms}
+                  large={true}
+                  onSelect={setSelectedProg}
+                  onRemove={() => {}}
+                  currentUser={user}
+                  isAdmin={false}
+                  toggleWatchLater={toggleWatchLater}
+                  watchLaterList={userData?.watchLaterCulture || []}
+                />
+              )}
+
               {hydratedWatchLater.length > 0 && (
                 <ProgramRow
                   title="À regarder plus tard"
