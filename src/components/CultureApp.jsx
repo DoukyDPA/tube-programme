@@ -599,6 +599,105 @@ export default function CultureApp() {
   };
 
   // -----------------------------------------------------------------
+  // Migration des métadonnées : pour chaque document Firestore Culture
+  // qui n'a pas title/creatorName/publishedAt, on les récupère via
+  // YouTube et on les écrit en base. À lancer une seule fois après
+  // déploiement de la nouvelle structure de données. Coût : ~ N/50
+  // unités de quota (1 unité par lot de 50 vidéos).
+  // -----------------------------------------------------------------
+  const migrateCultureMetadata = async () => {
+    if (!YOUTUBE_API_KEY_CULTURE) {
+      return alert('Clé API YouTube Culture manquante.');
+    }
+    if (!isAdmin) return alert("Réservé à l'admin.");
+    if (
+      !window.confirm(
+        'Migrer les métadonnées (title, créateur, date) pour les anciennes vidéos Culture ?\nUne seule fois suffit.'
+      )
+    ) {
+      return;
+    }
+
+    setIsSyncing(true);
+    setSyncMessage('Migration des métadonnées Culture');
+    setSyncSubMessage('Lecture des thématiques...');
+
+    let totalUpdated = 0;
+    let totalSkipped = 0;
+    let totalMissing = 0;
+
+    try {
+      for (const theme of CULTURE_THEMES) {
+        const docs = themePrograms[theme.id] || [];
+        const needFill = docs.filter((p) => !p.title);
+        if (needFill.length === 0) continue;
+
+        setSyncMessage(`Migration : ${theme.label}`);
+        setSyncSubMessage(`${needFill.length} vidéos à hydrater`);
+
+        const ids = needFill.map((p) => p.youtubeId);
+        const meta = {};
+
+        for (let i = 0; i < ids.length; i += 50) {
+          const chunk = ids.slice(i, i + 50).join(',');
+          const r = await fetch(
+            `https://www.googleapis.com/youtube/v3/videos?key=${YOUTUBE_API_KEY_CULTURE}&id=${chunk}&part=snippet`
+          );
+          const d = await r.json();
+          if (d.items) {
+            for (const it of d.items) {
+              meta[it.id] = {
+                title: it.snippet?.title || '',
+                creatorName: it.snippet?.channelTitle || '',
+                publishedAt: it.snippet?.publishedAt
+                  ? new Date(it.snippet.publishedAt).getTime()
+                  : null,
+              };
+            }
+          }
+        }
+
+        // Écritures Firestore en batch
+        for (let i = 0; i < needFill.length; i += 400) {
+          const batch = writeBatch(db);
+          for (const p of needFill.slice(i, i + 400)) {
+            const m = meta[p.youtubeId];
+            if (!m) {
+              totalMissing++;
+              continue;
+            }
+            const ref = doc(db, 'scopes', theme.id, 'programs', p.id);
+            batch.set(
+              ref,
+              {
+                title: m.title,
+                creatorName: m.creatorName,
+                publishedAt: m.publishedAt || p.createdAt,
+              },
+              { merge: true }
+            );
+            totalUpdated++;
+          }
+          await batch.commit();
+        }
+
+        totalSkipped += docs.length - needFill.length;
+      }
+
+      alert(
+        `Migration Culture terminée.\n` +
+          `Mises à jour : ${totalUpdated}\n` +
+          `Déjà à jour : ${totalSkipped}\n` +
+          `Vidéos introuvables (privées/supprimées) : ${totalMissing}`
+      );
+    } catch (e) {
+      alert(`Erreur migration : ${e.message}`);
+    } finally {
+      setIsSyncing(false);
+    }
+  };
+
+  // -----------------------------------------------------------------
   // Audit des chaînes Culture : pour chaque handle résolu, récupère la
   // date de la dernière vidéo publiée. Télécharge un CSV récap pour
   // identifier les chaînes mortes ou dormantes.
@@ -949,6 +1048,15 @@ export default function CultureApp() {
           </h2>
           {isAdmin && activeTab !== 'guide' && (
             <div className="flex items-center gap-2">
+              <button
+                onClick={migrateCultureMetadata}
+                disabled={isSyncing}
+                className="flex items-center gap-2 bg-slate-800 hover:bg-slate-700 text-slate-200 px-3 py-2 md:px-4 md:py-2 rounded-xl text-xs md:text-sm font-bold transition-all disabled:opacity-50"
+                title="Backfill title/créateur/date pour les anciennes vidéos (à lancer une seule fois)"
+              >
+                <Sparkles size={16} />
+                <span className="hidden md:inline">Migrer</span>
+              </button>
               <button
                 onClick={auditCultureChannels}
                 disabled={isSyncing}

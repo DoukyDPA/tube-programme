@@ -1,7 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import { auth, db, YOUTUBE_API_KEY } from './firebase';
 import { onAuthStateChanged, signOut } from 'firebase/auth';
-import { collection, onSnapshot, doc, getDoc, setDoc, deleteDoc, arrayUnion, arrayRemove } from 'firebase/firestore';
+import { collection, onSnapshot, doc, getDoc, setDoc, deleteDoc, arrayUnion, arrayRemove, writeBatch } from 'firebase/firestore';
 
 import Auth from './components/Auth';
 import AdminPanel from './components/AdminPanel';
@@ -387,6 +387,79 @@ export default function App() {
     finally { setIsSyncing(false); }
   };
 
+  // -----------------------------------------------------------------
+  // Migration des métadonnées Tubiscope : pour chaque document
+  // scopes/*/programs qui n'a pas title/creatorName/publishedAt, on
+  // récupère via YouTube et on les écrit en base. À lancer une seule
+  // fois après déploiement. Coût : ~ N/50 unités de quota.
+  // -----------------------------------------------------------------
+  const migrateMetadata = async () => {
+    if (!YOUTUBE_API_KEY) return alert("❌ Clé API YouTube manquante !");
+    if (!isAdmin) return alert("❌ Réservé à l'admin.");
+    if (!window.confirm(
+      "Migrer les métadonnées (title, créateur, date) pour les anciennes vidéos Tubiscope ?\nUne seule fois suffit."
+    )) return;
+
+    setIsSyncing(true);
+    let updated = 0;
+    let missing = 0;
+
+    try {
+      const allScopes = Object.values(scopePrograms).flat();
+      const needFill = allScopes.filter(p => !p.title);
+
+      if (needFill.length === 0) {
+        alert("Tout est déjà à jour, rien à migrer.");
+        return;
+      }
+
+      const ids = needFill.map(p => p.youtubeId);
+      const meta = {};
+      for (let i = 0; i < ids.length; i += 50) {
+        const chunk = ids.slice(i, i + 50).join(',');
+        const r = await fetch(`https://www.googleapis.com/youtube/v3/videos?key=${YOUTUBE_API_KEY}&id=${chunk}&part=snippet`);
+        const d = await r.json();
+        if (d.items) {
+          for (const it of d.items) {
+            meta[it.id] = {
+              title: it.snippet?.title || '',
+              creatorName: it.snippet?.channelTitle || '',
+              publishedAt: it.snippet?.publishedAt
+                ? new Date(it.snippet.publishedAt).getTime()
+                : null,
+            };
+          }
+        }
+      }
+
+      for (let i = 0; i < needFill.length; i += 400) {
+        const batch = writeBatch(db);
+        for (const p of needFill.slice(i, i + 400)) {
+          const m = meta[p.youtubeId];
+          if (!m) { missing++; continue; }
+          const ref = doc(db, 'scopes', p._scopeId, 'programs', p.id);
+          batch.set(
+            ref,
+            {
+              title: m.title,
+              creatorName: m.creatorName,
+              publishedAt: m.publishedAt || p.createdAt,
+            },
+            { merge: true }
+          );
+          updated++;
+        }
+        await batch.commit();
+      }
+
+      alert(`✅ Migration terminée.\n${updated} vidéos mises à jour.\n${missing} introuvables (privées/supprimées).`);
+    } catch (e) {
+      alert(`❌ Erreur : ${e.message}`);
+    } finally {
+      setIsSyncing(false);
+    }
+  };
+
   const removeProgram = async (prog) => {
     // Sur un scope, seul l'admin peut supprimer
     if (prog._source === 'scope' && !isAdmin) {
@@ -592,10 +665,21 @@ export default function App() {
           </h2>
 
           {activeTab === 'accueil' && isAdmin && (
-            <button onClick={syncWhatsNew} disabled={isSyncing} className="flex items-center gap-2 bg-indigo-600 hover:bg-indigo-500 text-white px-3 py-2 md:px-4 md:py-2 rounded-xl text-xs md:text-sm font-bold shadow-lg shadow-indigo-500/20 transition-all disabled:opacity-50">
-              {isSyncing ? <Loader2 size={16} className="animate-spin"/> : <RefreshCw size={16} />}
-              <span className="hidden md:inline">{isSyncing ? 'Recherche...' : 'Actualiser'}</span>
-            </button>
+            <div className="flex items-center gap-2">
+              <button
+                onClick={migrateMetadata}
+                disabled={isSyncing}
+                className="flex items-center gap-2 bg-slate-800 hover:bg-slate-700 text-slate-200 px-3 py-2 md:px-4 md:py-2 rounded-xl text-xs md:text-sm font-bold transition-all disabled:opacity-50"
+                title="Backfill title/créateur/date pour les anciennes vidéos (à lancer une seule fois)"
+              >
+                <Sparkles size={16} />
+                <span className="hidden md:inline">Migrer</span>
+              </button>
+              <button onClick={syncWhatsNew} disabled={isSyncing} className="flex items-center gap-2 bg-indigo-600 hover:bg-indigo-500 text-white px-3 py-2 md:px-4 md:py-2 rounded-xl text-xs md:text-sm font-bold shadow-lg shadow-indigo-500/20 transition-all disabled:opacity-50">
+                {isSyncing ? <Loader2 size={16} className="animate-spin"/> : <RefreshCw size={16} />}
+                <span className="hidden md:inline">{isSyncing ? 'Recherche...' : 'Actualiser'}</span>
+              </button>
+            </div>
           )}
         </header>
 
