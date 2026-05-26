@@ -103,6 +103,8 @@ export default function CultureApp() {
   const [loading, setLoading] = useState(true);
   const [isAdmin, setIsAdmin] = useState(false);
   const [isSyncing, setIsSyncing] = useState(false);
+  const [syncMessage, setSyncMessage] = useState('');
+  const [syncSubMessage, setSyncSubMessage] = useState('');
 
   // Vidéos par thématique. Indexé par themeId, valeur = array de programmes.
   const [themePrograms, setThemePrograms] = useState({});
@@ -313,6 +315,8 @@ export default function CultureApp() {
     if (!user) return;
 
     setIsSyncing(true);
+    setSyncMessage('Préparation...');
+    setSyncSubMessage('');
 
     // Mapping de départ : fichier public + cache localStorage
     let resolvedMap = { ...(resolved || {}) };
@@ -330,10 +334,29 @@ export default function CultureApp() {
 
     try {
       // 1. Résout les handles manquants
+      const handlesToResolve = [];
       for (const theme of CULTURE_THEMES) {
         const channels = CULTURE_CHANNELS[theme.id] || [];
         for (const ch of channels) {
-          if (resolvedMap[ch.handle]?.channelId) continue;
+          if (!resolvedMap[ch.handle]?.channelId) {
+            handlesToResolve.push({ ch, theme });
+          }
+        }
+      }
+
+      if (handlesToResolve.length > 0) {
+        setSyncMessage(
+          `Première étape : identification des chaînes YouTube (${handlesToResolve.length})`
+        );
+        setSyncSubMessage(
+          'Cette étape ne tourne qu\'au premier lancement, puis le résultat est mis en cache.'
+        );
+        let i = 0;
+        for (const { ch, theme } of handlesToResolve) {
+          i++;
+          if (i % 10 === 0 || i === handlesToResolve.length) {
+            setSyncSubMessage(`Chaîne ${i} sur ${handlesToResolve.length}`);
+          }
           try {
             const r = await fetch(
               `https://www.googleapis.com/youtube/v3/channels?key=${YOUTUBE_API_KEY_CULTURE}&forHandle=@${encodeURIComponent(
@@ -366,14 +389,32 @@ export default function CultureApp() {
       }
 
       // 2. Pour chaque thématique, agrège les vidéos
-      for (const theme of CULTURE_THEMES) {
+      const themesWithChannels = CULTURE_THEMES.filter((t) =>
+        Object.values(resolvedMap).some((info) => info?.themeId === t.id)
+      );
+
+      let themeIdx = 0;
+      for (const theme of themesWithChannels) {
+        themeIdx++;
         const channels = Object.entries(resolvedMap)
           .filter(([, info]) => info && info.themeId === theme.id)
           .map(([handle, info]) => ({ handle, ...info }));
         if (channels.length === 0) continue;
 
+        setSyncMessage(
+          `Récupération des vidéos (${themeIdx} sur ${themesWithChannels.length})`
+        );
+        setSyncSubMessage(`Thématique : ${theme.label}`);
+
         const candidates = [];
+        let chIdx = 0;
         for (const ch of channels) {
+          chIdx++;
+          if (chIdx % 5 === 0 || chIdx === channels.length) {
+            setSyncSubMessage(
+              `${theme.label} : chaîne ${chIdx} sur ${channels.length}`
+            );
+          }
           try {
             const playlistId = ch.channelId.replace(/^UC/, 'UU');
             const pRes = await fetch(
@@ -674,7 +715,12 @@ export default function CultureApp() {
                 );
               })}
               {orderedUserThemes.every((t) => (hydrated[t.id] || []).length === 0) && (
-                <EmptyState onPick={() => setShowPicker(true)} />
+                <EmptyState
+                  onPick={() => setShowPicker(true)}
+                  isAdmin={isAdmin}
+                  onSync={syncCultureFromBrowser}
+                  isSyncing={isSyncing}
+                />
               )}
             </>
           ) : (
@@ -704,6 +750,9 @@ export default function CultureApp() {
       )}
       {showAccount && <AccountModal user={user} onClose={() => setShowAccount(false)} />}
       {legalTab && <Legal initialTab={legalTab} onClose={() => setLegalTab(null)} />}
+      {isSyncing && (
+        <SyncOverlay message={syncMessage} subMessage={syncSubMessage} />
+      )}
     </div>
   );
 }
@@ -800,23 +849,65 @@ function ThemeDetail({ theme, programs, onSelect, toggleWatchLater, watchLaterLi
 }
 
 // --- Empty state quand aucune vidéo n'est encore syncée ---
-function EmptyState({ onPick }) {
+function EmptyState({ onPick, isAdmin, onSync, isSyncing }) {
   return (
     <div className="px-4 md:px-0">
       <div className="bg-slate-900/50 border border-slate-800 rounded-2xl p-8 text-center">
         <Sparkles className="mx-auto text-fuchsia-400 mb-3" size={32} />
         <h3 className="text-lg font-bold text-white mb-2">
-          Les vidéos arrivent
+          {isAdmin ? 'Pas encore de vidéos' : 'Les vidéos arrivent'}
         </h3>
         <p className="text-sm text-slate-400 mb-4">
-          La première synchronisation YouTube peut prendre quelques minutes. Revenez dans un instant.
+          {isAdmin
+            ? 'Lance la première synchronisation pour récupérer les vidéos de tes thématiques. Compte quelques minutes au premier passage.'
+            : 'La première synchronisation YouTube peut prendre quelques minutes. Revenez dans un instant.'}
         </p>
-        <button
-          onClick={onPick}
-          className="bg-fuchsia-600 hover:bg-fuchsia-500 text-white px-4 py-2 rounded-xl text-sm font-bold"
-        >
-          Modifier vos thématiques
-        </button>
+        <div className="flex flex-col md:flex-row gap-2 justify-center">
+          {isAdmin && (
+            <button
+              onClick={onSync}
+              disabled={isSyncing}
+              className="bg-fuchsia-600 hover:bg-fuchsia-500 text-white px-4 py-2 rounded-xl text-sm font-bold disabled:opacity-50 inline-flex items-center justify-center gap-2"
+            >
+              {isSyncing ? (
+                <Loader2 size={16} className="animate-spin" />
+              ) : (
+                <RefreshCw size={16} />
+              )}
+              {isSyncing ? 'Synchronisation...' : 'Lancer la synchronisation'}
+            </button>
+          )}
+          <button
+            onClick={onPick}
+            className="bg-slate-800 hover:bg-slate-700 text-white px-4 py-2 rounded-xl text-sm font-bold"
+          >
+            Modifier vos thématiques
+          </button>
+        </div>
+      </div>
+    </div>
+  );
+}
+
+// --- Overlay plein écran pendant la synchronisation ---
+function SyncOverlay({ message, subMessage }) {
+  return (
+    <div className="fixed inset-0 z-[100] bg-slate-950/90 backdrop-blur-sm flex items-center justify-center p-6">
+      <div className="bg-slate-900 border border-slate-800 rounded-2xl p-8 max-w-md w-full text-center shadow-2xl">
+        <Loader2
+          className="animate-spin text-fuchsia-400 mx-auto mb-4"
+          size={40}
+        />
+        <h3 className="text-lg font-bold text-white mb-2">
+          {message || 'Synchronisation en cours'}
+        </h3>
+        {subMessage && (
+          <p className="text-sm text-slate-400 mb-3">{subMessage}</p>
+        )}
+        <p className="text-xs text-slate-500">
+          Ne fermez pas cet onglet. La première synchronisation interroge plus
+          de 350 chaînes YouTube et peut prendre quelques minutes.
+        </p>
       </div>
     </div>
   );
