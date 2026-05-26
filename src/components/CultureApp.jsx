@@ -465,15 +465,40 @@ export default function CultureApp() {
           }
         }
 
+        // Tri par date puis dédup par youtubeId (deux chaînes peuvent référencer
+        // la même vidéo, on garde la plus récente occurrence).
         candidates.sort((a, b) => b.publishedAt - a.publishedAt);
-        const top = candidates.slice(0, CULTURE_VIDEOS_PER_THEME);
+        const seenYid = new Set();
+        const dedupedCandidates = [];
+        for (const c of candidates) {
+          if (seenYid.has(c.youtubeId)) continue;
+          seenYid.add(c.youtubeId);
+          dedupedCandidates.push(c);
+        }
+        const top = dedupedCandidates.slice(0, CULTURE_VIDEOS_PER_THEME);
         const topIds = new Set(top.map((v) => v.youtubeId));
 
+        // Côté Firestore : si des doublons existent déjà (ancien sync sans
+        // dédup), on garde un seul doc par youtubeId et on supprime les autres.
         const existing = themePrograms[theme.id] || [];
-        const existingIds = new Set(existing.map((p) => p.youtubeId));
+        const existingByYid = new Map();
+        const oldDuplicates = [];
+        for (const p of existing) {
+          if (!existingByYid.has(p.youtubeId)) {
+            existingByYid.set(p.youtubeId, p);
+          } else {
+            oldDuplicates.push(p);
+          }
+        }
+        const existingIds = new Set(existingByYid.keys());
 
         const toAdd = top.filter((v) => !existingIds.has(v.youtubeId));
-        const toDelete = existing.filter((p) => !topIds.has(p.youtubeId));
+        const toDelete = [
+          ...oldDuplicates,
+          ...Array.from(existingByYid.values()).filter(
+            (p) => !topIds.has(p.youtubeId)
+          ),
+        ];
 
         // Écritures batchées (Firestore : max 500 ops par batch)
         const colRef = collection(db, 'scopes', theme.id, 'programs');
@@ -516,6 +541,159 @@ export default function CultureApp() {
     } finally {
       setIsSyncing(false);
     }
+  };
+
+  // -----------------------------------------------------------------
+  // Audit des chaînes Culture : pour chaque handle résolu, récupère la
+  // date de la dernière vidéo publiée. Télécharge un CSV récap pour
+  // identifier les chaînes mortes ou dormantes.
+  // -----------------------------------------------------------------
+  const auditCultureChannels = async () => {
+    if (!YOUTUBE_API_KEY_CULTURE) {
+      return alert('Clé API YouTube Culture manquante.');
+    }
+    if (!isAdmin) return alert("Réservé à l'admin.");
+
+    setIsSyncing(true);
+    setSyncMessage('Audit des chaînes Culture');
+    setSyncSubMessage('');
+
+    let resolvedMap = { ...(resolved || {}) };
+    try {
+      const ls = JSON.parse(localStorage.getItem('cultureResolved') || '{}');
+      resolvedMap = { ...ls, ...resolvedMap };
+    } catch {
+      // ignore
+    }
+
+    const themeLabel = (id) =>
+      CULTURE_THEMES.find((t) => t.id === id)?.label || id;
+
+    const entries = Object.entries(resolvedMap).filter(
+      ([, info]) => info?.channelId
+    );
+    if (entries.length === 0) {
+      setIsSyncing(false);
+      return alert('Aucune chaîne résolue à auditer. Lance d\'abord la synchronisation.');
+    }
+
+    const results = [];
+    let i = 0;
+    for (const [handle, info] of entries) {
+      i++;
+      if (i % 10 === 0 || i === entries.length) {
+        setSyncSubMessage(`Chaîne ${i} sur ${entries.length}`);
+      }
+      try {
+        const playlistId = info.channelId.replace(/^UC/, 'UU');
+        const r = await fetch(
+          `https://www.googleapis.com/youtube/v3/playlistItems?key=${YOUTUBE_API_KEY_CULTURE}&playlistId=${playlistId}&part=contentDetails,snippet&maxResults=1`
+        );
+        const d = await r.json();
+        const item = d.items?.[0];
+        if (!item) {
+          results.push({
+            handle,
+            name: info.name || '',
+            themeId: info.themeId || '',
+            themeLabel: themeLabel(info.themeId),
+            channelId: info.channelId,
+            lastVideoTitle: '',
+            lastVideoDate: '',
+            daysSinceLast: '',
+            status: 'no_videos',
+          });
+          continue;
+        }
+        const publishedAt = new Date(item.snippet.publishedAt);
+        const days = Math.floor(
+          (Date.now() - publishedAt.getTime()) / (1000 * 60 * 60 * 24)
+        );
+        let status = 'active';
+        if (days > 365 * 3) status = 'dead';
+        else if (days > 365) status = 'silent';
+        else if (days > 180) status = 'slow';
+        results.push({
+          handle,
+          name: info.name || '',
+          themeId: info.themeId || '',
+          themeLabel: themeLabel(info.themeId),
+          channelId: info.channelId,
+          lastVideoTitle: item.snippet.title || '',
+          lastVideoDate: publishedAt.toISOString().slice(0, 10),
+          daysSinceLast: days,
+          status,
+        });
+      } catch (e) {
+        console.warn(`Audit @${handle} échoué:`, e.message);
+        results.push({
+          handle,
+          name: info.name || '',
+          themeId: info.themeId || '',
+          themeLabel: themeLabel(info.themeId),
+          channelId: info.channelId,
+          lastVideoTitle: '',
+          lastVideoDate: '',
+          daysSinceLast: '',
+          status: 'error',
+        });
+      }
+    }
+
+    // Tri : les plus dormantes en haut
+    results.sort((a, b) => {
+      const da = a.daysSinceLast === '' ? Infinity : a.daysSinceLast;
+      const db = b.daysSinceLast === '' ? Infinity : b.daysSinceLast;
+      return db - da;
+    });
+
+    // CSV
+    const csvHeader = [
+      'handle',
+      'name',
+      'themeId',
+      'themeLabel',
+      'channelId',
+      'lastVideoTitle',
+      'lastVideoDate',
+      'daysSinceLast',
+      'status',
+    ];
+    const csvEscape = (s) => {
+      const str = String(s ?? '');
+      if (/[",;\n]/.test(str)) return `"${str.replace(/"/g, '""')}"`;
+      return str;
+    };
+    const csv = [
+      csvHeader.join(';'),
+      ...results.map((r) =>
+        csvHeader.map((k) => csvEscape(r[k])).join(';')
+      ),
+    ].join('\n');
+
+    // Téléchargement
+    const blob = new Blob([csv], { type: 'text/csv;charset=utf-8;' });
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement('a');
+    a.href = url;
+    const stamp = new Date().toISOString().slice(0, 10);
+    a.download = `audit-culture-${stamp}.csv`;
+    document.body.appendChild(a);
+    a.click();
+    document.body.removeChild(a);
+    URL.revokeObjectURL(url);
+
+    const dead = results.filter((r) => r.status === 'dead').length;
+    const silent = results.filter((r) => r.status === 'silent').length;
+    const noVid = results.filter((r) => r.status === 'no_videos').length;
+    setIsSyncing(false);
+    alert(
+      `Audit terminé. ${results.length} chaînes analysées.\n` +
+        `Mortes (>3 ans) : ${dead}\n` +
+        `Silencieuses (>1 an) : ${silent}\n` +
+        `Aucune vidéo : ${noVid}\n\n` +
+        `CSV téléchargé : audit-culture-${stamp}.csv`
+    );
   };
 
   // Construit l'URL d'une chaîne YouTube depuis le handle stocké côté front
@@ -682,20 +860,31 @@ export default function CultureApp() {
               : CULTURE_THEMES.find((t) => t.id === activeTab)?.label}
           </h2>
           {isAdmin && activeTab !== 'guide' && (
-            <button
-              onClick={syncCultureFromBrowser}
-              disabled={isSyncing}
-              className="flex items-center gap-2 bg-fuchsia-600 hover:bg-fuchsia-500 text-white px-3 py-2 md:px-4 md:py-2 rounded-xl text-xs md:text-sm font-bold shadow-lg shadow-fuchsia-500/20 transition-all disabled:opacity-50"
-            >
-              {isSyncing ? (
-                <Loader2 size={16} className="animate-spin" />
-              ) : (
-                <RefreshCw size={16} />
-              )}
-              <span className="hidden md:inline">
-                {isSyncing ? 'Synchronisation...' : 'Actualiser'}
-              </span>
-            </button>
+            <div className="flex items-center gap-2">
+              <button
+                onClick={auditCultureChannels}
+                disabled={isSyncing}
+                className="flex items-center gap-2 bg-slate-800 hover:bg-slate-700 text-slate-200 px-3 py-2 md:px-4 md:py-2 rounded-xl text-xs md:text-sm font-bold transition-all disabled:opacity-50"
+                title="Télécharge un CSV des chaînes avec leur dernière date de publication"
+              >
+                <Info size={16} />
+                <span className="hidden md:inline">Auditer</span>
+              </button>
+              <button
+                onClick={syncCultureFromBrowser}
+                disabled={isSyncing}
+                className="flex items-center gap-2 bg-fuchsia-600 hover:bg-fuchsia-500 text-white px-3 py-2 md:px-4 md:py-2 rounded-xl text-xs md:text-sm font-bold shadow-lg shadow-fuchsia-500/20 transition-all disabled:opacity-50"
+              >
+                {isSyncing ? (
+                  <Loader2 size={16} className="animate-spin" />
+                ) : (
+                  <RefreshCw size={16} />
+                )}
+                <span className="hidden md:inline">
+                  {isSyncing ? 'Synchronisation...' : 'Actualiser'}
+                </span>
+              </button>
+            </div>
           )}
         </header>
 
