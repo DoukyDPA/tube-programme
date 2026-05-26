@@ -544,6 +544,35 @@ export default function CultureApp() {
   };
 
   // -----------------------------------------------------------------
+  // Suppression d'une vidéo d'un scope Culture (admin only).
+  // Le programme vit dans scopes/{themeId}/programs/{progId}. On le
+  // retire de Firestore, le listener onSnapshot rafraîchit l'UI.
+  // -----------------------------------------------------------------
+  const removeProgram = async (prog) => {
+    if (!isAdmin) {
+      return alert("Réservé à l'admin.");
+    }
+    if (!prog?.id || !prog?._scopeId) {
+      // Cas particulier : vidéo issue de "À regarder plus tard" pas en scope
+      return;
+    }
+    if (
+      !window.confirm(
+        `Supprimer définitivement « ${prog.title || prog.youtubeId} » de la thématique ?`
+      )
+    ) {
+      return;
+    }
+    try {
+      await deleteDoc(
+        doc(db, 'scopes', prog._scopeId, 'programs', prog.id)
+      );
+    } catch (e) {
+      alert(`Erreur suppression : ${e.message}`);
+    }
+  };
+
+  // -----------------------------------------------------------------
   // Audit des chaînes Culture : pour chaque handle résolu, récupère la
   // date de la dernière vidéo publiée. Télécharge un CSV récap pour
   // identifier les chaînes mortes ou dormantes.
@@ -932,9 +961,9 @@ export default function CultureApp() {
                   programs={latestPrograms}
                   large={true}
                   onSelect={setSelectedProg}
-                  onRemove={() => {}}
+                  onRemove={removeProgram}
                   currentUser={user}
-                  isAdmin={false}
+                  isAdmin={isAdmin}
                   toggleWatchLater={toggleWatchLater}
                   watchLaterList={userData?.watchLaterCulture || []}
                 />
@@ -946,9 +975,9 @@ export default function CultureApp() {
                   programs={hydratedWatchLater}
                   small={true}
                   onSelect={setSelectedProg}
-                  onRemove={() => {}}
+                  onRemove={removeProgram}
                   currentUser={user}
-                  isAdmin={false}
+                  isAdmin={isAdmin}
                   toggleWatchLater={toggleWatchLater}
                   watchLaterList={userData?.watchLaterCulture || []}
                 />
@@ -962,6 +991,8 @@ export default function CultureApp() {
                     theme={t}
                     programs={progs}
                     onSelect={setSelectedProg}
+                    onRemove={removeProgram}
+                    isAdmin={isAdmin}
                     toggleWatchLater={toggleWatchLater}
                     watchLaterList={userData?.watchLaterCulture || []}
                     currentUser={user}
@@ -983,6 +1014,8 @@ export default function CultureApp() {
               theme={CULTURE_THEMES.find((t) => t.id === activeTab)}
               programs={hydrated[activeTab] || []}
               onSelect={setSelectedProg}
+              onRemove={removeProgram}
+              isAdmin={isAdmin}
               toggleWatchLater={toggleWatchLater}
               watchLaterList={userData?.watchLaterCulture || []}
               currentUser={user}
@@ -1013,7 +1046,7 @@ export default function CultureApp() {
 }
 
 // --- Bloc "thématique" sur l'accueil : titre, vidéos, liste de chaînes en bas ---
-function ThemeRow({ theme, programs, onSelect, toggleWatchLater, watchLaterList, currentUser, resolved }) {
+function ThemeRow({ theme, programs, onSelect, onRemove, isAdmin, toggleWatchLater, watchLaterList, currentUser, resolved }) {
   return (
     <div className="mb-12">
       <div className="flex items-center justify-between mb-3 px-4 md:px-0">
@@ -1028,9 +1061,9 @@ function ThemeRow({ theme, programs, onSelect, toggleWatchLater, watchLaterList,
         title={null}
         programs={programs}
         onSelect={onSelect}
-        onRemove={() => {}}
+        onRemove={onRemove}
         currentUser={currentUser}
-        isAdmin={false}
+        isAdmin={isAdmin}
         toggleWatchLater={toggleWatchLater}
         watchLaterList={watchLaterList}
       />
@@ -1078,7 +1111,7 @@ function ChannelList({ channels, resolved }) {
 }
 
 // --- Vue détail d'une thématique : vidéos en haut, chaînes en liste dessous ---
-function ThemeDetail({ theme, programs, onSelect, toggleWatchLater, watchLaterList, currentUser, resolved }) {
+function ThemeDetail({ theme, programs, onSelect, onRemove, isAdmin, toggleWatchLater, watchLaterList, currentUser, resolved }) {
   if (!theme) return null;
   const channels = CULTURE_CHANNELS[theme.id] || [];
   return (
@@ -1092,9 +1125,9 @@ function ThemeDetail({ theme, programs, onSelect, toggleWatchLater, watchLaterLi
         title={null}
         programs={programs}
         onSelect={onSelect}
-        onRemove={() => {}}
+        onRemove={onRemove}
         currentUser={currentUser}
-        isAdmin={false}
+        isAdmin={isAdmin}
         toggleWatchLater={toggleWatchLater}
         watchLaterList={watchLaterList}
       />
