@@ -71,16 +71,25 @@ const parseDuration = (duration) => {
 const MIN_DURATION_S = 180;
 
 // Charge le mapping handle -> { channelId, themeId, name }
+// Cherche en priorité scripts/, sinon public/ (copie servie au front et
+// commitée pour la prod).
 const loadResolved = () => {
-  const p = join(__dirname, '..', 'scripts', 'culture-channels-resolved.json');
-  try {
-    return JSON.parse(readFileSync(p, 'utf8'));
-  } catch (e) {
-    console.error(
-      'culture-channels-resolved.json introuvable. Exécute d\'abord :\n  node scripts/seed-culture-channels.js'
-    );
-    return {};
+  const candidates = [
+    join(__dirname, '..', 'scripts', 'culture-channels-resolved.json'),
+    join(__dirname, '..', 'public', 'culture-channels-resolved.json'),
+  ];
+  for (const p of candidates) {
+    try {
+      const data = JSON.parse(readFileSync(p, 'utf8'));
+      if (data && Object.keys(data).length > 0) return data;
+    } catch (e) {
+      // on essaie le suivant
+    }
   }
+  console.error(
+    'culture-channels-resolved.json introuvable ou vide. Exécute d\'abord :\n  node scripts/seed-culture-channels.js'
+  );
+  return {};
 };
 
 // Pour une chaîne YouTube (channelId UC...), retourne les vidéos récentes

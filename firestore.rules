@@ -1,17 +1,25 @@
 rules_version = '2';
 
 // =====================================================================
-// Tubiscope — Règles de sécurité Firestore (v2, post refonte data)
+// Tubiscope — Règles de sécurité Firestore (v3, ajout Tubiscope Culture)
 // =====================================================================
 // Modèle de sécurité
 //
-// 1. users/{uid}                                     : données privées du user (isPremium, themeCount)
+// 1. users/{uid}                                     : données privées du user
+//    - isPremium       : réservé Cloud Function Stripe
+//    - themeCount      : nombre de thèmes personnels (Studio/Gratuit)
+//    - watchLater      : array de youtubeIds (10 max)
+//    - culturePrefs    : { themes: [...], setAt, updatedAt } pour Tubiscope Culture
 // 2. users/{uid}/themes/{themeId}                    : thèmes custom du user
 // 3. users/{uid}/themes/{themeId}/programs/{progId}  : vidéos d'un thème custom du user
-// 4. scopes/{scopeId}/programs/{progId}              : vidéos des scopes éditeur (admin only en écriture)
-// 5. artifacts/{appId}/public/data/programs/{progId} : ANCIENNE collection, read-only pendant la migration
+// 4. scopes/{scopeId}/programs/{progId}              : vidéos des scopes éditeur (admin)
+//    + scopes/cult_xxx/programs/{progId}             : vidéos Tubiscope Culture (sync serveur)
+// 5. artifacts/{appId}/public/data/programs/{progId} : ANCIENNE collection, read-only
 //
 // Identification admin : custom claim `admin = true`
+// Le sync Culture tourne avec firebase-admin (service account), il bypass
+// les rules. Les rules autorisent donc la lecture publique sur les scopes
+// Culture, mais pas l'écriture côté client.
 // =====================================================================
 
 service cloud.firestore {

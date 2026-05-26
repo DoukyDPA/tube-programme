@@ -26,3 +26,6 @@ Thumbs.db
 # IDE
 .vscode/
 .idea/
+
+# Vite (fichiers temporaires de build)
+vite.config.js.timestamp-*

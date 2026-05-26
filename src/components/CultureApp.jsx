@@ -5,8 +5,10 @@ import {
   onSnapshot,
   getDoc,
   setDoc,
+  deleteDoc,
   arrayUnion,
   arrayRemove,
+  writeBatch,
 } from 'firebase/firestore';
 import { onAuthStateChanged, signOut } from 'firebase/auth';
 import {
@@ -18,6 +20,7 @@ import {
   ExternalLink,
   Settings,
   Info,
+  RefreshCw,
 } from 'lucide-react';
 
 import { auth, db, YOUTUBE_API_KEY_CULTURE } from '../firebase';
@@ -80,10 +83,26 @@ const useResolvedChannels = () => {
   return map;
 };
 
+// Parse une durée ISO8601 YouTube (PT4M13S, etc.) en secondes.
+const parseDuration = (duration) => {
+  if (!duration) return 0;
+  const m = duration.match(/PT(?:(\d+)H)?(?:(\d+)M)?(?:(\d+)S)?/);
+  if (!m) return 0;
+  return (
+    parseInt(m[1] || 0, 10) * 3600 +
+    parseInt(m[2] || 0, 10) * 60 +
+    parseInt(m[3] || 0, 10)
+  );
+};
+
+const MIN_DURATION_S = 180;
+
 export default function CultureApp() {
   const [user, setUser] = useState(null);
   const [userData, setUserData] = useState(null);
   const [loading, setLoading] = useState(true);
+  const [isAdmin, setIsAdmin] = useState(false);
+  const [isSyncing, setIsSyncing] = useState(false);
 
   // Vidéos par thématique. Indexé par themeId, valeur = array de programmes.
   const [themePrograms, setThemePrograms] = useState({});
@@ -104,16 +123,24 @@ export default function CultureApp() {
     return onAuthStateChanged(auth, async (u) => {
       setUser(u);
       if (u) {
+        try {
+          const tokenResult = await u.getIdTokenResult();
+          setIsAdmin(tokenResult.claims?.admin === true);
+        } catch (e) {
+          console.error('Erreur lecture token:', e);
+          setIsAdmin(false);
+        }
         const ref = doc(db, 'users', u.uid);
         const snap = await getDoc(ref);
         if (snap.exists()) {
           setUserData(snap.data());
         } else {
-          const init = { isPremium: false, themeCount: 0, watchLater: [] };
+          const init = { isPremium: false, themeCount: 0, watchLater: [], watchLaterCulture: [] };
           await setDoc(ref, init);
           setUserData(init);
         }
       } else {
+        setIsAdmin(false);
         setUserData(null);
         setThemePrograms({});
       }
@@ -164,7 +191,7 @@ export default function CultureApp() {
   // Hydratation YouTube : titres, créateur, dates
   useEffect(() => {
     const run = async () => {
-      const watchLaterIds = userData?.watchLater || [];
+      const watchLaterIds = userData?.watchLaterCulture || [];
       if (!YOUTUBE_API_KEY_CULTURE) return;
       if (allPrograms.length === 0 && watchLaterIds.length === 0) {
         setHydrated({});
@@ -237,20 +264,20 @@ export default function CultureApp() {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [
     JSON.stringify(allPrograms.map((p) => p.id)),
-    JSON.stringify(userData?.watchLater || []),
+    JSON.stringify(userData?.watchLaterCulture || []),
   ]);
 
   // Toggle watch later (partagé avec la version standard)
   const toggleWatchLater = async (prog) => {
     if (!user) return;
     const ref = doc(db, 'users', user.uid);
-    const currentWl = userData?.watchLater || [];
+    const currentWl = userData?.watchLaterCulture || [];
     const isWl = currentWl.includes(prog.youtubeId);
     try {
       if (isWl) {
         await setDoc(
           ref,
-          { watchLater: arrayRemove(prog.youtubeId) },
+          { watchLaterCulture: arrayRemove(prog.youtubeId) },
           { merge: true }
         );
       } else {
@@ -260,12 +287,177 @@ export default function CultureApp() {
         }
         await setDoc(
           ref,
-          { watchLater: arrayUnion(prog.youtubeId) },
+          { watchLaterCulture: arrayUnion(prog.youtubeId) },
           { merge: true }
         );
       }
     } catch (e) {
       alert(`Erreur : ${e.message}`);
+    }
+  };
+
+  // -----------------------------------------------------------------
+  // Actualisation Culture depuis le navigateur (admin only).
+  // Contourne le besoin d'une clé serveur : on utilise la clé front,
+  // donc YouTube voit un Referer valide. On résout les handles à la
+  // volée, on persiste le mapping en localStorage pour économiser le
+  // quota au prochain clic, puis on applique le delta dans Firestore.
+  // -----------------------------------------------------------------
+  const syncCultureFromBrowser = async () => {
+    if (!YOUTUBE_API_KEY_CULTURE) {
+      return alert('Clé API YouTube Culture manquante.');
+    }
+    if (!isAdmin) {
+      return alert("Réservé à l'admin.");
+    }
+    if (!user) return;
+
+    setIsSyncing(true);
+
+    // Mapping de départ : fichier public + cache localStorage
+    let resolvedMap = { ...(resolved || {}) };
+    try {
+      const ls = JSON.parse(localStorage.getItem('cultureResolved') || '{}');
+      resolvedMap = { ...ls, ...resolvedMap };
+    } catch {
+      // ignore
+    }
+
+    let resolvedNew = 0;
+    let unresolved = 0;
+    let totalAdded = 0;
+    let totalDeleted = 0;
+
+    try {
+      // 1. Résout les handles manquants
+      for (const theme of CULTURE_THEMES) {
+        const channels = CULTURE_CHANNELS[theme.id] || [];
+        for (const ch of channels) {
+          if (resolvedMap[ch.handle]?.channelId) continue;
+          try {
+            const r = await fetch(
+              `https://www.googleapis.com/youtube/v3/channels?key=${YOUTUBE_API_KEY_CULTURE}&forHandle=@${encodeURIComponent(
+                ch.handle
+              )}&part=id,snippet`
+            );
+            const d = await r.json();
+            if (d.items?.[0]) {
+              resolvedMap[ch.handle] = {
+                channelId: d.items[0].id,
+                themeId: theme.id,
+                name: ch.name,
+              };
+              resolvedNew++;
+            } else {
+              unresolved++;
+            }
+          } catch (e) {
+            unresolved++;
+            console.warn(`Résolution @${ch.handle} échouée:`, e.message);
+          }
+        }
+      }
+
+      // Persiste le mapping pour le prochain clic
+      try {
+        localStorage.setItem('cultureResolved', JSON.stringify(resolvedMap));
+      } catch {
+        // quota localStorage plein, on ignore
+      }
+
+      // 2. Pour chaque thématique, agrège les vidéos
+      for (const theme of CULTURE_THEMES) {
+        const channels = Object.entries(resolvedMap)
+          .filter(([, info]) => info && info.themeId === theme.id)
+          .map(([handle, info]) => ({ handle, ...info }));
+        if (channels.length === 0) continue;
+
+        const candidates = [];
+        for (const ch of channels) {
+          try {
+            const playlistId = ch.channelId.replace(/^UC/, 'UU');
+            const pRes = await fetch(
+              `https://www.googleapis.com/youtube/v3/playlistItems?key=${YOUTUBE_API_KEY_CULTURE}&playlistId=${playlistId}&part=contentDetails,snippet&maxResults=10`
+            );
+            const pData = await pRes.json();
+            if (!pData.items) continue;
+
+            const videoIds = pData.items
+              .map((v) => v.contentDetails.videoId)
+              .join(',');
+            const dRes = await fetch(
+              `https://www.googleapis.com/youtube/v3/videos?key=${YOUTUBE_API_KEY_CULTURE}&id=${videoIds}&part=contentDetails,snippet`
+            );
+            const dData = await dRes.json();
+
+            for (const it of pData.items) {
+              const det = dData.items?.find(
+                (d) => d.id === it.contentDetails.videoId
+              );
+              if (!det) continue;
+              if (parseDuration(det.contentDetails.duration) < MIN_DURATION_S)
+                continue;
+              candidates.push({
+                youtubeId: it.contentDetails.videoId,
+                channelId: ch.channelId,
+                publishedAt: new Date(it.snippet.publishedAt).getTime(),
+              });
+            }
+          } catch (e) {
+            console.warn(`Fetch ${ch.handle} échoué:`, e.message);
+          }
+        }
+
+        candidates.sort((a, b) => b.publishedAt - a.publishedAt);
+        const top = candidates.slice(0, CULTURE_VIDEOS_PER_THEME);
+        const topIds = new Set(top.map((v) => v.youtubeId));
+
+        const existing = themePrograms[theme.id] || [];
+        const existingIds = new Set(existing.map((p) => p.youtubeId));
+
+        const toAdd = top.filter((v) => !existingIds.has(v.youtubeId));
+        const toDelete = existing.filter((p) => !topIds.has(p.youtubeId));
+
+        // Écritures batchées (Firestore : max 500 ops par batch)
+        const colRef = collection(db, 'scopes', theme.id, 'programs');
+        for (let i = 0; i < toAdd.length; i += 400) {
+          const batch = writeBatch(db);
+          for (const v of toAdd.slice(i, i + 400)) {
+            const ref = doc(colRef);
+            batch.set(ref, {
+              youtubeId: v.youtubeId,
+              channelId: v.channelId,
+              categoryId: theme.id,
+              addedBy: user.uid,
+              pitch: '',
+              createdAt: Date.now(),
+              avgScore: 0,
+            });
+            totalAdded++;
+          }
+          await batch.commit();
+        }
+        for (let i = 0; i < toDelete.length; i += 400) {
+          const batch = writeBatch(db);
+          for (const p of toDelete.slice(i, i + 400)) {
+            batch.delete(doc(db, 'scopes', theme.id, 'programs', p.id));
+            totalDeleted++;
+          }
+          await batch.commit();
+        }
+      }
+
+      const parts = [
+        `${totalAdded} vidéos ajoutées`,
+        `${totalDeleted} supprimées`,
+      ];
+      if (resolvedNew > 0) parts.push(`${resolvedNew} chaînes résolues`);
+      if (unresolved > 0) parts.push(`${unresolved} chaînes introuvables`);
+      alert(`Sync Culture terminée : ${parts.join(', ')}.`);
+    } catch (e) {
+      alert(`Erreur sync : ${e.message}`);
+    } finally {
+      setIsSyncing(false);
     }
   };
 
@@ -429,6 +621,22 @@ export default function CultureApp() {
               ? 'Guide & légal'
               : CULTURE_THEMES.find((t) => t.id === activeTab)?.label}
           </h2>
+          {isAdmin && activeTab !== 'guide' && (
+            <button
+              onClick={syncCultureFromBrowser}
+              disabled={isSyncing}
+              className="flex items-center gap-2 bg-fuchsia-600 hover:bg-fuchsia-500 text-white px-3 py-2 md:px-4 md:py-2 rounded-xl text-xs md:text-sm font-bold shadow-lg shadow-fuchsia-500/20 transition-all disabled:opacity-50"
+            >
+              {isSyncing ? (
+                <Loader2 size={16} className="animate-spin" />
+              ) : (
+                <RefreshCw size={16} />
+              )}
+              <span className="hidden md:inline">
+                {isSyncing ? 'Synchronisation...' : 'Actualiser'}
+              </span>
+            </button>
+          )}
         </header>
 
         <div className="px-0 md:px-10">
@@ -446,7 +654,7 @@ export default function CultureApp() {
                   currentUser={user}
                   isAdmin={false}
                   toggleWatchLater={toggleWatchLater}
-                  watchLaterList={userData?.watchLater || []}
+                  watchLaterList={userData?.watchLaterCulture || []}
                 />
               )}
               {orderedUserThemes.map((t) => {
@@ -459,7 +667,7 @@ export default function CultureApp() {
                     programs={progs}
                     onSelect={setSelectedProg}
                     toggleWatchLater={toggleWatchLater}
-                    watchLaterList={userData?.watchLater || []}
+                    watchLaterList={userData?.watchLaterCulture || []}
                     currentUser={user}
                     resolved={resolved}
                   />
@@ -475,7 +683,7 @@ export default function CultureApp() {
               programs={hydrated[activeTab] || []}
               onSelect={setSelectedProg}
               toggleWatchLater={toggleWatchLater}
-              watchLaterList={userData?.watchLater || []}
+              watchLaterList={userData?.watchLaterCulture || []}
               currentUser={user}
               resolved={resolved}
             />
