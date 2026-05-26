@@ -175,54 +175,76 @@ export default function App() {
   ];
 
   // Hydratation YouTube (programmes courants + vidéos À regarder plus tard)
+  // Optimisation : on ne fetche YouTube QUE pour les vidéos qui n'ont pas
+  // déjà title/creatorName/publishedAt en base. Les nouvelles syncs stockent
+  // ces champs, donc le quota tombe naturellement à zéro au fil du
+  // renouvellement des vidéos.
   useEffect(() => {
     const fetchYoutubeData = async () => {
       const watchLaterIds = userData?.watchLater || [];
-      if (!YOUTUBE_API_KEY) return;
       if (programs.length === 0 && watchLaterIds.length === 0) {
         setHydratedPrograms([]);
         setHydratedWatchLater([]);
         return;
       }
 
-      const uniqueIds = [...new Set([...programs.map(p => p.youtubeId), ...watchLaterIds])];
-      let fetchedData = {};
+      // Index des programmes pour retrouver leurs métadonnées par youtubeId
+      const progByYid = new Map();
+      for (const p of programs) progByYid.set(p.youtubeId, p);
 
-      for (let i = 0; i < uniqueIds.length; i += 50) {
-        const chunk = uniqueIds.slice(i, i + 50).join(',');
-        try {
-          const res = await fetch(`https://www.googleapis.com/youtube/v3/videos?key=${YOUTUBE_API_KEY}&id=${chunk}&part=snippet`);
-          const data = await res.json();
-          if (data.items) {
-            data.items.forEach(item => {
-              fetchedData[item.id] = {
-                title: item.snippet.title,
-                creatorName: item.snippet.channelTitle,
-                publishedAt: new Date(item.snippet.publishedAt).getTime(),
-              };
-            });
+      // Ne reste à hydrater que ce qui n'a pas de title en base
+      const needHydration = new Set();
+      for (const p of programs) {
+        if (!p.title) needHydration.add(p.youtubeId);
+      }
+      for (const id of watchLaterIds) {
+        const existing = progByYid.get(id);
+        if (!existing || !existing.title) needHydration.add(id);
+      }
+
+      let fetchedData = {};
+      if (YOUTUBE_API_KEY && needHydration.size > 0) {
+        const ids = Array.from(needHydration);
+        for (let i = 0; i < ids.length; i += 50) {
+          const chunk = ids.slice(i, i + 50).join(',');
+          try {
+            const res = await fetch(`https://www.googleapis.com/youtube/v3/videos?key=${YOUTUBE_API_KEY}&id=${chunk}&part=snippet`);
+            const data = await res.json();
+            if (data.items) {
+              data.items.forEach(item => {
+                fetchedData[item.id] = {
+                  title: item.snippet.title,
+                  creatorName: item.snippet.channelTitle,
+                  publishedAt: new Date(item.snippet.publishedAt).getTime(),
+                };
+              });
+            }
+          } catch (e) {
+            console.error("Erreur hydratation API YouTube:", e);
           }
-        } catch (e) {
-          console.error("Erreur hydratation API YouTube:", e);
         }
       }
 
-      const merged = programs.map(p => ({
+      // Helper : pour chaque vidéo, on prend en priorité ce qui est en base,
+      // puis ce qui vient d'être fetché, puis des valeurs par défaut.
+      const enrich = (p) => ({
         ...p,
-        title: fetchedData[p.youtubeId]?.title || "Vidéo indisponible",
-        creatorName: fetchedData[p.youtubeId]?.creatorName || "Créateur inconnu",
-        publishedAt: fetchedData[p.youtubeId]?.publishedAt || p.createdAt,
-      }));
-      setHydratedPrograms(merged.sort((a,b) => b.publishedAt - a.publishedAt));
+        title: p.title || fetchedData[p.youtubeId]?.title || "Vidéo indisponible",
+        creatorName: p.creatorName || fetchedData[p.youtubeId]?.creatorName || "Créateur inconnu",
+        publishedAt: p.publishedAt || fetchedData[p.youtubeId]?.publishedAt || p.createdAt,
+      });
+
+      const merged = programs.map(enrich);
+      setHydratedPrograms(merged.sort((a, b) => b.publishedAt - a.publishedAt));
 
       // Vidéos "À regarder plus tard" : on hydrate même si la source a disparu d'un scope
       const wlMerged = watchLaterIds.map(id => {
-        const existing = programs.find(p => p.youtubeId === id) || { id: `wl-${id}`, youtubeId: id, createdAt: Date.now() };
+        const existing = progByYid.get(id) || { id: `wl-${id}`, youtubeId: id, createdAt: Date.now() };
         return {
           ...existing,
-          title: fetchedData[id]?.title || "Vidéo supprimée ou privée",
-          creatorName: fetchedData[id]?.creatorName || "Inconnu",
-          publishedAt: fetchedData[id]?.publishedAt || existing.createdAt,
+          title: existing.title || fetchedData[id]?.title || "Vidéo supprimée ou privée",
+          creatorName: existing.creatorName || fetchedData[id]?.creatorName || "Inconnu",
+          publishedAt: existing.publishedAt || fetchedData[id]?.publishedAt || existing.createdAt,
         };
       });
       setHydratedWatchLater(wlMerged);
@@ -303,32 +325,45 @@ export default function App() {
         if (!pData.items) continue;
 
         const videoIds = pData.items.map(v => v.contentDetails.videoId).join(',');
-        const detailsRes = await fetch(`https://www.googleapis.com/youtube/v3/videos?key=${YOUTUBE_API_KEY}&id=${videoIds}&part=contentDetails`);
+        // On ajoute snippet pour stocker title/channelTitle/publishedAt
+        // directement dans Firestore. Pas de coût quota supplémentaire.
+        const detailsRes = await fetch(`https://www.googleapis.com/youtube/v3/videos?key=${YOUTUBE_API_KEY}&id=${videoIds}&part=contentDetails,snippet`);
         const detailsData = await detailsRes.json();
 
-        const top5Ids = [];
+        const top5 = [];
         for (const v of pData.items) {
           const vidId = v.contentDetails.videoId;
           const detail = detailsData.items?.find(d => d.id === vidId);
           if (detail && parseDuration(detail.contentDetails.duration) >= 180) {
-            top5Ids.push(vidId);
+            top5.push({
+              youtubeId: vidId,
+              title: detail.snippet?.title || '',
+              creatorName: detail.snippet?.channelTitle || '',
+              publishedAt: detail.snippet?.publishedAt
+                ? new Date(detail.snippet.publishedAt).getTime()
+                : Date.now(),
+            });
           }
         }
+        const top5Ids = top5.map(v => v.youtubeId);
 
         const existingForChannel = videosByChannel[cid] || [];
         const existingIdsForChannel = existingForChannel.map(v => v.youtubeId);
 
-        for (const vidId of top5Ids) {
-          if (!existingIdsForChannel.includes(vidId)) {
+        for (const v of top5) {
+          if (!existingIdsForChannel.includes(v.youtubeId)) {
             const newDocRef = doc(collection(db, 'scopes', channel.category, 'programs'));
             addPromises.push(setDoc(newDocRef, {
-              youtubeId: vidId,
+              youtubeId: v.youtubeId,
               channelId: cid,
               categoryId: channel.category,
               addedBy: user.uid,
               pitch: "",
               createdAt: Date.now(),
-              avgScore: 0
+              avgScore: 0,
+              title: v.title,
+              creatorName: v.creatorName,
+              publishedAt: v.publishedAt
             }));
             addedCount++;
           }

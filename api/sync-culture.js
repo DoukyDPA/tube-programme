@@ -124,8 +124,11 @@ async function fetchRecentLongVideos(channelId, apiKey, limit = 30) {
     long.push({
       youtubeId: it.contentDetails.videoId,
       channelId,
-      publishedAt: new Date(it.snippet.publishedAt).getTime(),
-      title: it.snippet.title,
+      publishedAt: new Date(
+        det.snippet?.publishedAt || it.snippet.publishedAt
+      ).getTime(),
+      title: det.snippet?.title || it.snippet.title || '',
+      creatorName: det.snippet?.channelTitle || '',
     });
   }
   return long;
@@ -215,6 +218,9 @@ export default async function handler(req, res) {
           createdAt: Date.now(),
           publishedAt: v.publishedAt,
           avgScore: 0,
+          // Métadonnées stockées pour éviter l'hydratation client
+          title: v.title || '',
+          creatorName: v.creatorName || '',
         });
         added++;
       }

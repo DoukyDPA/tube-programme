@@ -207,40 +207,55 @@ export default function CultureApp() {
   }, [hydrated]);
 
   // Hydratation YouTube : titres, créateur, dates
+  // Optimisation : on ne fetche YouTube QUE pour les vidéos qui n'ont pas
+  // encore title/creatorName en base. Les syncs récentes stockent ces
+  // champs directement, donc le quota baisse au fil du renouvellement.
   useEffect(() => {
     const run = async () => {
       const watchLaterIds = userData?.watchLaterCulture || [];
-      if (!YOUTUBE_API_KEY_CULTURE) return;
       if (allPrograms.length === 0 && watchLaterIds.length === 0) {
         setHydrated({});
         setHydratedWatchLater([]);
         return;
       }
 
-      const uniqueIds = [
-        ...new Set([...allPrograms.map((p) => p.youtubeId), ...watchLaterIds]),
-      ];
-      const fetched = {};
+      // Index pour retrouver les vidéos par youtubeId
+      const progByYid = new Map();
+      for (const p of allPrograms) progByYid.set(p.youtubeId, p);
 
-      for (let i = 0; i < uniqueIds.length; i += 50) {
-        const chunk = uniqueIds.slice(i, i + 50).join(',');
-        try {
-          const res = await fetch(
-            `https://www.googleapis.com/youtube/v3/videos?key=${YOUTUBE_API_KEY_CULTURE}&id=${chunk}&part=snippet`
-          );
-          const data = await res.json();
-          if (data.items) {
-            data.items.forEach((it) => {
-              fetched[it.id] = {
-                title: it.snippet.title,
-                creatorName: it.snippet.channelTitle,
-                channelId: it.snippet.channelId,
-                publishedAt: new Date(it.snippet.publishedAt).getTime(),
-              };
-            });
+      // Ne reste à hydrater que ce qui n'a pas de title en base
+      const needHydration = new Set();
+      for (const p of allPrograms) {
+        if (!p.title) needHydration.add(p.youtubeId);
+      }
+      for (const id of watchLaterIds) {
+        const existing = progByYid.get(id);
+        if (!existing || !existing.title) needHydration.add(id);
+      }
+
+      const fetched = {};
+      if (YOUTUBE_API_KEY_CULTURE && needHydration.size > 0) {
+        const ids = Array.from(needHydration);
+        for (let i = 0; i < ids.length; i += 50) {
+          const chunk = ids.slice(i, i + 50).join(',');
+          try {
+            const res = await fetch(
+              `https://www.googleapis.com/youtube/v3/videos?key=${YOUTUBE_API_KEY_CULTURE}&id=${chunk}&part=snippet`
+            );
+            const data = await res.json();
+            if (data.items) {
+              data.items.forEach((it) => {
+                fetched[it.id] = {
+                  title: it.snippet.title,
+                  creatorName: it.snippet.channelTitle,
+                  channelId: it.snippet.channelId,
+                  publishedAt: new Date(it.snippet.publishedAt).getTime(),
+                };
+              });
+            }
+          } catch (e) {
+            console.error('Hydratation YT échouée:', e);
           }
-        } catch (e) {
-          console.error('Hydratation YT échouée:', e);
         }
       }
 
@@ -249,11 +264,12 @@ export default function CultureApp() {
       Object.entries(themePrograms).forEach(([themeId, progs]) => {
         const merged = progs.map((p) => ({
           ...p,
-          title: fetched[p.youtubeId]?.title || 'Vidéo indisponible',
-          creatorName: fetched[p.youtubeId]?.creatorName || 'Créateur inconnu',
+          title: p.title || fetched[p.youtubeId]?.title || 'Vidéo indisponible',
+          creatorName:
+            p.creatorName || fetched[p.youtubeId]?.creatorName || 'Créateur inconnu',
           channelHandleId: fetched[p.youtubeId]?.channelId || p.channelId,
           publishedAt:
-            fetched[p.youtubeId]?.publishedAt || p.publishedAt || p.createdAt,
+            p.publishedAt || fetched[p.youtubeId]?.publishedAt || p.createdAt,
         }));
         byTheme[themeId] = merged
           .sort((a, b) => b.publishedAt - a.publishedAt)
@@ -264,16 +280,18 @@ export default function CultureApp() {
       // Watch later
       const wlMerged = watchLaterIds.map((id) => {
         const existing =
-          allPrograms.find((p) => p.youtubeId === id) || {
+          progByYid.get(id) || {
             id: `wl-${id}`,
             youtubeId: id,
             createdAt: Date.now(),
           };
         return {
           ...existing,
-          title: fetched[id]?.title || 'Vidéo supprimée ou privée',
-          creatorName: fetched[id]?.creatorName || 'Inconnu',
-          publishedAt: fetched[id]?.publishedAt || existing.createdAt,
+          title: existing.title || fetched[id]?.title || 'Vidéo supprimée ou privée',
+          creatorName:
+            existing.creatorName || fetched[id]?.creatorName || 'Inconnu',
+          publishedAt:
+            existing.publishedAt || fetched[id]?.publishedAt || existing.createdAt,
         };
       });
       setHydratedWatchLater(wlMerged);
@@ -457,7 +475,11 @@ export default function CultureApp() {
               candidates.push({
                 youtubeId: it.contentDetails.videoId,
                 channelId: ch.channelId,
-                publishedAt: new Date(it.snippet.publishedAt).getTime(),
+                publishedAt: new Date(
+                  det.snippet?.publishedAt || it.snippet.publishedAt
+                ).getTime(),
+                title: det.snippet?.title || it.snippet?.title || '',
+                creatorName: det.snippet?.channelTitle || '',
               });
             }
           } catch (e) {
@@ -514,6 +536,10 @@ export default function CultureApp() {
               pitch: '',
               createdAt: Date.now(),
               avgScore: 0,
+              // Métadonnées YouTube stockées pour éviter l'hydratation client
+              title: v.title || '',
+              creatorName: v.creatorName || '',
+              publishedAt: v.publishedAt,
             });
             totalAdded++;
           }

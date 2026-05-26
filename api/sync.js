@@ -61,37 +61,51 @@ export default async function handler(req, res) {
       
       if (!vData.items) continue;
 
-      const top5Ids = [];
+      const top5 = [];
       const videoIds = vData.items.map(v => v.contentDetails.videoId).join(',');
-      const detailsRes = await fetch(`https://www.googleapis.com/youtube/v3/videos?key=${YOUTUBE_API_KEY}&id=${videoIds}&part=contentDetails`);
+      // On ajoute snippet pour récupérer title/channelTitle/publishedAt sans
+      // coût quota supplémentaire (1 unité par appel quel que soit le nombre
+      // de "part").
+      const detailsRes = await fetch(`https://www.googleapis.com/youtube/v3/videos?key=${YOUTUBE_API_KEY}&id=${videoIds}&part=contentDetails,snippet`);
       const detailsData = await detailsRes.json();
 
       for (const v of vData.items) {
         const vidId = v.contentDetails.videoId;
         const detail = detailsData.items?.find(d => d.id === vidId);
-        
+
         if (detail && parseDuration(detail.contentDetails.duration) >= 180) {
-           top5Ids.push(vidId);
-           // On s'arrête dès qu'on a trouvé 5 vidéos de format "long"
-           if (top5Ids.length === 5) break; 
+           top5.push({
+             youtubeId: vidId,
+             title: detail.snippet?.title || '',
+             creatorName: detail.snippet?.channelTitle || '',
+             publishedAt: detail.snippet?.publishedAt
+               ? new Date(detail.snippet.publishedAt).getTime()
+               : Date.now(),
+           });
+           if (top5.length === 5) break;
         }
       }
+      const top5Ids = top5.map(v => v.youtubeId);
 
       const existingForChannel = videosByChannel[channelId] || [];
       const existingIdsForChannel = existingForChannel.map(v => v.youtubeId);
 
-      for (const vidId of top5Ids) {
-        if (!existingIdsForChannel.includes(vidId)) {
+      for (const v of top5) {
+        if (!existingIdsForChannel.includes(v.youtubeId)) {
           const newDocRef = doc(collection(db, 'artifacts', FIREBASE_APP_ID, 'public', 'data', 'programs'));
           await setDoc(newDocRef, {
             id: newDocRef.id,
-            youtubeId: vidId,
+            youtubeId: v.youtubeId,
             channelId: channelId,
             categoryId: channelInfo.category,
             addedBy: channelInfo.addedBy,
             pitch: "",
             createdAt: Date.now(),
-            avgScore: 0
+            avgScore: 0,
+            // Métadonnées YouTube stockées au sync pour éviter l'hydratation client
+            title: v.title,
+            creatorName: v.creatorName,
+            publishedAt: v.publishedAt
           });
           addedCount++;
         }
