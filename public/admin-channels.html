@@ -168,6 +168,25 @@
   </div>
 </div>
 
+<!-- Modal Éditer chaîne -->
+<div class="modal-bg" id="modal-edit-channel">
+  <div class="modal">
+    <h2>Éditer la chaîne</h2>
+    <p id="edit-channel-id" style="margin: 0 0 12px; color: var(--muted); font-size: 11px; font-family: ui-monospace, monospace;"></p>
+    <label>Nom affiché</label>
+    <input id="edit-channel-name">
+    <label>Handle YouTube (sans @, ex: College-de-France)</label>
+    <input id="edit-channel-handle">
+    <div class="notice info" style="margin-top: 14px; font-size: 12px;">
+      Si le handle pointe vers une autre chaîne (channelId différent), je remplace l'entrée dans /channels et je migre tous les programs associés. Sinon, je mets juste à jour le nom et le handle.
+    </div>
+    <div class="actions">
+      <button class="btn ghost" data-close>Annuler</button>
+      <button class="btn ok" id="confirm-edit-channel">Valider</button>
+    </div>
+  </div>
+</div>
+
 <!-- Modal Réaffecter -->
 <div class="modal-bg" id="modal-reassign">
   <div class="modal">
@@ -248,6 +267,7 @@ let sortBy = 'lastVideoAt';
 let sortDir = 'asc'; // les plus vieilles en haut par défaut
 let reassignTarget = null;
 let editingCatId = null;
+let editChannelTarget = null;
 
 // ---------- DOM helpers ----------
 const $ = (sel) => document.querySelector(sel);
@@ -426,6 +446,7 @@ function renderChannels() {
       <td>
         <div class="actions">
           <button class="btn ghost" data-action="refresh" data-id="${c.channelId}" title="Refresh date">⟳</button>
+          <button class="btn ghost" data-action="edit" data-id="${c.channelId}" title="Éditer nom / handle">✎</button>
           <button class="btn warn" data-action="reassign" data-id="${c.channelId}">Déplacer</button>
           <button class="btn danger" data-action="delete" data-id="${c.channelId}">Supprimer</button>
         </div>
@@ -552,6 +573,14 @@ async function onRowAction(action, channelId) {
   if (!ch) return;
   if (action === 'delete') return deleteChannel(ch);
   if (action === 'refresh') return refreshChannelDate(ch);
+  if (action === 'edit') {
+    editChannelTarget = ch;
+    $('#edit-channel-id').textContent = ch.channelId;
+    $('#edit-channel-name').value = ch.name || '';
+    $('#edit-channel-handle').value = ch.handle || '';
+    openModal('#modal-edit-channel');
+    return;
+  }
   if (action === 'reassign') {
     reassignTarget = ch;
     $('#reassign-name').textContent = ch.name;
@@ -560,6 +589,104 @@ async function onRowAction(action, channelId) {
     openModal('#modal-reassign');
   }
 }
+
+// ---------- Édition d'une chaîne (nom + handle, avec re-résolution YouTube) ----------
+$('#confirm-edit-channel').addEventListener('click', async () => {
+  if (!editChannelTarget) return;
+  const ch = editChannelTarget;
+  const newName = $('#edit-channel-name').value.trim();
+  const newHandleRaw = $('#edit-channel-handle').value.trim().replace(/^@/, '');
+  if (!newName) return alert('Le nom est requis.');
+  if (!newHandleRaw) return alert('Le handle est requis.');
+
+  const handleChanged = newHandleRaw !== (ch.handle || '');
+  const nameChanged = newName !== (ch.name || '');
+
+  if (!handleChanged && !nameChanged) {
+    closeModal('#modal-edit-channel');
+    return;
+  }
+
+  setStatus('Validation…', 'busy');
+  try {
+    let newChannelId = ch.channelId;
+
+    if (handleChanged) {
+      // Re-résoudre via YouTube pour savoir si le channelId change
+      setStatus(`Résolution de @${newHandleRaw}…`, 'busy');
+      const r = await fetch(`https://www.googleapis.com/youtube/v3/channels?key=${YOUTUBE_API_KEY}&forHandle=@${encodeURIComponent(newHandleRaw)}&part=id,snippet`);
+      const d = await r.json();
+      if (d.error) throw new Error('YouTube: ' + d.error.message);
+      if (!d.items?.length) throw new Error(`Aucune chaîne YouTube pour @${newHandleRaw}.`);
+      newChannelId = d.items[0].id;
+    }
+
+    const now = Date.now();
+
+    if (newChannelId === ch.channelId) {
+      // Cas simple : on update juste name et handle
+      await updateDoc(doc(db, 'channels', ch.channelId), {
+        name: newName,
+        handle: newHandleRaw,
+        updatedAt: now,
+      });
+      setStatus('Chaîne mise à jour.', 'ok');
+    } else {
+      // Le handle pointe vers une autre chaîne YouTube : remplacement
+      if (!confirm(`Le handle @${newHandleRaw} pointe vers ${newChannelId}, différent de ${ch.channelId}.\n\nJe vais remplacer le doc /channels et migrer les programs associés. OK ?`)) {
+        setStatus('Édition annulée.', '');
+        closeModal('#modal-edit-channel');
+        return;
+      }
+
+      setStatus('Migration des programs…', 'busy');
+      // 1. Récupérer dernière date YouTube de la nouvelle chaîne
+      let lastVideoAt = 0;
+      try { lastVideoAt = await fetchLastVideoAtFromYT(newChannelId); } catch (e) {}
+
+      // 2. Créer le nouveau doc /channels/{newChannelId}
+      await setDoc(doc(db, 'channels', newChannelId), {
+        channelId: newChannelId,
+        handle: newHandleRaw,
+        name: newName,
+        categoryId: ch.categoryId,
+        mode: ch.mode,
+        lastVideoAt,
+        lastCheckedAt: now,
+        videoCount: 0,
+        createdAt: ch.createdAt || now,
+        updatedAt: now,
+      }, { merge: true });
+
+      // 3. Migrer les programs (update channelId sur place)
+      const progsSnap = await getDocs(query(
+        collection(db, 'scopes', ch.categoryId, 'programs'),
+        where('channelId', '==', ch.channelId)
+      ));
+      let migrated = 0;
+      for (let i = 0; i < progsSnap.docs.length; i += 200) {
+        const batch = writeBatch(db);
+        for (const d of progsSnap.docs.slice(i, i + 200)) {
+          batch.update(d.ref, { channelId: newChannelId });
+          migrated++;
+        }
+        await batch.commit();
+      }
+
+      // 4. Supprimer l'ancien doc /channels
+      await deleteDoc(doc(db, 'channels', ch.channelId));
+
+      setStatus(`Remplacée. ${migrated} program(s) migré(s) vers ${newChannelId}.`, 'ok');
+    }
+
+    closeModal('#modal-edit-channel');
+    editChannelTarget = null;
+    await loadAll();
+  } catch (e) {
+    setStatus('Erreur : ' + e.message, 'err');
+    alert('Erreur : ' + e.message);
+  }
+});
 
 $('#confirm-reassign').addEventListener('click', async () => {
   if (!reassignTarget) return;
