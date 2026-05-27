@@ -1,29 +1,17 @@
 // =====================================================================
 // api/sync-culture.js
 // =====================================================================
-// Synchronise les vidéos des 350+ chaînes "Culture" (ministère de la
-// Culture) vers Firestore.
+// Synchronise les vidéos des chaînes Tubiscope Culture vers Firestore.
 //
-// Pour chaque thématique cult_xxx :
-//   - on lit toutes les chaînes définies dans src/data/cultureChannels.js
-//   - on récupère via l'API YouTube les 25 dernières vidéos longues (>3min)
-//     en agrégeant les uploads de toutes les chaînes de la thématique
-//   - on écrit le delta dans scopes/{themeId}/programs (ajouts + suppressions)
+// Source de vérité : collection /channels (mode = 'culture').
+// Pour chaque catégorie culture (cult_xxx) :
+//   - on lit les chaînes /channels où mode='culture' && categoryId=cult_xxx
+//   - on agrège les uploads récents (>= 180s) de toutes ces chaînes
+//   - on garde les CULTURE_VIDEOS_PER_THEME plus récentes
+//   - on écrit le delta dans scopes/{themeId}/programs
+// On met aussi à jour lastVideoAt et videoCount par chaîne dans /channels.
 //
-// Particularités vs sync.js classique :
-//   - Source = liste figée de handles, pas les programs déjà en base
-//   - Limite = 25 vidéos par thématique (pas par chaîne)
-//   - Filtrage durée >= 180s, idem version standard
-//
-// Auth Firestore : signInAnonymously, donc les rules doivent autoriser
-// la lecture publique sur scopes/{scopeId}/programs (déjà le cas) et la
-// LECTURE/ÉCRITURE seulement pour les admins. Or ici on tourne côté serveur
-// avec un compte standard, donc on a besoin que les rules autorisent
-// l'écriture aussi avec un custom claim "admin", ou alors on utilise
-// firebase-admin avec une service account.
-//
-// Choix retenu : firebase-admin via firebase-admin-key.json (déjà utilisé
-// par scripts/migrate-to-v2.js). Bypass les rules, exécution serveur only.
+// Auth : firebase-admin via service account (bypass rules).
 // =====================================================================
 
 import { initializeApp, getApps, cert } from 'firebase-admin/app';
@@ -32,19 +20,16 @@ import { readFileSync } from 'fs';
 import { dirname, join } from 'path';
 import { fileURLToPath } from 'url';
 
-import {
-  CULTURE_THEMES,
-  CULTURE_CHANNELS,
-  CULTURE_VIDEOS_PER_THEME,
-} from '../src/data/cultureChannels.js';
-
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = dirname(__filename);
 
-// ---- Init Firebase Admin (singleton) ----
+// Hardcodé pour éviter de dépendre de cultureChannels.js maintenant que
+// /channels est la source de vérité.
+const CULTURE_VIDEOS_PER_THEME = 25;
+const MIN_DURATION_S = 180;
+
 const initAdmin = () => {
   if (getApps().length > 0) return getFirestore();
-  // Service account peut venir de fichier OU de variable d'env (Railway/Vercel)
   let credential;
   if (process.env.FIREBASE_ADMIN_KEY_JSON) {
     credential = cert(JSON.parse(process.env.FIREBASE_ADMIN_KEY_JSON));
@@ -68,33 +53,8 @@ const parseDuration = (duration) => {
   );
 };
 
-const MIN_DURATION_S = 180;
-
-// Charge le mapping handle -> { channelId, themeId, name }
-// Cherche en priorité scripts/, sinon public/ (copie servie au front et
-// commitée pour la prod).
-const loadResolved = () => {
-  const candidates = [
-    join(__dirname, '..', 'scripts', 'culture-channels-resolved.json'),
-    join(__dirname, '..', 'public', 'culture-channels-resolved.json'),
-  ];
-  for (const p of candidates) {
-    try {
-      const data = JSON.parse(readFileSync(p, 'utf8'));
-      if (data && Object.keys(data).length > 0) return data;
-    } catch (e) {
-      // on essaie le suivant
-    }
-  }
-  console.error(
-    'culture-channels-resolved.json introuvable ou vide. Exécute d\'abord :\n  node scripts/seed-culture-channels.js'
-  );
-  return {};
-};
-
-// Pour une chaîne YouTube (channelId UC...), retourne les vidéos récentes
-// d'une durée >= MIN_DURATION_S, jusqu'à `limit`.
-async function fetchRecentLongVideos(channelId, apiKey, limit = 30) {
+// Récupère les vidéos longues récentes d'une chaîne, jusqu'à `limit`.
+async function fetchRecentLongVideos(channelId, apiKey, limit = 10) {
   const playlistId = channelId.replace(/^UC/, 'UU');
   const url = `https://www.googleapis.com/youtube/v3/playlistItems?key=${apiKey}&playlistId=${playlistId}&part=contentDetails,snippet&maxResults=${Math.min(
     limit,
@@ -103,10 +63,10 @@ async function fetchRecentLongVideos(channelId, apiKey, limit = 30) {
   const res = await fetch(url);
   const data = await res.json();
   if (data.error) {
-    console.warn(`  ⚠️  ${channelId} : ${data.error.message}`);
+    console.warn(`  ${channelId} : ${data.error.message}`);
     return [];
   }
-  if (!data.items) return [];
+  if (!data.items?.length) return [];
 
   const videoIds = data.items.map((v) => v.contentDetails.videoId).join(',');
   if (!videoIds) return [];
@@ -135,124 +95,175 @@ async function fetchRecentLongVideos(channelId, apiKey, limit = 30) {
 }
 
 export default async function handler(req, res) {
-  // Priorité : clé dédiée Culture, sinon clé principale
   const YOUTUBE_API_KEY =
     process.env.VITE_YOUTUBE_API_KEY_CULTURE || process.env.VITE_YOUTUBE_API_KEY;
   if (!YOUTUBE_API_KEY) {
     return res?.status(500).json({
+      success: false,
       error: 'VITE_YOUTUBE_API_KEY_CULTURE (ou VITE_YOUTUBE_API_KEY) manquante',
     });
   }
 
-  const db = initAdmin();
-  const resolved = loadResolved();
-  // Map themeId -> [ { handle, channelId, name }, ... ]
-  const byTheme = {};
-  for (const [handle, info] of Object.entries(resolved)) {
-    if (!info.channelId || !info.themeId) continue;
-    if (!byTheme[info.themeId]) byTheme[info.themeId] = [];
-    byTheme[info.themeId].push({
-      handle,
-      channelId: info.channelId,
-      name: info.name,
-    });
-  }
+  try {
+    const db = initAdmin();
 
-  const report = {};
-  let totalAdded = 0;
-  let totalDeleted = 0;
-
-  for (const theme of CULTURE_THEMES) {
-    const themeId = theme.id;
-    const channels = byTheme[themeId] || [];
-    if (channels.length === 0) {
-      report[themeId] = { added: 0, deleted: 0, skipped: 'pas de chaînes résolues' };
-      continue;
-    }
-
-    // 1. Récupère les uploads de toutes les chaînes de la thématique
-    const candidates = [];
-    for (const ch of channels) {
-      try {
-        const v = await fetchRecentLongVideos(ch.channelId, YOUTUBE_API_KEY, 10);
-        candidates.push(...v);
-      } catch (e) {
-        console.warn(`  ⚠️  Erreur fetch ${ch.handle}: ${e.message}`);
-      }
-    }
-
-    // 2. Garde uniquement les 25 plus récentes au global
-    candidates.sort((a, b) => b.publishedAt - a.publishedAt);
-    const top = candidates.slice(0, CULTURE_VIDEOS_PER_THEME);
-    const topIds = new Set(top.map((v) => v.youtubeId));
-
-    // 3. Lit l'existant dans Firestore
-    const existingSnap = await db
-      .collection('scopes')
-      .doc(themeId)
-      .collection('programs')
+    // 1. Lire toutes les chaînes Culture et les grouper par categoryId
+    const chSnap = await db
+      .collection('channels')
+      .where('mode', '==', 'culture')
       .get();
 
-    const existing = existingSnap.docs.map((d) => ({ id: d.id, ...d.data() }));
-    const existingIds = new Set(existing.map((p) => p.youtubeId));
+    if (chSnap.empty) {
+      return res?.status(200).json({
+        success: true,
+        message: 'Aucune chaîne Culture en base.',
+      });
+    }
 
-    // 4. Delta
-    const toAdd = top.filter((v) => !existingIds.has(v.youtubeId));
-    const toDelete = existing.filter((p) => !topIds.has(p.youtubeId));
+    const byTheme = {};
+    chSnap.docs.forEach((d) => {
+      const c = d.data();
+      if (!c.categoryId || !c.channelId) return;
+      (byTheme[c.categoryId] ||= []).push(c);
+    });
 
-    // 5. Writes batchés (max 500 par batch Firestore)
-    let added = 0;
-    let deleted = 0;
-    const colRef = db.collection('scopes').doc(themeId).collection('programs');
+    const report = {};
+    let totalAdded = 0;
+    let totalDeleted = 0;
+    // Map channelId -> { lastVideoAt, videoCount } accumulé par catégorie
+    const channelStats = {};
 
-    for (let i = 0; i < toAdd.length; i += 400) {
+    for (const [themeId, channels] of Object.entries(byTheme)) {
+      // 2. Fetch uploads de toutes les chaînes de la thématique
+      const candidates = [];
+      for (const ch of channels) {
+        try {
+          const v = await fetchRecentLongVideos(
+            ch.channelId,
+            YOUTUBE_API_KEY,
+            10
+          );
+          candidates.push(...v);
+          // last video by channel (max publishedAt parmi les longues)
+          if (v.length > 0) {
+            const maxAt = Math.max(...v.map((x) => x.publishedAt));
+            channelStats[ch.channelId] = channelStats[ch.channelId] || {
+              lastVideoAt: 0,
+              videoCount: 0,
+            };
+            if (maxAt > channelStats[ch.channelId].lastVideoAt) {
+              channelStats[ch.channelId].lastVideoAt = maxAt;
+            }
+          }
+        } catch (e) {
+          console.warn(`  Erreur fetch ${ch.channelId}: ${e.message}`);
+        }
+      }
+
+      // 3. Top CULTURE_VIDEOS_PER_THEME les plus récentes
+      candidates.sort((a, b) => b.publishedAt - a.publishedAt);
+      const top = candidates.slice(0, CULTURE_VIDEOS_PER_THEME);
+      const topIds = new Set(top.map((v) => v.youtubeId));
+
+      // 4. Lire l'existant
+      const existingSnap = await db
+        .collection('scopes')
+        .doc(themeId)
+        .collection('programs')
+        .get();
+      const existing = existingSnap.docs.map((d) => ({ id: d.id, ...d.data() }));
+      const existingIds = new Set(existing.map((p) => p.youtubeId));
+
+      // 5. Delta
+      const toAdd = top.filter((v) => !existingIds.has(v.youtubeId));
+      const toDelete = existing.filter((p) => !topIds.has(p.youtubeId));
+
+      let added = 0;
+      let deleted = 0;
+      const colRef = db.collection('scopes').doc(themeId).collection('programs');
+
+      for (let i = 0; i < toAdd.length; i += 400) {
+        const batch = db.batch();
+        for (const v of toAdd.slice(i, i + 400)) {
+          const ref = colRef.doc();
+          batch.set(ref, {
+            youtubeId: v.youtubeId,
+            channelId: v.channelId,
+            categoryId: themeId,
+            addedBy: 'sync-culture',
+            pitch: '',
+            createdAt: Date.now(),
+            publishedAt: v.publishedAt,
+            avgScore: 0,
+            title: v.title || '',
+            creatorName: v.creatorName || '',
+          });
+          added++;
+        }
+        await batch.commit();
+      }
+
+      for (let i = 0; i < toDelete.length; i += 400) {
+        const batch = db.batch();
+        for (const p of toDelete.slice(i, i + 400)) {
+          batch.delete(colRef.doc(p.id));
+          deleted++;
+        }
+        await batch.commit();
+      }
+
+      // 6. videoCount par chaîne pour cette catégorie : compter dans top
+      for (const ch of channels) {
+        const cnt = top.filter((v) => v.channelId === ch.channelId).length;
+        channelStats[ch.channelId] = channelStats[ch.channelId] || {
+          lastVideoAt: ch.lastVideoAt || 0,
+          videoCount: 0,
+        };
+        channelStats[ch.channelId].videoCount = cnt;
+      }
+
+      report[themeId] = { added, deleted, channels: channels.length };
+      totalAdded += added;
+      totalDeleted += deleted;
+      console.log(
+        `  ${themeId} : +${added} / -${deleted} sur ${channels.length} chaînes`
+      );
+    }
+
+    // 7. Mise à jour /channels avec lastVideoAt + videoCount
+    const now = Date.now();
+    const ids = Object.keys(channelStats);
+    for (let i = 0; i < ids.length; i += 400) {
       const batch = db.batch();
-      for (const v of toAdd.slice(i, i + 400)) {
-        const ref = colRef.doc();
-        batch.set(ref, {
-          youtubeId: v.youtubeId,
-          channelId: v.channelId,
-          categoryId: themeId,
-          addedBy: 'culture-sync',
-          pitch: '',
-          createdAt: Date.now(),
-          publishedAt: v.publishedAt,
-          avgScore: 0,
-          // Métadonnées stockées pour éviter l'hydratation client
-          title: v.title || '',
-          creatorName: v.creatorName || '',
-        });
-        added++;
+      for (const cid of ids.slice(i, i + 400)) {
+        const s = channelStats[cid];
+        batch.set(
+          db.collection('channels').doc(cid),
+          {
+            lastVideoAt: s.lastVideoAt,
+            videoCount: s.videoCount,
+            lastCheckedAt: now,
+            updatedAt: now,
+          },
+          { merge: true }
+        );
       }
       await batch.commit();
     }
 
-    for (let i = 0; i < toDelete.length; i += 400) {
-      const batch = db.batch();
-      for (const p of toDelete.slice(i, i + 400)) {
-        batch.delete(colRef.doc(p.id));
-        deleted++;
-      }
-      await batch.commit();
-    }
+    const payload = {
+      success: true,
+      message: `Synchronisation Culture terminée. ${totalAdded} nouveautés, ${totalDeleted} anciennes supprimées sur ${Object.keys(byTheme).length} catégories.`,
+      totalAdded,
+      totalDeleted,
+      report,
+    };
 
-    report[themeId] = { added, deleted, channels: channels.length };
-    totalAdded += added;
-    totalDeleted += deleted;
-    console.log(
-      `  ${theme.label} (${themeId}) : +${added} / -${deleted} sur ${channels.length} chaînes`
-    );
+    if (res?.status) return res.status(200).json(payload);
+    return payload;
+  } catch (error) {
+    console.error('Erreur sync-culture :', error);
+    if (res?.status) return res.status(500).json({ success: false, error: error.message });
+    throw error;
   }
-
-  const payload = {
-    success: true,
-    totalAdded,
-    totalDeleted,
-    report,
-  };
-
-  if (res?.status) {
-    return res.status(200).json(payload);
-  }
-  return payload;
 }

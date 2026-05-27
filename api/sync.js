@@ -1,130 +1,222 @@
-import { initializeApp } from 'firebase/app';
-import { getAuth, signInAnonymously } from 'firebase/auth';
-import { getFirestore, collection, getDocs, doc, setDoc, deleteDoc } from 'firebase/firestore'; 
+// =====================================================================
+// api/sync.js
+// =====================================================================
+// Synchronise les vidéos des chaînes Tubiscope (scopes éditeur) vers
+// Firestore.
+//
+// Source de vérité : collection /channels (mode = 'tubiscope').
+// Pour chaque chaîne :
+//   - on fetch via YouTube API les 5 dernières vidéos longues (>= 180s)
+//   - on écrit le delta dans scopes/{channel.categoryId}/programs
+//     (ajout des nouvelles, suppression de celles qui ne sont plus
+//     dans le top 5)
+//   - on met à jour lastVideoAt, lastCheckedAt et videoCount dans
+//     /channels/{channelId}
+//
+// Auth : firebase-admin via service account (bypass rules).
+// =====================================================================
+
+import { initializeApp, getApps, cert } from 'firebase-admin/app';
+import { getFirestore } from 'firebase-admin/firestore';
+import { readFileSync } from 'fs';
+import { dirname, join } from 'path';
+import { fileURLToPath } from 'url';
+
+const __filename = fileURLToPath(import.meta.url);
+const __dirname = dirname(__filename);
+
+const initAdmin = () => {
+  if (getApps().length > 0) return getFirestore();
+  let credential;
+  if (process.env.FIREBASE_ADMIN_KEY_JSON) {
+    credential = cert(JSON.parse(process.env.FIREBASE_ADMIN_KEY_JSON));
+  } else {
+    const keyPath = join(__dirname, '..', 'firebase-admin-key.json');
+    const sa = JSON.parse(readFileSync(keyPath, 'utf8'));
+    credential = cert(sa);
+  }
+  initializeApp({ credential });
+  return getFirestore();
+};
 
 const parseDuration = (duration) => {
   if (!duration) return 0;
-  const match = duration.match(/PT(?:(\d+)H)?(?:(\d+)M)?(?:(\d+)S)?/);
-  if (!match) return 0;
-  return (parseInt(match[1] || 0, 10) * 3600) + (parseInt(match[2] || 0, 10) * 60) + parseInt(match[3] || 0, 10);
+  const m = duration.match(/PT(?:(\d+)H)?(?:(\d+)M)?(?:(\d+)S)?/);
+  if (!m) return 0;
+  return (
+    parseInt(m[1] || 0, 10) * 3600 +
+    parseInt(m[2] || 0, 10) * 60 +
+    parseInt(m[3] || 0, 10)
+  );
 };
 
-export default async function handler(req, res) {
-  const firebaseConfig = {
-    apiKey: process.env.VITE_FIREBASE_API_KEY,
-    authDomain: process.env.VITE_FIREBASE_AUTH_DOMAIN,
-    projectId: process.env.VITE_FIREBASE_PROJECT_ID,
-    storageBucket: process.env.VITE_FIREBASE_STORAGE_BUCKET,
-    messagingSenderId: process.env.VITE_FIREBASE_MESSAGING_SENDER_ID,
-    appId: process.env.VITE_FIREBASE_APP_ID
-  };
+const MIN_DURATION_S = 180;
+const TOP_N = 5;
 
+// Récupère les TOP_N dernières vidéos longues d'une chaîne avec leurs métadonnées
+async function fetchTopVideos(channelId, apiKey) {
+  const playlistId = channelId.replace(/^UC/, 'UU');
+  const url = `https://www.googleapis.com/youtube/v3/playlistItems?key=${apiKey}&playlistId=${playlistId}&part=contentDetails,snippet&maxResults=15`;
+  const res = await fetch(url);
+  const data = await res.json();
+  if (data.error) {
+    console.warn(`  ${channelId} : ${data.error.message}`);
+    return [];
+  }
+  if (!data.items?.length) return [];
+
+  const videoIds = data.items.map((v) => v.contentDetails.videoId).join(',');
+  const detRes = await fetch(
+    `https://www.googleapis.com/youtube/v3/videos?key=${apiKey}&id=${videoIds}&part=contentDetails,snippet`
+  );
+  const detData = await detRes.json();
+
+  const out = [];
+  for (const it of data.items) {
+    const det = detData.items?.find((d) => d.id === it.contentDetails.videoId);
+    if (!det) continue;
+    if (parseDuration(det.contentDetails.duration) < MIN_DURATION_S) continue;
+    out.push({
+      youtubeId: it.contentDetails.videoId,
+      title: det.snippet?.title || '',
+      creatorName: det.snippet?.channelTitle || '',
+      publishedAt: new Date(
+        det.snippet?.publishedAt || it.snippet.publishedAt
+      ).getTime(),
+    });
+    if (out.length === TOP_N) break;
+  }
+  return out;
+}
+
+export default async function handler(req, res) {
   const YOUTUBE_API_KEY = process.env.VITE_YOUTUBE_API_KEY;
-  const FIREBASE_APP_ID = "tube-prog-v0";
+  if (!YOUTUBE_API_KEY) {
+    return res
+      ?.status(500)
+      .json({ success: false, error: 'VITE_YOUTUBE_API_KEY manquante' });
+  }
 
   try {
-    const app = initializeApp(firebaseConfig);
-    const auth = getAuth(app);
-    const db = getFirestore(app);
+    const db = initAdmin();
 
-    await signInAnonymously(auth);
+    // 1. Lire toutes les chaînes Tubiscope depuis /channels
+    const channelsSnap = await db
+      .collection('channels')
+      .where('mode', '==', 'tubiscope')
+      .get();
 
-    const programsRef = collection(db, 'artifacts', FIREBASE_APP_ID, 'public', 'data', 'programs');
-    const existingDocs = await getDocs(programsRef);
-    
-    const channelsToMonitor = new Map();
-    const videosByChannel = {}; 
-
-    existingDocs.forEach(d => {
-      const data = d.data();
-      if (data.channelId) {
-        if (!videosByChannel[data.channelId]) videosByChannel[data.channelId] = [];
-        videosByChannel[data.channelId].push({ docId: d.id, youtubeId: data.youtubeId });
-
-        if (data.categoryId) {
-          channelsToMonitor.set(data.channelId, { 
-            id: data.channelId, 
-            category: data.categoryId,
-            addedBy: data.addedBy || "system" 
-          });
-        }
-      }
-    });
+    if (channelsSnap.empty) {
+      return res?.status(200).json({
+        success: true,
+        message: 'Aucune chaîne Tubiscope en base.',
+      });
+    }
 
     let addedCount = 0;
     let deletedCount = 0;
+    const channelReport = [];
 
-    for (const [channelId, channelInfo] of channelsToMonitor) {
-      const playlistId = channelId.replace(/^UC/, 'UU');
-      const vRes = await fetch(`https://www.googleapis.com/youtube/v3/playlistItems?key=${YOUTUBE_API_KEY}&playlistId=${playlistId}&part=contentDetails&maxResults=50`);
-      const vData = await vRes.json();
-      
-      if (!vData.items) continue;
-
-      const top5 = [];
-      const videoIds = vData.items.map(v => v.contentDetails.videoId).join(',');
-      // On ajoute snippet pour récupérer title/channelTitle/publishedAt sans
-      // coût quota supplémentaire (1 unité par appel quel que soit le nombre
-      // de "part").
-      const detailsRes = await fetch(`https://www.googleapis.com/youtube/v3/videos?key=${YOUTUBE_API_KEY}&id=${videoIds}&part=contentDetails,snippet`);
-      const detailsData = await detailsRes.json();
-
-      for (const v of vData.items) {
-        const vidId = v.contentDetails.videoId;
-        const detail = detailsData.items?.find(d => d.id === vidId);
-
-        if (detail && parseDuration(detail.contentDetails.duration) >= 180) {
-           top5.push({
-             youtubeId: vidId,
-             title: detail.snippet?.title || '',
-             creatorName: detail.snippet?.channelTitle || '',
-             publishedAt: detail.snippet?.publishedAt
-               ? new Date(detail.snippet.publishedAt).getTime()
-               : Date.now(),
-           });
-           if (top5.length === 5) break;
-        }
+    for (const chDoc of channelsSnap.docs) {
+      const ch = chDoc.data();
+      const channelId = ch.channelId || chDoc.id;
+      const categoryId = ch.categoryId;
+      if (!categoryId) {
+        console.warn(`  ${channelId} : pas de categoryId, skip`);
+        continue;
       }
-      const top5Ids = top5.map(v => v.youtubeId);
 
-      const existingForChannel = videosByChannel[channelId] || [];
-      const existingIdsForChannel = existingForChannel.map(v => v.youtubeId);
+      // 2. Fetch top N vidéos depuis YouTube
+      const top = await fetchTopVideos(channelId, YOUTUBE_API_KEY);
+      const topIds = new Set(top.map((v) => v.youtubeId));
 
-      for (const v of top5) {
-        if (!existingIdsForChannel.includes(v.youtubeId)) {
-          const newDocRef = doc(collection(db, 'artifacts', FIREBASE_APP_ID, 'public', 'data', 'programs'));
-          await setDoc(newDocRef, {
-            id: newDocRef.id,
+      // 3. Lire les programs existants pour cette chaîne dans la bonne catégorie
+      const existingSnap = await db
+        .collection('scopes')
+        .doc(categoryId)
+        .collection('programs')
+        .where('channelId', '==', channelId)
+        .get();
+
+      const existing = existingSnap.docs.map((d) => ({
+        id: d.id,
+        ...d.data(),
+      }));
+      const existingIds = new Set(existing.map((p) => p.youtubeId));
+
+      // 4. Delta : ajouts et suppressions
+      const toAdd = top.filter((v) => !existingIds.has(v.youtubeId));
+      const toDelete = existing.filter((p) => !topIds.has(p.youtubeId));
+
+      const colRef = db.collection('scopes').doc(categoryId).collection('programs');
+
+      // 5. Writes batchés
+      let added = 0;
+      let deleted = 0;
+      for (let i = 0; i < toAdd.length; i += 400) {
+        const batch = db.batch();
+        for (const v of toAdd.slice(i, i + 400)) {
+          const ref = colRef.doc();
+          batch.set(ref, {
             youtubeId: v.youtubeId,
-            channelId: channelId,
-            categoryId: channelInfo.category,
-            addedBy: channelInfo.addedBy,
-            pitch: "",
+            channelId,
+            categoryId,
+            addedBy: ch.addedBy || 'sync-tubiscope',
+            pitch: '',
             createdAt: Date.now(),
+            publishedAt: v.publishedAt,
             avgScore: 0,
-            // Métadonnées YouTube stockées au sync pour éviter l'hydratation client
             title: v.title,
             creatorName: v.creatorName,
-            publishedAt: v.publishedAt
           });
-          addedCount++;
+          added++;
         }
+        await batch.commit();
       }
 
-      for (const existingVid of existingForChannel) {
-        if (!top5Ids.includes(existingVid.youtubeId)) {
-          await deleteDoc(doc(db, 'artifacts', FIREBASE_APP_ID, 'public', 'data', 'programs', existingVid.docId));
-          deletedCount++;
+      for (let i = 0; i < toDelete.length; i += 400) {
+        const batch = db.batch();
+        for (const p of toDelete.slice(i, i + 400)) {
+          batch.delete(colRef.doc(p.id));
+          deleted++;
         }
+        await batch.commit();
       }
+
+      // 6. Mettre à jour /channels avec lastVideoAt et videoCount
+      const newCount = existing.length - toDelete.length + toAdd.length;
+      const lastVideoAt = top[0]?.publishedAt || ch.lastVideoAt || 0;
+      await db.collection('channels').doc(channelId).set(
+        {
+          lastVideoAt,
+          lastCheckedAt: Date.now(),
+          videoCount: newCount,
+          updatedAt: Date.now(),
+        },
+        { merge: true }
+      );
+
+      addedCount += added;
+      deletedCount += deleted;
+      channelReport.push({ channelId, name: ch.name, added, deleted });
+      console.log(
+        `  ${ch.name || channelId} (${categoryId}) : +${added} / -${deleted}`
+      );
     }
 
-    return res.status(200).json({ 
-      success: true, 
-      message: `Synchronisation terminée. ${addedCount} nouveautés, ${deletedCount} anciennes supprimées.` 
-    });
+    const payload = {
+      success: true,
+      message: `Synchronisation Tubiscope terminée. ${addedCount} nouveautés, ${deletedCount} anciennes supprimées sur ${channelsSnap.size} chaînes.`,
+      totalAdded: addedCount,
+      totalDeleted: deletedCount,
+      channels: channelReport,
+    };
 
+    if (res?.status) return res.status(200).json(payload);
+    return payload;
   } catch (error) {
-    return res.status(500).json({ success: false, error: error.message });
+    console.error('Erreur sync :', error);
+    if (res?.status) return res.status(500).json({ success: false, error: error.message });
+    throw error;
   }
 }

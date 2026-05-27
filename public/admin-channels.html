@@ -121,6 +121,7 @@
           <option value="0">Pas de date connue</option>
         </select>
         <button class="btn" id="add-channel-btn">+ Ajouter une chaîne</button>
+        <button class="btn ok" id="run-sync-btn">⚡ Lancer le sync</button>
         <button class="btn ghost" id="refresh-all-btn">Refresh dates (YouTube)</button>
         <button class="btn ghost hidden" id="import-culture-btn">Importer 270 chaînes Culture</button>
         <span class="count" id="count"></span>
@@ -534,13 +535,35 @@ async function onRowAction(action, channelId) {
 $('#confirm-reassign').addEventListener('click', async () => {
   if (!reassignTarget) return;
   const newCat = $('#reassign-cat').value;
-  if (newCat === reassignTarget.categoryId) return closeModal('#modal-reassign');
+  const oldCat = reassignTarget.categoryId;
+  if (newCat === oldCat) return closeModal('#modal-reassign');
   setStatus('Réaffectation…', 'busy');
   try {
+    // 1. Met à jour /channels avec la nouvelle catégorie
     await updateDoc(doc(db, 'channels', reassignTarget.channelId), {
       categoryId: newCat, updatedAt: Date.now()
     });
-    setStatus('Réaffectée. Les vidéos déjà ingérées restent dans l\'ancienne catégorie tant que le sync n\'a pas tourné.', 'ok');
+
+    // 2. Migre les programs : copie vers la nouvelle catégorie avec le bon
+    //    categoryId, puis supprime les originaux. Les IDs Firestore changent
+    //    (nouveau doc), mais le youtubeId reste identique pour l'utilisateur.
+    const progsSnap = await getDocs(query(
+      collection(db, 'scopes', oldCat, 'programs'),
+      where('channelId', '==', reassignTarget.channelId)
+    ));
+    let moved = 0;
+    for (let i = 0; i < progsSnap.docs.length; i += 200) {
+      const batch = writeBatch(db);
+      for (const d of progsSnap.docs.slice(i, i + 200)) {
+        const data = d.data();
+        const newRef = doc(collection(db, 'scopes', newCat, 'programs'));
+        batch.set(newRef, { ...data, categoryId: newCat });
+        batch.delete(doc(db, 'scopes', oldCat, 'programs', d.id));
+        moved++;
+      }
+      await batch.commit();
+    }
+    setStatus(`Réaffectée. ${moved} vidéo(s) déplacée(s) vers la nouvelle catégorie.`, 'ok');
     closeModal('#modal-reassign');
     await loadAll();
   } catch (e) {
@@ -585,6 +608,26 @@ async function refreshChannelDate(ch) {
     setStatus('Erreur : ' + e.message, 'err');
   }
 }
+
+// ---------- Lancer le sync (Tubiscope ou Culture selon l'onglet) ----------
+$('#run-sync-btn').addEventListener('click', async () => {
+  const mode = activeTab;
+  if (mode !== 'tubiscope' && mode !== 'culture') return;
+  const endpoint = mode === 'culture' ? '/api/sync-culture' : '/api/sync';
+  if (!confirm(`Lancer le sync ${mode === 'culture' ? 'Culture' : 'Tubiscope'} ?\n\nLe serveur va interroger YouTube pour chaque chaîne et mettre à jour les vidéos dans Firestore. Durée : quelques minutes.`)) return;
+  setStatus(`Sync ${mode} en cours… (laisse l'onglet ouvert)`, 'busy');
+  try {
+    const r = await fetch(endpoint);
+    const data = await r.json();
+    if (!data.success) throw new Error(data.error || 'Erreur inconnue');
+    setStatus(data.message || 'Sync terminé.', 'ok');
+    alert(data.message || 'Sync terminé.');
+    await loadAll();
+  } catch (e) {
+    setStatus('Erreur : ' + e.message, 'err');
+    alert('Erreur : ' + e.message);
+  }
+});
 
 // ---------- Import en masse des chaînes Culture ----------
 $('#import-culture-btn').addEventListener('click', async () => {
