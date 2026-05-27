@@ -138,7 +138,27 @@ service cloud.firestore {
     }
 
     // =========================================================
-    // 6. Fallback : tout le reste est interdit par défaut
+    // 6. Collection /channels (gestion centralisée des chaînes YouTube)
+    // =========================================================
+    // Source de vérité unifiée Tubiscope + Culture. Lecture admin only
+    // (outil interne, pas exposé aux end users). Écriture admin only.
+    match /channels/{channelId} {
+      allow read:  if isAdmin();
+      allow write: if isAdmin();
+    }
+
+    // =========================================================
+    // 7. Collection /categories (catégories éditables des deux apps)
+    // =========================================================
+    // Lecture authentifiée (les apps en ont besoin pour afficher les labels),
+    // écriture admin only.
+    match /categories/{categoryId} {
+      allow read:  if isSignedIn();
+      allow write: if isAdmin();
+    }
+
+    // =========================================================
+    // 8. Fallback : tout le reste est interdit par défaut
     // =========================================================
     match /{document=**} {
       allow read, write: if false;

@@ -1,0 +1,784 @@
+<!DOCTYPE html>
+<html lang="fr">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Admin Chaînes — Tubiscope</title>
+<style>
+  :root {
+    --bg: #0b1020;
+    --panel: #131a32;
+    --border: #1f2944;
+    --text: #e7ecff;
+    --muted: #8a95b8;
+    --accent: #6366f1;
+    --accent2: #22d3ee;
+    --danger: #ef4444;
+    --warn: #f59e0b;
+    --ok: #10b981;
+  }
+  * { box-sizing: border-box; }
+  body { margin: 0; background: var(--bg); color: var(--text); font: 14px/1.5 system-ui, -apple-system, "Segoe UI", Roboto, sans-serif; }
+  header { padding: 14px 24px; border-bottom: 1px solid var(--border); display: flex; gap: 16px; align-items: center; background: var(--panel); }
+  header h1 { font-size: 16px; margin: 0; }
+  header .spacer { flex: 1; }
+  header .user { font-size: 12px; color: var(--muted); }
+  header button { background: var(--accent); color: white; border: none; padding: 8px 14px; border-radius: 8px; font-weight: 600; cursor: pointer; font-size: 13px; }
+  header button:hover { filter: brightness(1.1); }
+  .tabs { display: flex; gap: 4px; padding: 16px 24px 0; border-bottom: 1px solid var(--border); background: var(--panel); }
+  .tabs button { background: transparent; border: none; color: var(--muted); padding: 10px 18px; border-radius: 8px 8px 0 0; cursor: pointer; font-weight: 600; font-size: 13px; }
+  .tabs button.active { background: var(--bg); color: var(--text); border: 1px solid var(--border); border-bottom-color: var(--bg); margin-bottom: -1px; }
+  main { padding: 20px 24px 48px; }
+  .toolbar { display: flex; gap: 10px; margin-bottom: 16px; flex-wrap: wrap; align-items: center; }
+  .toolbar input, .toolbar select { background: var(--panel); color: var(--text); border: 1px solid var(--border); padding: 7px 12px; border-radius: 8px; font-size: 13px; }
+  .toolbar input { min-width: 220px; }
+  .toolbar .count { color: var(--muted); font-size: 12px; margin-left: auto; }
+  table { width: 100%; border-collapse: collapse; background: var(--panel); border-radius: 12px; overflow: hidden; }
+  th, td { padding: 10px 12px; text-align: left; font-size: 13px; border-bottom: 1px solid var(--border); }
+  th { color: var(--muted); font-weight: 600; text-transform: uppercase; font-size: 11px; letter-spacing: 0.05em; cursor: pointer; user-select: none; background: rgba(255,255,255,0.02); }
+  th:hover { color: var(--text); }
+  tr:last-child td { border-bottom: none; }
+  tr:hover td { background: rgba(99, 102, 241, 0.05); }
+  .age-old { color: var(--danger); font-weight: 600; }
+  .age-warn { color: var(--warn); }
+  .age-ok { color: var(--muted); }
+  .actions { display: flex; gap: 6px; }
+  .btn { background: var(--accent); color: white; border: none; padding: 5px 10px; border-radius: 6px; font-size: 11px; cursor: pointer; font-weight: 600; }
+  .btn.ghost { background: transparent; color: var(--muted); border: 1px solid var(--border); }
+  .btn.ghost:hover { color: var(--text); border-color: var(--accent); }
+  .btn.danger { background: var(--danger); }
+  .btn.warn { background: var(--warn); color: #1a1a1a; }
+  .btn.ok { background: var(--ok); }
+  .badge { display: inline-block; padding: 2px 8px; background: rgba(99,102,241,0.15); color: var(--accent2); border-radius: 999px; font-size: 11px; font-weight: 600; }
+  .badge.culture { background: rgba(34,211,238,0.15); color: var(--accent2); }
+  .pill-input { background: var(--panel); color: var(--text); border: 1px solid var(--border); padding: 5px 9px; border-radius: 6px; font-size: 12px; }
+  .empty { padding: 40px; text-align: center; color: var(--muted); font-style: italic; }
+  .notice { padding: 12px 16px; border-radius: 10px; margin-bottom: 16px; font-size: 13px; }
+  .notice.info { background: rgba(99,102,241,0.1); border: 1px solid rgba(99,102,241,0.3); }
+  .notice.warn { background: rgba(245,158,11,0.1); border: 1px solid rgba(245,158,11,0.3); color: var(--warn); }
+  .modal-bg { position: fixed; inset: 0; background: rgba(0,0,0,0.7); display: none; align-items: center; justify-content: center; z-index: 100; }
+  .modal-bg.open { display: flex; }
+  .modal { background: var(--panel); border: 1px solid var(--border); border-radius: 16px; padding: 24px; min-width: 360px; max-width: 480px; }
+  .modal h2 { margin: 0 0 16px; font-size: 16px; }
+  .modal label { display: block; font-size: 11px; color: var(--muted); margin: 12px 0 4px; text-transform: uppercase; letter-spacing: 0.05em; font-weight: 600; }
+  .modal input, .modal select { width: 100%; background: var(--bg); color: var(--text); border: 1px solid var(--border); padding: 9px 12px; border-radius: 8px; font-size: 13px; }
+  .modal .actions { justify-content: flex-end; margin-top: 20px; }
+  .login { max-width: 380px; margin: 80px auto; padding: 32px; background: var(--panel); border: 1px solid var(--border); border-radius: 16px; text-align: center; }
+  .login h2 { margin: 0 0 8px; }
+  .login p { color: var(--muted); font-size: 13px; margin: 0 0 24px; }
+  .login button { background: var(--accent); color: white; border: none; padding: 12px 24px; border-radius: 10px; font-weight: 600; cursor: pointer; font-size: 14px; }
+  .hidden { display: none !important; }
+  .status { font-size: 12px; color: var(--muted); margin-left: 12px; }
+  .status.busy { color: var(--accent2); }
+  .status.ok { color: var(--ok); }
+  .status.err { color: var(--danger); }
+  .cat-row { display: flex; align-items: center; gap: 10px; padding: 10px 14px; background: var(--panel); border: 1px solid var(--border); border-radius: 10px; margin-bottom: 8px; }
+  .cat-row .label { flex: 1; font-weight: 600; }
+  .cat-row .meta { color: var(--muted); font-size: 11px; }
+</style>
+</head>
+<body>
+
+<div id="login" class="login hidden">
+  <h2>Admin Tubiscope</h2>
+  <p>Connecte-toi avec ton compte admin (email + mot de passe Tubiscope).</p>
+  <form id="login-form" style="display: flex; flex-direction: column; gap: 10px; margin-top: 8px;">
+    <input id="login-email" type="email" placeholder="Email" required style="background: var(--bg); color: var(--text); border: 1px solid var(--border); padding: 10px 12px; border-radius: 8px; font-size: 13px;">
+    <input id="login-password" type="password" placeholder="Mot de passe" required style="background: var(--bg); color: var(--text); border: 1px solid var(--border); padding: 10px 12px; border-radius: 8px; font-size: 13px;">
+    <button id="login-btn" type="submit">Se connecter</button>
+  </form>
+  <p id="login-err" style="color: var(--danger); margin-top: 16px; font-size: 12px;"></p>
+</div>
+
+<div id="app" class="hidden">
+  <header>
+    <h1>Admin Chaînes</h1>
+    <span class="status" id="global-status"></span>
+    <div class="spacer"></div>
+    <span class="user" id="user-info"></span>
+    <button id="logout-btn">Se déconnecter</button>
+  </header>
+
+  <div class="tabs">
+    <button data-tab="tubiscope" class="active">Tubiscope</button>
+    <button data-tab="culture">Tubiscope Culture</button>
+    <button data-tab="categories">Catégories</button>
+  </div>
+
+  <main>
+    <!-- TUBISCOPE / CULTURE: même structure, on filtre par mode -->
+    <section id="view-channels">
+      <div class="notice info" id="mode-info"></div>
+      <div class="toolbar">
+        <input id="search" type="search" placeholder="Filtrer par nom de chaîne…">
+        <select id="filter-cat"><option value="">Toutes les catégories</option></select>
+        <select id="filter-age">
+          <option value="">Tous âges</option>
+          <option value="365">+ d'1 an sans vidéo</option>
+          <option value="180">+ de 6 mois sans vidéo</option>
+          <option value="90">+ de 3 mois sans vidéo</option>
+          <option value="30">+ de 1 mois sans vidéo</option>
+          <option value="0">Pas de date connue</option>
+        </select>
+        <button class="btn" id="add-channel-btn">+ Ajouter une chaîne</button>
+        <button class="btn ghost" id="refresh-all-btn">Refresh dates (YouTube)</button>
+        <button class="btn ghost hidden" id="import-culture-btn">Importer 270 chaînes Culture</button>
+        <span class="count" id="count"></span>
+      </div>
+      <table>
+        <thead>
+          <tr>
+            <th data-sort="name">Nom ▲</th>
+            <th data-sort="categoryId">Catégorie</th>
+            <th data-sort="lastVideoAt">Dernière vidéo</th>
+            <th data-sort="videoCount">Vidéos</th>
+            <th>Actions</th>
+          </tr>
+        </thead>
+        <tbody id="channels-tbody"></tbody>
+      </table>
+      <div id="empty" class="empty hidden">Aucune chaîne ne correspond aux filtres.</div>
+    </section>
+
+    <section id="view-categories" class="hidden">
+      <div class="notice info">Les catégories sont stockées dans la collection <code>/categories</code>. Les apps React continuent pour l'instant de lire les valeurs hardcodées : refactor à prévoir pour qu'elles lisent Firestore.</div>
+      <div class="toolbar">
+        <button class="btn" id="add-cat-btn">+ Nouvelle catégorie</button>
+      </div>
+      <div id="cat-tubiscope-list"></div>
+      <h3 style="margin-top: 28px;">Tubiscope Culture</h3>
+      <div id="cat-culture-list"></div>
+    </section>
+  </main>
+</div>
+
+<!-- Modal Ajouter chaîne -->
+<div class="modal-bg" id="modal-add-channel">
+  <div class="modal">
+    <h2>Ajouter une chaîne</h2>
+    <label>Handle YouTube (avec ou sans @)</label>
+    <input id="new-handle" placeholder="@MonsieurPhi">
+    <label>Catégorie</label>
+    <select id="new-cat"></select>
+    <div class="actions">
+      <button class="btn ghost" data-close>Annuler</button>
+      <button class="btn ok" id="confirm-add-channel">Ajouter</button>
+    </div>
+  </div>
+</div>
+
+<!-- Modal Réaffecter -->
+<div class="modal-bg" id="modal-reassign">
+  <div class="modal">
+    <h2>Changer la catégorie</h2>
+    <p id="reassign-name" style="margin: 0 0 12px; color: var(--muted); font-size: 13px;"></p>
+    <label>Nouvelle catégorie</label>
+    <select id="reassign-cat"></select>
+    <div class="actions">
+      <button class="btn ghost" data-close>Annuler</button>
+      <button class="btn ok" id="confirm-reassign">Valider</button>
+    </div>
+  </div>
+</div>
+
+<!-- Modal Catégorie (ajout/édition) -->
+<div class="modal-bg" id="modal-cat">
+  <div class="modal">
+    <h2 id="cat-modal-title">Nouvelle catégorie</h2>
+    <label>ID (slug, immuable une fois créé)</label>
+    <input id="cat-id" placeholder="ex: science">
+    <label>Libellé</label>
+    <input id="cat-label" placeholder="ex: Science Scope">
+    <label>Mode</label>
+    <select id="cat-mode">
+      <option value="tubiscope">Tubiscope</option>
+      <option value="culture">Tubiscope Culture</option>
+    </select>
+    <label>Icône (clé)</label>
+    <input id="cat-icon" placeholder="sparkles, cpu, book, trophy, mic…">
+    <div class="actions">
+      <button class="btn ghost" data-close>Annuler</button>
+      <button class="btn ok" id="confirm-cat">Enregistrer</button>
+    </div>
+  </div>
+</div>
+
+<script type="module">
+import { initializeApp } from 'https://www.gstatic.com/firebasejs/10.13.0/firebase-app.js';
+import {
+  getAuth, signInWithEmailAndPassword, signOut, onAuthStateChanged, getIdTokenResult
+} from 'https://www.gstatic.com/firebasejs/10.13.0/firebase-auth.js';
+import {
+  getFirestore, collection, doc, getDocs, getDoc, setDoc, deleteDoc, updateDoc, writeBatch, query, where
+} from 'https://www.gstatic.com/firebasejs/10.13.0/firebase-firestore.js';
+
+// =====================================================================
+// Config — chargée depuis /admin-config.json (généré par
+// scripts/generate-admin-config.js depuis .env). Le fichier est
+// gitignored, ne sera donc pas committé.
+// =====================================================================
+let cfg;
+try {
+  const r = await fetch('/admin-config.json', { cache: 'no-store' });
+  if (!r.ok) throw new Error('admin-config.json introuvable');
+  cfg = await r.json();
+} catch (e) {
+  document.body.innerHTML = `<div style="padding:48px;max-width:600px;margin:0 auto;color:#e7ecff;font:14px system-ui">
+    <h2 style="color:#ef4444">Config manquante</h2>
+    <p>${e.message}</p>
+    <p>Exécute <code>node scripts/generate-admin-config.js</code> pour produire <code>public/admin-config.json</code> depuis ton <code>.env</code>.</p>
+  </div>`;
+  throw e;
+}
+const FIREBASE_CONFIG = cfg.firebase;
+const YOUTUBE_API_KEY = cfg.youtubeApiKey;
+
+const app = initializeApp(FIREBASE_CONFIG);
+const auth = getAuth(app);
+const db = getFirestore(app);
+
+// ---------- State ----------
+let currentUser = null;
+let isAdmin = false;
+let categories = []; // { id, label, mode, icon, order }
+let channels = [];   // { channelId, name, categoryId, mode, lastVideoAt, videoCount, ... }
+let activeTab = 'tubiscope';
+let sortBy = 'lastVideoAt';
+let sortDir = 'asc'; // les plus vieilles en haut par défaut
+let reassignTarget = null;
+let editingCatId = null;
+
+// ---------- DOM helpers ----------
+const $ = (sel) => document.querySelector(sel);
+const $$ = (sel) => Array.from(document.querySelectorAll(sel));
+const setStatus = (txt, kind = '') => {
+  const el = $('#global-status');
+  el.textContent = txt;
+  el.className = 'status ' + kind;
+};
+
+// ---------- Auth ----------
+const AUTH_ERRORS = {
+  'auth/invalid-credential': "Email ou mot de passe incorrect.",
+  'auth/wrong-password': "Mot de passe incorrect.",
+  'auth/user-not-found': "Aucun compte avec cet email.",
+  'auth/invalid-email': "Format d'email invalide.",
+  'auth/too-many-requests': "Trop d'essais. Réessaie dans quelques minutes.",
+  'auth/network-request-failed': "Pas de connexion réseau.",
+  'auth/operation-not-allowed': "Méthode de connexion désactivée côté Firebase.",
+};
+
+$('#login-form').addEventListener('submit', async (e) => {
+  e.preventDefault();
+  $('#login-err').textContent = '';
+  const email = $('#login-email').value.trim();
+  const password = $('#login-password').value;
+  try {
+    await signInWithEmailAndPassword(auth, email, password);
+  } catch (err) {
+    $('#login-err').textContent = AUTH_ERRORS[err.code] || err.message;
+  }
+});
+$('#logout-btn').addEventListener('click', () => signOut(auth));
+
+onAuthStateChanged(auth, async (u) => {
+  currentUser = u;
+  if (!u) {
+    $('#login').classList.remove('hidden');
+    $('#app').classList.add('hidden');
+    return;
+  }
+  const tok = await getIdTokenResult(u, true);
+  isAdmin = !!tok.claims.admin;
+  if (!isAdmin) {
+    $('#login').classList.remove('hidden');
+    $('#login-err').textContent = `Le compte ${u.email} n'est pas admin. Lance scripts/set-admin.js puis reconnecte-toi.`;
+    await signOut(auth);
+    return;
+  }
+  $('#login').classList.add('hidden');
+  $('#app').classList.remove('hidden');
+  $('#user-info').textContent = u.email;
+  await loadAll();
+});
+
+// ---------- Load ----------
+async function loadAll() {
+  setStatus('Chargement…', 'busy');
+  try {
+    const [catSnap, chSnap] = await Promise.all([
+      getDocs(collection(db, 'categories')),
+      getDocs(collection(db, 'channels'))
+    ]);
+    categories = catSnap.docs.map(d => ({ id: d.id, ...d.data() }))
+      .sort((a, b) => (a.order || 0) - (b.order || 0));
+    channels = chSnap.docs.map(d => ({ id: d.id, ...d.data() }));
+    setStatus(`${channels.length} chaînes, ${categories.length} catégories`, 'ok');
+    render();
+  } catch (e) {
+    setStatus('Erreur : ' + e.message, 'err');
+    console.error(e);
+  }
+}
+
+// ---------- Render ----------
+function render() {
+  if (activeTab === 'categories') {
+    $('#view-channels').classList.add('hidden');
+    $('#view-categories').classList.remove('hidden');
+    renderCategories();
+  } else {
+    $('#view-channels').classList.remove('hidden');
+    $('#view-categories').classList.add('hidden');
+    renderChannels();
+  }
+}
+
+function renderChannels() {
+  const mode = activeTab; // 'tubiscope' | 'culture'
+  $('#mode-info').textContent = mode === 'tubiscope'
+    ? "Chaînes Tubiscope (scopes éditeur). Suppression = retrait de toutes les vidéos de la chaîne dans la catégorie."
+    : "Chaînes Tubiscope Culture. Suppression = retrait de la chaîne. La liste est aussi figée dans src/data/cultureChannels.js qu'il faudra committer.";
+
+  // Filter dropdown
+  const catSel = $('#filter-cat');
+  const currentCatFilter = catSel.value;
+  catSel.innerHTML = '<option value="">Toutes les catégories</option>' +
+    categories.filter(c => c.mode === mode)
+      .map(c => `<option value="${c.id}" ${c.id === currentCatFilter ? 'selected' : ''}>${esc(c.label)}</option>`).join('');
+
+  const search = ($('#search').value || '').toLowerCase().trim();
+  const catFilter = catSel.value;
+  const ageFilter = $('#filter-age').value;
+  const now = Date.now();
+  const dayMs = 86400000;
+
+  let rows = channels.filter(c => c.mode === mode);
+  if (search) rows = rows.filter(c => (c.name || '').toLowerCase().includes(search));
+  if (catFilter) rows = rows.filter(c => c.categoryId === catFilter);
+  if (ageFilter !== '') {
+    const days = parseInt(ageFilter, 10);
+    if (days === 0) {
+      rows = rows.filter(c => !c.lastVideoAt || c.lastVideoAt === 0);
+    } else {
+      rows = rows.filter(c => c.lastVideoAt && (now - c.lastVideoAt) > days * dayMs);
+    }
+  }
+
+  // Sort
+  rows.sort((a, b) => {
+    const dir = sortDir === 'asc' ? 1 : -1;
+    if (sortBy === 'lastVideoAt') {
+      return (a.lastVideoAt || 0) > (b.lastVideoAt || 0) ? dir : -dir;
+    }
+    if (sortBy === 'videoCount') {
+      return ((a.videoCount || 0) - (b.videoCount || 0)) * dir;
+    }
+    return ('' + (a[sortBy] || '')).localeCompare('' + (b[sortBy] || ''), 'fr') * dir;
+  });
+
+  $('#count').textContent = `${rows.length} chaîne${rows.length > 1 ? 's' : ''}`;
+  $('#empty').classList.toggle('hidden', rows.length > 0);
+
+  const tbody = $('#channels-tbody');
+  tbody.innerHTML = rows.map(c => {
+    const ageDays = c.lastVideoAt ? Math.floor((now - c.lastVideoAt) / dayMs) : null;
+    const ageClass = ageDays === null ? 'age-warn'
+      : ageDays > 365 ? 'age-old'
+      : ageDays > 180 ? 'age-warn' : 'age-ok';
+    const ageTxt = ageDays === null ? '— jamais —' : (ageDays + ' j');
+    const cat = categories.find(x => x.id === c.categoryId);
+    return `<tr>
+      <td><strong>${esc(c.name)}</strong><div style="color:var(--muted);font-size:11px">${esc(c.channelId)}${c.handle ? ' · @' + esc(c.handle) : ''}</div></td>
+      <td><span class="badge ${c.mode === 'culture' ? 'culture' : ''}">${esc(cat ? cat.label : c.categoryId)}</span></td>
+      <td class="${ageClass}">${ageTxt}</td>
+      <td>${c.videoCount || 0}</td>
+      <td>
+        <div class="actions">
+          <button class="btn ghost" data-action="refresh" data-id="${c.channelId}" title="Refresh date">⟳</button>
+          <button class="btn warn" data-action="reassign" data-id="${c.channelId}">Déplacer</button>
+          <button class="btn danger" data-action="delete" data-id="${c.channelId}">Supprimer</button>
+        </div>
+      </td>
+    </tr>`;
+  }).join('');
+
+  // Wire row actions
+  tbody.querySelectorAll('button[data-action]').forEach(btn => {
+    btn.addEventListener('click', () => onRowAction(btn.dataset.action, btn.dataset.id));
+  });
+}
+
+function renderCategories() {
+  const renderList = (mode, hostId) => {
+    const list = categories.filter(c => c.mode === mode);
+    $(hostId).innerHTML = list.length === 0
+      ? '<div class="empty">Aucune catégorie pour ce mode.</div>'
+      : list.map(c => `
+        <div class="cat-row">
+          <span class="badge ${mode === 'culture' ? 'culture' : ''}">${esc(c.id)}</span>
+          <span class="label">${esc(c.label)}</span>
+          <span class="meta">icône: ${esc(c.icon || '—')} · ordre: ${c.order || 0} · ${channelCount(c.id)} chaînes</span>
+          <button class="btn ghost" data-cat-edit="${c.id}">Éditer</button>
+          <button class="btn danger" data-cat-del="${c.id}">Supprimer</button>
+        </div>`).join('');
+    $(hostId).querySelectorAll('[data-cat-edit]').forEach(b => {
+      b.addEventListener('click', () => openEditCat(b.dataset.catEdit));
+    });
+    $(hostId).querySelectorAll('[data-cat-del]').forEach(b => {
+      b.addEventListener('click', () => deleteCategory(b.dataset.catDel));
+    });
+  };
+  renderList('tubiscope', '#cat-tubiscope-list');
+  renderList('culture', '#cat-culture-list');
+}
+
+const channelCount = (catId) => channels.filter(c => c.categoryId === catId).length;
+const esc = (s) => (s == null ? '' : String(s)).replace(/[&<>"]/g, m => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;'}[m]));
+
+// ---------- Tabs ----------
+$$('.tabs button').forEach(b => {
+  b.addEventListener('click', () => {
+    activeTab = b.dataset.tab;
+    $$('.tabs button').forEach(x => x.classList.toggle('active', x === b));
+    // Le bouton "Importer Culture" n'apparaît que dans l'onglet Culture
+    $('#import-culture-btn').classList.toggle('hidden', activeTab !== 'culture');
+    render();
+  });
+});
+
+// ---------- Sort headers ----------
+$$('th[data-sort]').forEach(th => {
+  th.addEventListener('click', () => {
+    const k = th.dataset.sort;
+    if (sortBy === k) sortDir = sortDir === 'asc' ? 'desc' : 'asc';
+    else { sortBy = k; sortDir = 'asc'; }
+    render();
+  });
+});
+
+// ---------- Filters ----------
+$('#search').addEventListener('input', renderChannels);
+$('#filter-cat').addEventListener('change', renderChannels);
+$('#filter-age').addEventListener('change', renderChannels);
+
+// ---------- Modal helpers ----------
+function openModal(id) { $(id).classList.add('open'); }
+function closeModal(id) { $(id).classList.remove('open'); }
+document.querySelectorAll('[data-close]').forEach(b => {
+  b.addEventListener('click', () => b.closest('.modal-bg').classList.remove('open'));
+});
+
+// ---------- Add channel ----------
+$('#add-channel-btn').addEventListener('click', () => {
+  const mode = activeTab;
+  $('#new-cat').innerHTML = categories.filter(c => c.mode === mode)
+    .map(c => `<option value="${c.id}">${esc(c.label)}</option>`).join('');
+  $('#new-handle').value = '';
+  openModal('#modal-add-channel');
+});
+
+$('#confirm-add-channel').addEventListener('click', async () => {
+  const raw = $('#new-handle').value.trim();
+  const catId = $('#new-cat').value;
+  if (!raw || !catId) return alert('Handle et catégorie requis.');
+  setStatus('Résolution YouTube…', 'busy');
+  try {
+    let handle = raw.replace(/^@/, '');
+    let channelId = raw.startsWith('UC') ? raw : null;
+    let name = handle;
+
+    if (!channelId) {
+      const res = await fetch(`https://www.googleapis.com/youtube/v3/channels?key=${YOUTUBE_API_KEY}&forHandle=@${encodeURIComponent(handle)}&part=id,snippet`);
+      const data = await res.json();
+      if (data.error) throw new Error(data.error.message);
+      if (!data.items?.length) throw new Error('Chaîne introuvable.');
+      channelId = data.items[0].id;
+      name = data.items[0].snippet?.title || handle;
+    }
+
+    const lastVideoAt = await fetchLastVideoAtFromYT(channelId);
+    const mode = activeTab;
+    const now = Date.now();
+
+    await setDoc(doc(db, 'channels', channelId), {
+      channelId, handle, name, categoryId: catId, mode,
+      lastVideoAt, lastCheckedAt: now, videoCount: 0,
+      createdAt: now, updatedAt: now
+    }, { merge: true });
+
+    setStatus(`Ajoutée : ${name}`, 'ok');
+    closeModal('#modal-add-channel');
+    await loadAll();
+  } catch (e) {
+    setStatus('Erreur : ' + e.message, 'err');
+    alert(e.message);
+  }
+});
+
+// ---------- Row actions ----------
+async function onRowAction(action, channelId) {
+  const ch = channels.find(c => c.channelId === channelId);
+  if (!ch) return;
+  if (action === 'delete') return deleteChannel(ch);
+  if (action === 'refresh') return refreshChannelDate(ch);
+  if (action === 'reassign') {
+    reassignTarget = ch;
+    $('#reassign-name').textContent = ch.name;
+    $('#reassign-cat').innerHTML = categories.filter(c => c.mode === ch.mode)
+      .map(c => `<option value="${c.id}" ${c.id === ch.categoryId ? 'selected' : ''}>${esc(c.label)}</option>`).join('');
+    openModal('#modal-reassign');
+  }
+}
+
+$('#confirm-reassign').addEventListener('click', async () => {
+  if (!reassignTarget) return;
+  const newCat = $('#reassign-cat').value;
+  if (newCat === reassignTarget.categoryId) return closeModal('#modal-reassign');
+  setStatus('Réaffectation…', 'busy');
+  try {
+    await updateDoc(doc(db, 'channels', reassignTarget.channelId), {
+      categoryId: newCat, updatedAt: Date.now()
+    });
+    setStatus('Réaffectée. Les vidéos déjà ingérées restent dans l\'ancienne catégorie tant que le sync n\'a pas tourné.', 'ok');
+    closeModal('#modal-reassign');
+    await loadAll();
+  } catch (e) {
+    setStatus('Erreur : ' + e.message, 'err');
+  }
+});
+
+async function deleteChannel(ch) {
+  if (!confirm(`Supprimer "${ch.name}" de la collection /channels ?\n\nLes vidéos déjà ingérées dans Firestore (scopes/${ch.categoryId}/programs) ne sont PAS supprimées par cette action. Pour les retirer aussi, utilise le bouton "Aussi purger les programs" du prompt suivant.`)) return;
+  const alsoPurge = confirm("Aussi purger les programs Firestore associés à cette chaîne dans cette catégorie ?");
+  setStatus('Suppression…', 'busy');
+  try {
+    await deleteDoc(doc(db, 'channels', ch.channelId));
+    if (alsoPurge) {
+      const progs = await getDocs(query(
+        collection(db, 'scopes', ch.categoryId, 'programs'),
+        where('channelId', '==', ch.channelId)
+      ));
+      const batch = writeBatch(db);
+      progs.forEach(p => batch.delete(p.ref));
+      await batch.commit();
+      setStatus(`Supprimée + ${progs.size} programs purgés.`, 'ok');
+    } else {
+      setStatus('Supprimée.', 'ok');
+    }
+    await loadAll();
+  } catch (e) {
+    setStatus('Erreur : ' + e.message, 'err');
+  }
+}
+
+async function refreshChannelDate(ch) {
+  setStatus(`Refresh ${ch.name}…`, 'busy');
+  try {
+    const lastVideoAt = await fetchLastVideoAtFromYT(ch.channelId);
+    await updateDoc(doc(db, 'channels', ch.channelId), {
+      lastVideoAt, lastCheckedAt: Date.now(), updatedAt: Date.now()
+    });
+    setStatus(`${ch.name} : ${lastVideoAt ? new Date(lastVideoAt).toLocaleDateString('fr-FR') : 'aucune vidéo'}`, 'ok');
+    await loadAll();
+  } catch (e) {
+    setStatus('Erreur : ' + e.message, 'err');
+  }
+}
+
+// ---------- Import en masse des chaînes Culture ----------
+$('#import-culture-btn').addEventListener('click', async () => {
+  setStatus('Chargement de la liste source…', 'busy');
+  let source;
+  try {
+    const r = await fetch('/culture-channels-source.json', { cache: 'no-store' });
+    if (!r.ok) throw new Error('culture-channels-source.json introuvable. Lance node scripts/export-culture-source.js');
+    source = await r.json();
+  } catch (e) {
+    setStatus('Erreur : ' + e.message, 'err');
+    return alert(e.message);
+  }
+
+  const total = source.total;
+  if (!confirm(`Importer ${total} chaînes Culture ?\n\nPour chaque chaîne, on résout son handle via l'API YouTube (1 appel) puis on récupère sa dernière vidéo (2 appels). Total ~${total * 3} unités de quota.\n\nDurée estimée : ~${Math.ceil(total * 0.3 / 60)} minutes.`)) return;
+
+  // Map themeId -> array de catégories existantes pour validation
+  const cultureCatIds = new Set(categories.filter(c => c.mode === 'culture').map(c => c.id));
+
+  let resolved = 0;
+  let written = 0;
+  let failed = [];
+  let i = 0;
+
+  for (const theme of source.themes) {
+    if (!cultureCatIds.has(theme.id)) {
+      console.warn(`Catégorie ${theme.id} absente de Firestore, skip ${(source.channels[theme.id] || []).length} chaînes`);
+      continue;
+    }
+    const list = source.channels[theme.id] || [];
+    for (const ch of list) {
+      i++;
+      setStatus(`Import ${i}/${total} : ${ch.name}`, 'busy');
+      try {
+        const r = await fetch(`https://www.googleapis.com/youtube/v3/channels?key=${YOUTUBE_API_KEY}&forHandle=@${encodeURIComponent(ch.handle)}&part=id,snippet`);
+        const d = await r.json();
+        if (d.error) throw new Error(d.error.message);
+        if (!d.items?.length) {
+          failed.push(ch.handle + ' (introuvable)');
+          continue;
+        }
+        const channelId = d.items[0].id;
+        const ytName = d.items[0].snippet?.title || ch.name;
+        resolved++;
+
+        // Dernière vidéo
+        let lastVideoAt = 0;
+        try { lastVideoAt = await fetchLastVideoAtFromYT(channelId); } catch (e) {}
+
+        const now = Date.now();
+        await setDoc(doc(db, 'channels', channelId), {
+          channelId,
+          handle: ch.handle,
+          name: ch.name || ytName,
+          categoryId: theme.id,
+          mode: 'culture',
+          lastVideoAt,
+          lastCheckedAt: now,
+          videoCount: 0,
+          updatedAt: now,
+          createdAt: now,
+        }, { merge: true });
+        written++;
+      } catch (e) {
+        failed.push(`${ch.handle} (${e.message})`);
+      }
+      await sleep(80);
+    }
+  }
+
+  const summary = `Import terminé : ${written} chaînes écrites sur ${total}.\n${failed.length} échecs.`;
+  setStatus(summary, written === total ? 'ok' : 'err');
+  if (failed.length) console.warn('Handles en échec :', failed);
+  alert(summary + (failed.length ? '\n\nVoir la console (F12) pour la liste des échecs.' : ''));
+  await loadAll();
+});
+
+$('#refresh-all-btn').addEventListener('click', async () => {
+  const mode = activeTab;
+  const targets = channels.filter(c => c.mode === mode);
+  if (!confirm(`Refresh ${targets.length} chaînes ? Ça consomme du quota YouTube.`)) return;
+  let i = 0;
+  for (const ch of targets) {
+    i++;
+    setStatus(`Refresh ${i}/${targets.length} : ${ch.name}`, 'busy');
+    try {
+      const lastVideoAt = await fetchLastVideoAtFromYT(ch.channelId);
+      await updateDoc(doc(db, 'channels', ch.channelId), {
+        lastVideoAt, lastCheckedAt: Date.now(), updatedAt: Date.now()
+      });
+    } catch (e) {
+      console.warn(ch.channelId, e.message);
+    }
+    await sleep(80);
+  }
+  setStatus(`Refresh terminé (${targets.length} chaînes).`, 'ok');
+  await loadAll();
+});
+
+// ---------- Categories ----------
+$('#add-cat-btn').addEventListener('click', () => {
+  editingCatId = null;
+  $('#cat-modal-title').textContent = 'Nouvelle catégorie';
+  $('#cat-id').value = '';
+  $('#cat-id').disabled = false;
+  $('#cat-label').value = '';
+  $('#cat-mode').value = 'tubiscope';
+  $('#cat-icon').value = '';
+  openModal('#modal-cat');
+});
+
+function openEditCat(id) {
+  const c = categories.find(x => x.id === id);
+  if (!c) return;
+  editingCatId = id;
+  $('#cat-modal-title').textContent = 'Éditer catégorie';
+  $('#cat-id').value = c.id;
+  $('#cat-id').disabled = true;
+  $('#cat-label').value = c.label;
+  $('#cat-mode').value = c.mode;
+  $('#cat-icon').value = c.icon || '';
+  openModal('#modal-cat');
+}
+
+$('#confirm-cat').addEventListener('click', async () => {
+  const id = $('#cat-id').value.trim();
+  const label = $('#cat-label').value.trim();
+  const mode = $('#cat-mode').value;
+  const icon = $('#cat-icon').value.trim() || null;
+  if (!id || !label) return alert('ID et libellé requis.');
+  setStatus('Enregistrement…', 'busy');
+  try {
+    const now = Date.now();
+    const isCreate = !editingCatId;
+    const payload = { id, label, mode, icon, updatedAt: now };
+    if (isCreate) {
+      payload.createdAt = now;
+      payload.order = (categories.filter(c => c.mode === mode).length || 0) + 1;
+    }
+    await setDoc(doc(db, 'categories', id), payload, { merge: true });
+    setStatus('Catégorie ' + (isCreate ? 'créée' : 'mise à jour') + '.', 'ok');
+    closeModal('#modal-cat');
+    editingCatId = null;
+    await loadAll();
+  } catch (e) {
+    setStatus('Erreur : ' + e.message, 'err');
+  }
+});
+
+async function deleteCategory(id) {
+  const count = channelCount(id);
+  if (count > 0) {
+    return alert(`Impossible : ${count} chaîne(s) sont encore affectées à cette catégorie. Réaffecte-les d'abord.`);
+  }
+  if (!confirm(`Supprimer la catégorie "${id}" ? Action irréversible.`)) return;
+  setStatus('Suppression…', 'busy');
+  try {
+    await deleteDoc(doc(db, 'categories', id));
+    setStatus('Supprimée.', 'ok');
+    await loadAll();
+  } catch (e) {
+    setStatus('Erreur : ' + e.message, 'err');
+  }
+}
+
+// ---------- YouTube helpers ----------
+const parseDuration = (d) => {
+  if (!d) return 0;
+  const m = d.match(/PT(?:(\d+)H)?(?:(\d+)M)?(?:(\d+)S)?/);
+  if (!m) return 0;
+  return (parseInt(m[1]||0,10)*3600) + (parseInt(m[2]||0,10)*60) + parseInt(m[3]||0,10);
+};
+
+async function fetchLastVideoAtFromYT(channelId) {
+  const playlistId = channelId.replace(/^UC/, 'UU');
+  const res = await fetch(`https://www.googleapis.com/youtube/v3/playlistItems?key=${YOUTUBE_API_KEY}&playlistId=${playlistId}&part=contentDetails,snippet&maxResults=10`);
+  const data = await res.json();
+  if (data.error) throw new Error(data.error.message);
+  if (!data.items?.length) return 0;
+  const videoIds = data.items.map(v => v.contentDetails.videoId).join(',');
+  const det = await fetch(`https://www.googleapis.com/youtube/v3/videos?key=${YOUTUBE_API_KEY}&id=${videoIds}&part=contentDetails,snippet`);
+  const dData = await det.json();
+  for (const it of data.items) {
+    const d = dData.items?.find(x => x.id === it.contentDetails.videoId);
+    if (!d) continue;
+    if (parseDuration(d.contentDetails.duration) < 180) continue;
+    return new Date(d.snippet?.publishedAt || it.snippet.publishedAt).getTime();
+  }
+  return 0;
+}
+
+const sleep = (ms) => new Promise(r => setTimeout(r, ms));
+</script>
+
+</body>
+</html>
