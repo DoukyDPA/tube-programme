@@ -5,6 +5,7 @@
   "type": "module",
   "scripts": {
     "dev": "vite",
+    "prebuild": "node scripts/generate-admin-config.js && node scripts/export-culture-source.js",
     "build": "vite build",
     "preview": "vite preview",
     "start": "npm run build && node server.js"
