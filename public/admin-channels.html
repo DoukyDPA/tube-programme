@@ -314,6 +314,27 @@ async function loadAll() {
     categories = catSnap.docs.map(d => ({ id: d.id, ...d.data() }))
       .sort((a, b) => (a.order || 0) - (b.order || 0));
     channels = chSnap.docs.map(d => ({ id: d.id, ...d.data() }));
+
+    // Comptage live des programs par channelId : pour chaque catégorie utilisée,
+    // on récupère la sous-collection scopes/{catId}/programs, on compte par
+    // channelId, et on enrichit channels.videoCount. Ça donne la vraie valeur
+    // même si le sync n'a pas écrit videoCount dans /channels.
+    setStatus('Comptage des vidéos…', 'busy');
+    const catsUsed = new Set(channels.map(c => c.categoryId).filter(Boolean));
+    const countsByChannel = {};
+    const progSnaps = await Promise.all(
+      Array.from(catsUsed).map(catId =>
+        getDocs(collection(db, 'scopes', catId, 'programs')).then(s => ({ catId, snap: s }))
+      )
+    );
+    for (const { snap } of progSnaps) {
+      snap.docs.forEach(p => {
+        const cid = p.data().channelId;
+        if (cid) countsByChannel[cid] = (countsByChannel[cid] || 0) + 1;
+      });
+    }
+    channels = channels.map(c => ({ ...c, videoCount: countsByChannel[c.channelId] || 0 }));
+
     setStatus(`${channels.length} chaînes, ${categories.length} catégories`, 'ok');
     render();
   } catch (e) {
@@ -389,8 +410,16 @@ function renderChannels() {
       : ageDays > 180 ? 'age-warn' : 'age-ok';
     const ageTxt = ageDays === null ? '— jamais —' : (ageDays + ' j');
     const cat = categories.find(x => x.id === c.categoryId);
+    const ytUrl = c.handle
+      ? `https://www.youtube.com/@${encodeURIComponent(c.handle)}`
+      : `https://www.youtube.com/channel/${encodeURIComponent(c.channelId)}`;
     return `<tr>
-      <td><strong>${esc(c.name)}</strong><div style="color:var(--muted);font-size:11px">${esc(c.channelId)}${c.handle ? ' · @' + esc(c.handle) : ''}</div></td>
+      <td>
+        <a href="${ytUrl}" target="_blank" rel="noopener" style="color:inherit;text-decoration:none">
+          <strong style="border-bottom:1px dotted var(--accent2)">${esc(c.name)}</strong> ↗
+        </a>
+        <div style="color:var(--muted);font-size:11px">${esc(c.channelId)}${c.handle ? ' · @' + esc(c.handle) : ''}</div>
+      </td>
       <td><span class="badge ${c.mode === 'culture' ? 'culture' : ''}">${esc(cat ? cat.label : c.categoryId)}</span></td>
       <td class="${ageClass}">${ageTxt}</td>
       <td>${c.videoCount || 0}</td>
@@ -782,6 +811,26 @@ async function deleteCategory(id) {
   const count = channelCount(id);
   if (count > 0) {
     return alert(`Impossible : ${count} chaîne(s) sont encore affectées à cette catégorie. Réaffecte-les d'abord.`);
+  }
+  // Vérif supplémentaire : pas de programs orphelins dans scopes/{id}/programs
+  setStatus('Vérification des programs…', 'busy');
+  try {
+    const progs = await getDocs(collection(db, 'scopes', id, 'programs'));
+    if (progs.size > 0) {
+      const purge = confirm(`${progs.size} vidéo(s) sont encore dans cette catégorie (sans chaîne associée). Les purger et supprimer la catégorie ?`);
+      if (!purge) {
+        setStatus('Suppression annulée.', '');
+        return;
+      }
+      for (let i = 0; i < progs.docs.length; i += 400) {
+        const batch = writeBatch(db);
+        progs.docs.slice(i, i + 400).forEach(p => batch.delete(p.ref));
+        await batch.commit();
+      }
+    }
+  } catch (e) {
+    setStatus('Erreur vérif : ' + e.message, 'err');
+    return;
   }
   if (!confirm(`Supprimer la catégorie "${id}" ? Action irréversible.`)) return;
   setStatus('Suppression…', 'busy');

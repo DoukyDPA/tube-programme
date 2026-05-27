@@ -16,17 +16,8 @@ import DiscoverBanner from './components/DiscoverBanner';
 import { MODE_STANDARD } from './data/appMode';
 
 import { Sparkles, Home, Settings, Loader2, RefreshCw, LogOut, Cpu, BookOpen, Trophy, Mic2, Clapperboard, Info, UserCircle, ChevronDown } from 'lucide-react';
-
-const CATEGORIES = [
-  { id: 'ia', label: 'IA & Tech Scope', icon: <Cpu size={18}/> },
-  { id: 'lecture', label: 'Culture Scope', icon: <BookOpen size={18}/> },
-  { id: 'foot', label: 'Economie Scope', icon: <Trophy size={18}/> },
-  { id: 'interviews', label: 'Talks Scope', icon: <Mic2 size={18}/> },
-  { id: 'divertissement', label: 'Divertissement Scope', icon: <Clapperboard size={18}/> },
-];
-
-// Ids des scopes éditeur (doivent matcher CATEGORIES ci-dessus)
-const SCOPE_IDS = CATEGORIES.map(c => c.id);
+import { useCategories } from './hooks/useCategories';
+import { getCategoryIcon } from './data/categoryIcons';
 
 // Nouveau composant d'icône TubiScope
 const AppIcon = () => (
@@ -56,6 +47,11 @@ const parseDuration = (duration) => {
 };
 
 export default function App() {
+  // Catégories Tubiscope (scopes éditeur) chargées depuis Firestore
+  // avec fallback hardcodé. SCOPE_IDS dérivé pour les listeners.
+  const CATEGORIES = useCategories('tubiscope');
+  const SCOPE_IDS = CATEGORIES.map(c => c.id);
+
   const [user, setUser] = useState(null);
   const [isAdmin, setIsAdmin] = useState(false);
 
@@ -111,7 +107,8 @@ export default function App() {
     });
   }, []);
 
-  // Listener sur chaque scope éditeur
+  // Listener sur chaque scope éditeur. Se réinitialise si la liste des
+  // catégories change (ajout/suppression depuis l'admin).
   useEffect(() => {
     if (!user) return;
     const unsubs = SCOPE_IDS.map(scopeId => {
@@ -127,7 +124,8 @@ export default function App() {
       });
     });
     return () => unsubs.forEach(u => u());
-  }, [user]);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [user, CATEGORIES]);
 
   // Listener sur les thèmes perso du user
   useEffect(() => {
@@ -530,7 +528,7 @@ export default function App() {
                     onClick={() => setActiveTab(cat.id)}
                     className={`flex-1 flex items-center gap-3 px-4 py-3 rounded-l-xl text-left ${isActive ? 'text-indigo-400 font-bold' : 'text-slate-400 hover:text-white'}`}
                   >
-                    <span className={isActive ? 'text-indigo-400' : 'text-slate-500'}>{cat.icon}</span>
+                    <span className={isActive ? 'text-indigo-400' : 'text-slate-500'}>{getCategoryIcon(cat.icon, 18)}</span>
                     <span className="text-sm whitespace-nowrap flex-1">{cat.label}</span>
                     {count > 0 && (
                       <span className={`text-[10px] font-bold px-1.5 py-0.5 rounded-full ${isActive ? 'bg-indigo-500/20 text-indigo-300' : 'bg-slate-800 text-slate-500'}`}>

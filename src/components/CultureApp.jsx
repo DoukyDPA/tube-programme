@@ -25,12 +25,12 @@ import {
 
 import { auth, db, YOUTUBE_API_KEY_CULTURE } from '../firebase';
 import {
-  CULTURE_THEMES,
   CULTURE_CHANNELS,
   CULTURE_VIDEOS_PER_THEME,
 } from '../data/cultureChannels';
 import { CultureIcon } from '../data/cultureIcons';
 import { MODE_CULTURE } from '../data/appMode';
+import { useCategories } from '../hooks/useCategories';
 
 import Auth from './Auth';
 import ProgramRow from './ProgramRow';
@@ -98,6 +98,10 @@ const parseDuration = (duration) => {
 const MIN_DURATION_S = 180;
 
 export default function CultureApp() {
+  // Catégories Culture (19 thématiques) chargées depuis Firestore avec fallback.
+  // Remplace l'ancien import CULTURE_THEMES de cultureChannels.js.
+  const CULTURE_THEMES = useCategories('culture');
+
   const [user, setUser] = useState(null);
   const [userData, setUserData] = useState(null);
   const [loading, setLoading] = useState(true);

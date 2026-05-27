@@ -2,6 +2,7 @@ import React, { useState, useMemo } from 'react';
 import { Cpu, BookOpen, Trophy, Mic2, X, CheckCircle2, Loader2, Sparkles, Edit2, Check, Trash2, Tv2 } from 'lucide-react';
 import { db, YOUTUBE_API_KEY } from '../firebase';
 import { collection, doc, setDoc, updateDoc, deleteDoc, writeBatch } from 'firebase/firestore';
+import { useCategories } from '../hooks/useCategories';
 
 const ICONS = [
   { id: 'ia', icon: <Cpu size={18}/> },
@@ -11,17 +12,6 @@ const ICONS = [
   { id: 'custom', icon: <Sparkles size={18}/> }
 ];
 
-const CATEGORIES = [
-  { id: 'divertissement', label: 'Divertissement Scope' },
-  { id: 'ia', label: 'IA & Tech Scope' },
-  { id: 'lecture', label: 'Culture Scope' },
-  { id: 'foot', label: 'Economie Scope' },
-  { id: 'interviews', label: 'Talks Scope' },
-];
-
-// Set des ids des scopes éditeur, pour discrimination rapide
-const SCOPE_IDS = new Set(CATEGORIES.map(c => c.id));
-
 const parseDuration = (duration) => {
   if (!duration) return 0;
   const match = duration.match(/PT(?:(\d+)H)?(?:(\d+)M)?(?:(\d+)S)?/);
@@ -30,6 +20,10 @@ const parseDuration = (duration) => {
 };
 
 export default function AdminPanel({ user, userData, customThemes = [], isAdmin = false, hydratedPrograms = [], onClose }) {
+  // Catégories Tubiscope chargées depuis Firestore (avec fallback)
+  const CATEGORIES = useCategories('tubiscope');
+  const SCOPE_IDS = useMemo(() => new Set(CATEGORIES.map(c => c.id)), [CATEGORIES]);
+
   const [tab, setTab] = useState('channel');
   const [loading, setLoading] = useState(false);
   const [removingChannel, setRemovingChannel] = useState(null);

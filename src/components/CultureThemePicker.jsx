@@ -3,11 +3,11 @@ import { Check, Loader2, Sparkles } from 'lucide-react';
 import { doc, setDoc, serverTimestamp } from 'firebase/firestore';
 import { db } from '../firebase';
 import {
-  CULTURE_THEMES,
   CULTURE_CHANNELS,
   CULTURE_MAX_USER_THEMES,
 } from '../data/cultureChannels';
 import { CultureIcon } from '../data/cultureIcons';
+import { useCategories } from '../hooks/useCategories';
 
 // Sélecteur des 7 thématiques Culture parmi les 19 disponibles.
 // S'affiche au premier accès ou via "Configurer mes thématiques" depuis le menu.
@@ -18,6 +18,9 @@ import { CultureIcon } from '../data/cultureIcons';
 //   onClose()            : fermer sans sauver
 //   onSaved(themeIds)    : callback après save réussi
 export default function CultureThemePicker({ user, initialSelected = [], onClose, onSaved }) {
+  // Catégories Culture depuis Firestore (avec fallback)
+  const CULTURE_THEMES = useCategories('culture');
+
   const [selected, setSelected] = useState(new Set(initialSelected));
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState('');
