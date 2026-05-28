@@ -33,11 +33,11 @@ export default function DiscoverBanner({ mode }) {
 
   const title = isOnCulture
     ? 'Envie de personnaliser vos chaînes ?'
-    : 'Tu connais Tubiscope Culture ?';
+    : 'Et si on prenait une dose de savoir avec Tubiscope Culture ?';
 
   const desc = isOnCulture
     ? 'Sur tubiscope.com, sélectionnez vos propres chaînes par thématique. Version gratuite ou Studio.'
-    : '19 thématiques, 350 chaînes validées par le ministère de la Culture. Gratuit.';
+    : '19 thématiques, plusieurs centaines de chaînes culturelles choisies pour vous. Gratuit.';
 
   const cta = isOnCulture ? 'Voir Tubiscope' : 'Voir Tubiscope Culture';
 
