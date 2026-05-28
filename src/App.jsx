@@ -608,7 +608,13 @@ export default function App() {
             </>
           )}
 
-          <button onClick={() => setIsAdminOpen(true)} className="w-full flex items-center gap-3 px-4 py-3 rounded-xl text-slate-400 hover:text-white hover:bg-slate-800/50 transition-all mt-4">
+          {/* Séparateur : les boutons ci-dessous ne sont pas des chaînes
+              mais des actions de niveau application. */}
+          <div className="mt-8 mb-3 mx-4">
+            <div className="h-px bg-slate-800/70" />
+          </div>
+
+          <button onClick={() => setIsAdminOpen(true)} className="w-full flex items-center gap-3 px-4 py-3 rounded-xl text-slate-400 hover:text-white hover:bg-slate-800/50 transition-all">
             <Settings size={18} /> Configurer
           </button>
           <button onClick={() => setActiveTab('guide')} className={`w-full flex items-center gap-3 px-4 py-3 rounded-xl transition-all ${activeTab === 'guide' ? 'bg-indigo-600/10 text-indigo-400 font-bold' : 'text-slate-400 hover:text-white hover:bg-slate-800/50'}`}>
@@ -713,13 +719,46 @@ export default function App() {
                 />
               )}
 
-              {allCategories.map(cat => {
+              {/* Rangées des scopes éditeur */}
+              {CATEGORIES.map(cat => {
                 const catProgs = hydratedPrograms.filter(p => p.categoryId === cat.id);
                 if (catProgs.length === 0) return null;
                 return (
                   <ProgramRow
                     key={cat.id}
                     title={cat.label}
+                    programs={catProgs}
+                    onSelect={setSelectedProg}
+                    onRemove={removeProgram}
+                    currentUser={user}
+                    isAdmin={isAdmin}
+                    toggleWatchLater={toggleWatchLater}
+                    watchLaterList={userData?.watchLater || []}
+                  />
+                );
+              })}
+
+              {/* Séparateur scopes / thématiques perso */}
+              {customThemes.length > 0 && customThemes.some(ct => hydratedPrograms.some(p => p.categoryId === ct.id)) && (
+                <div className="mt-10 mb-4 px-4 md:px-0">
+                  <div className="flex items-center gap-4">
+                    <div className="h-px flex-1 bg-gradient-to-r from-transparent via-emerald-500/30 to-emerald-500/30" />
+                    <span className="text-[11px] font-bold text-emerald-400 uppercase tracking-widest flex items-center gap-2">
+                      <Sparkles size={14} /> Mes Thématiques
+                    </span>
+                    <div className="h-px flex-1 bg-gradient-to-l from-transparent via-emerald-500/30 to-emerald-500/30" />
+                  </div>
+                </div>
+              )}
+
+              {/* Rangées des thématiques personnelles */}
+              {customThemes.map(ct => {
+                const catProgs = hydratedPrograms.filter(p => p.categoryId === ct.id);
+                if (catProgs.length === 0) return null;
+                return (
+                  <ProgramRow
+                    key={ct.id}
+                    title={ct.name}
                     programs={catProgs}
                     onSelect={setSelectedProg}
                     onRemove={removeProgram}
