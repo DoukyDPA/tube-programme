@@ -54,27 +54,45 @@ const parseDuration = (duration) => {
 };
 
 // Récupère les vidéos longues récentes d'une chaîne, jusqu'à `limit`.
+// Retourne { ok: boolean, videos: [...] }. ok=false si YouTube a renvoyé une
+// erreur ou si l'appel a planté. Utilisé pour ne pas purger sur erreur.
 async function fetchRecentLongVideos(channelId, apiKey, limit = 10) {
   const playlistId = channelId.replace(/^UC/, 'UU');
   const url = `https://www.googleapis.com/youtube/v3/playlistItems?key=${apiKey}&playlistId=${playlistId}&part=contentDetails,snippet&maxResults=${Math.min(
     limit,
     50
   )}`;
-  const res = await fetch(url);
-  const data = await res.json();
+  let data;
+  try {
+    const res = await fetch(url);
+    data = await res.json();
+  } catch (e) {
+    console.warn(`  ${channelId} : fetch failed (${e.message})`);
+    return { ok: false, videos: [] };
+  }
   if (data.error) {
     console.warn(`  ${channelId} : ${data.error.message}`);
-    return [];
+    return { ok: false, videos: [] };
   }
-  if (!data.items?.length) return [];
+  if (!data.items?.length) return { ok: true, videos: [] };
 
   const videoIds = data.items.map((v) => v.contentDetails.videoId).join(',');
-  if (!videoIds) return [];
+  if (!videoIds) return { ok: true, videos: [] };
 
-  const detRes = await fetch(
-    `https://www.googleapis.com/youtube/v3/videos?key=${apiKey}&id=${videoIds}&part=contentDetails,snippet`
-  );
-  const detData = await detRes.json();
+  let detData;
+  try {
+    const detRes = await fetch(
+      `https://www.googleapis.com/youtube/v3/videos?key=${apiKey}&id=${videoIds}&part=contentDetails,snippet`
+    );
+    detData = await detRes.json();
+  } catch (e) {
+    console.warn(`  ${channelId} : details fetch failed (${e.message})`);
+    return { ok: false, videos: [] };
+  }
+  if (detData.error) {
+    console.warn(`  ${channelId} : details ${detData.error.message}`);
+    return { ok: false, videos: [] };
+  }
 
   const long = [];
   for (const it of data.items) {
@@ -91,16 +109,22 @@ async function fetchRecentLongVideos(channelId, apiKey, limit = 10) {
       creatorName: det.snippet?.channelTitle || '',
     });
   }
-  return long;
+  return { ok: true, videos: long };
 }
 
 export default async function handler(req, res) {
+  // Priorité : clé serveur Culture > clé serveur générique > clé front Culture > clé front générique.
+  // Les deux premières ne sont pas exposées au navigateur.
   const YOUTUBE_API_KEY =
-    process.env.VITE_YOUTUBE_API_KEY_CULTURE || process.env.VITE_YOUTUBE_API_KEY;
+    process.env.YOUTUBE_API_KEY_CULTURE_SERVER ||
+    process.env.YOUTUBE_API_KEY_SERVER ||
+    process.env.VITE_YOUTUBE_API_KEY_CULTURE ||
+    process.env.VITE_YOUTUBE_API_KEY;
   if (!YOUTUBE_API_KEY) {
     return res?.status(500).json({
       success: false,
-      error: 'VITE_YOUTUBE_API_KEY_CULTURE (ou VITE_YOUTUBE_API_KEY) manquante',
+      error:
+        'Aucune clé YouTube trouvée (YOUTUBE_API_KEY_CULTURE_SERVER, YOUTUBE_API_KEY_SERVER, VITE_YOUTUBE_API_KEY_CULTURE, VITE_YOUTUBE_API_KEY).',
     });
   }
 
@@ -136,13 +160,18 @@ export default async function handler(req, res) {
     for (const [themeId, channels] of Object.entries(byTheme)) {
       // 2. Fetch uploads de toutes les chaînes de la thématique
       const candidates = [];
+      let failedChannels = 0;
       for (const ch of channels) {
         try {
-          const v = await fetchRecentLongVideos(
+          const { ok, videos: v } = await fetchRecentLongVideos(
             ch.channelId,
             YOUTUBE_API_KEY,
             10
           );
+          if (!ok) {
+            failedChannels++;
+            continue;
+          }
           candidates.push(...v);
           // last video by channel (max publishedAt parmi les longues)
           if (v.length > 0) {
@@ -156,6 +185,7 @@ export default async function handler(req, res) {
             }
           }
         } catch (e) {
+          failedChannels++;
           console.warn(`  Erreur fetch ${ch.channelId}: ${e.message}`);
         }
       }
@@ -174,9 +204,24 @@ export default async function handler(req, res) {
       const existing = existingSnap.docs.map((d) => ({ id: d.id, ...d.data() }));
       const existingIds = new Set(existing.map((p) => p.youtubeId));
 
+      // GARDE-FOU : si plus de la moitié des chaînes du thème ont planté,
+      // on n'effectue aucune suppression. C'est le signe d'un problème
+      // global (clé restreinte, quota grillé, panne YouTube...) plutôt
+      // que de vraies disparitions de vidéos.
+      const failureRatio = channels.length > 0 ? failedChannels / channels.length : 1;
+      const safeMode = failureRatio > 0.5;
+
       // 5. Delta
       const toAdd = top.filter((v) => !existingIds.has(v.youtubeId));
-      const toDelete = existing.filter((p) => !topIds.has(p.youtubeId));
+      const toDelete = safeMode
+        ? []
+        : existing.filter((p) => !topIds.has(p.youtubeId));
+
+      if (safeMode) {
+        console.warn(
+          `  ${themeId} : SAFE MODE (${failedChannels}/${channels.length} chaînes en erreur), aucune suppression.`
+        );
+      }
 
       let added = 0;
       let deleted = 0;

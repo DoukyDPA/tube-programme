@@ -52,8 +52,10 @@ app.post('/api/hydrate', async (req, res) => {
 
     // 2. S'il manque des vidéos, on interroge l'API YouTube
     if (idsToFetch.length > 0) {
-      // Utilisez la clé API stockée de manière sécurisée côté serveur
-      const YOUTUBE_API_KEY = process.env.VITE_YOUTUBE_API_KEY; 
+      // Côté serveur : on prend la clé serveur (sans restriction Referer)
+      // en priorité, et on retombe sur la clé front si elle est absente.
+      const YOUTUBE_API_KEY =
+        process.env.YOUTUBE_API_KEY_SERVER || process.env.VITE_YOUTUBE_API_KEY;
       
       // On regroupe les appels par paquets de 50 (limite de l'API YouTube)
       for (let i = 0; i < idsToFetch.length; i += 50) {

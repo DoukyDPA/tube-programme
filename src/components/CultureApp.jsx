@@ -1052,15 +1052,16 @@ export default function CultureApp() {
           </h2>
           {isAdmin && activeTab !== 'guide' && (
             <div className="flex items-center gap-2">
-              <button
-                onClick={migrateCultureMetadata}
-                disabled={isSyncing}
-                className="flex items-center gap-2 bg-slate-800 hover:bg-slate-700 text-slate-200 px-3 py-2 md:px-4 md:py-2 rounded-xl text-xs md:text-sm font-bold transition-all disabled:opacity-50"
-                title="Backfill title/créateur/date pour les anciennes vidéos (à lancer une seule fois)"
+              <a
+                href="/admin-channels.html"
+                target="_blank"
+                rel="noopener noreferrer"
+                className="flex items-center gap-2 bg-slate-800 hover:bg-slate-700 text-slate-200 px-3 py-2 md:px-4 md:py-2 rounded-xl text-xs md:text-sm font-bold transition-all"
+                title="Ouvrir l'admin des chaînes Culture"
               >
-                <Sparkles size={16} />
-                <span className="hidden md:inline">Migrer</span>
-              </button>
+                <Settings size={16} />
+                <span className="hidden md:inline">Admin</span>
+              </a>
               <button
                 onClick={auditCultureChannels}
                 disabled={isSyncing}

@@ -53,23 +53,42 @@ const parseDuration = (duration) => {
 const MIN_DURATION_S = 180;
 const TOP_N = 5;
 
-// Récupère les TOP_N dernières vidéos longues d'une chaîne avec leurs métadonnées
+// Récupère les TOP_N dernières vidéos longues d'une chaîne avec leurs métadonnées.
+// Retourne { ok: boolean, videos: [...] }. ok=false si YouTube a renvoyé une
+// erreur ou si l'appel a planté : dans ce cas, ne JAMAIS purger l'existant.
 async function fetchTopVideos(channelId, apiKey) {
   const playlistId = channelId.replace(/^UC/, 'UU');
   const url = `https://www.googleapis.com/youtube/v3/playlistItems?key=${apiKey}&playlistId=${playlistId}&part=contentDetails,snippet&maxResults=15`;
-  const res = await fetch(url);
-  const data = await res.json();
+  let data;
+  try {
+    const res = await fetch(url);
+    data = await res.json();
+  } catch (e) {
+    console.warn(`  ${channelId} : fetch failed (${e.message})`);
+    return { ok: false, videos: [] };
+  }
   if (data.error) {
     console.warn(`  ${channelId} : ${data.error.message}`);
-    return [];
+    return { ok: false, videos: [] };
   }
-  if (!data.items?.length) return [];
+  // Pas d'erreur, mais playlist vide : c'est un état légitime (chaîne sans vidéos).
+  if (!data.items?.length) return { ok: true, videos: [] };
 
   const videoIds = data.items.map((v) => v.contentDetails.videoId).join(',');
-  const detRes = await fetch(
-    `https://www.googleapis.com/youtube/v3/videos?key=${apiKey}&id=${videoIds}&part=contentDetails,snippet`
-  );
-  const detData = await detRes.json();
+  let detData;
+  try {
+    const detRes = await fetch(
+      `https://www.googleapis.com/youtube/v3/videos?key=${apiKey}&id=${videoIds}&part=contentDetails,snippet`
+    );
+    detData = await detRes.json();
+  } catch (e) {
+    console.warn(`  ${channelId} : details fetch failed (${e.message})`);
+    return { ok: false, videos: [] };
+  }
+  if (detData.error) {
+    console.warn(`  ${channelId} : details ${detData.error.message}`);
+    return { ok: false, videos: [] };
+  }
 
   const out = [];
   for (const it of data.items) {
@@ -86,15 +105,21 @@ async function fetchTopVideos(channelId, apiKey) {
     });
     if (out.length === TOP_N) break;
   }
-  return out;
+  return { ok: true, videos: out };
 }
 
 export default async function handler(req, res) {
-  const YOUTUBE_API_KEY = process.env.VITE_YOUTUBE_API_KEY;
+  // On préfère la clé serveur si elle existe, sinon on retombe sur
+  // VITE_YOUTUBE_API_KEY pour rester compatible avec l'ancien .env.
+  const YOUTUBE_API_KEY =
+    process.env.YOUTUBE_API_KEY_SERVER || process.env.VITE_YOUTUBE_API_KEY;
   if (!YOUTUBE_API_KEY) {
     return res
       ?.status(500)
-      .json({ success: false, error: 'VITE_YOUTUBE_API_KEY manquante' });
+      .json({
+        success: false,
+        error: 'YOUTUBE_API_KEY_SERVER ou VITE_YOUTUBE_API_KEY manquante',
+      });
   }
 
   try {
@@ -115,6 +140,7 @@ export default async function handler(req, res) {
 
     let addedCount = 0;
     let deletedCount = 0;
+    let skippedCount = 0;
     const channelReport = [];
 
     for (const chDoc of channelsSnap.docs) {
@@ -127,7 +153,29 @@ export default async function handler(req, res) {
       }
 
       // 2. Fetch top N vidéos depuis YouTube
-      const top = await fetchTopVideos(channelId, YOUTUBE_API_KEY);
+      const { ok, videos: top } = await fetchTopVideos(
+        channelId,
+        YOUTUBE_API_KEY
+      );
+
+      // GARDE-FOU CRITIQUE : si YouTube a échoué (clé restreinte, quota,
+      // panne réseau...), on n'ajoute rien et on ne supprime rien. Sinon
+      // un fetch raté = suppression totale des programs de la chaîne.
+      if (!ok) {
+        skippedCount++;
+        channelReport.push({
+          channelId,
+          name: ch.name,
+          added: 0,
+          deleted: 0,
+          skipped: true,
+        });
+        console.log(
+          `  ${ch.name || channelId} : SKIP (fetch YouTube en erreur)`
+        );
+        continue;
+      }
+
       const topIds = new Set(top.map((v) => v.youtubeId));
 
       // 3. Lire les programs existants pour cette chaîne dans la bonne catégorie
@@ -206,9 +254,10 @@ export default async function handler(req, res) {
 
     const payload = {
       success: true,
-      message: `Synchronisation Tubiscope terminée. ${addedCount} nouveautés, ${deletedCount} anciennes supprimées sur ${channelsSnap.size} chaînes.`,
+      message: `Synchronisation Tubiscope terminée. ${addedCount} nouveautés, ${deletedCount} anciennes supprimées, ${skippedCount} chaînes ignorées (erreur YouTube) sur ${channelsSnap.size} chaînes.`,
       totalAdded: addedCount,
       totalDeleted: deletedCount,
+      totalSkipped: skippedCount,
       channels: channelReport,
     };
 

@@ -36,11 +36,15 @@ const __dirname = dirname(__filename);
 // Charge .env à la racine du projet
 config({ path: join(__dirname, '..', '.env') });
 
+// Script Node : on prend d'abord les clés serveur (sans restriction Referer).
 const YOUTUBE_API_KEY =
-  process.env.VITE_YOUTUBE_API_KEY_CULTURE || process.env.VITE_YOUTUBE_API_KEY;
+  process.env.YOUTUBE_API_KEY_CULTURE_SERVER ||
+  process.env.YOUTUBE_API_KEY_SERVER ||
+  process.env.VITE_YOUTUBE_API_KEY_CULTURE ||
+  process.env.VITE_YOUTUBE_API_KEY;
 if (!YOUTUBE_API_KEY) {
   console.error(
-    '❌ VITE_YOUTUBE_API_KEY_CULTURE (ou VITE_YOUTUBE_API_KEY) absente dans .env'
+    '❌ Aucune clé YouTube trouvée (YOUTUBE_API_KEY_CULTURE_SERVER, YOUTUBE_API_KEY_SERVER, VITE_YOUTUBE_API_KEY_CULTURE, VITE_YOUTUBE_API_KEY) dans .env'
   );
   process.exit(1);
 }
