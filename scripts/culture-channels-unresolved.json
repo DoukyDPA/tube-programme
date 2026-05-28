@@ -1,21 +1,16 @@
 [
   {
-    "handle": "Bulledop",
+    "handle": "Bulledopjournal",
     "name": "Bulledop",
     "themeId": "cult_lettres"
   },
   {
-    "handle": "Cestpasundrame",
+    "handle": "cestpasundrame",
     "name": "C'est pas un drame",
     "themeId": "cult_lettres"
   },
   {
-    "handle": "Larche-poesie",
-    "name": "L'arche",
-    "themeId": "cult_lettres"
-  },
-  {
-    "handle": "larchonaute8815",
+    "handle": "larchonaute",
     "name": "L'Archéonaute",
     "themeId": "cult_lettres"
   },
@@ -30,7 +25,7 @@
     "themeId": "cult_lettres"
   },
   {
-    "handle": "lemarque-page883",
+    "handle": "LeMarquePage",
     "name": "Le marque-page",
     "themeId": "cult_lettres"
   },
@@ -55,7 +50,7 @@
     "themeId": "cult_lettres"
   },
   {
-    "handle": "lhommelitteraire",
+    "handle": "homme_litteraire",
     "name": "L'Homme Littéraire",
     "themeId": "cult_lettres"
   },
@@ -67,11 +62,6 @@
   {
     "handle": "MissBookLeChronique",
     "name": "Miss Book",
-    "themeId": "cult_lettres"
-  },
-  {
-    "handle": "MounLireounePasLire",
-    "name": "Moun",
     "themeId": "cult_lettres"
   },
   {
@@ -105,7 +95,7 @@
     "themeId": "cult_lettres"
   },
   {
-    "handle": "tesgrandsauteurs",
+    "handle": "tgaepm",
     "name": "Tes grands auteurs en petits morceaux",
     "themeId": "cult_lettres"
   },
@@ -137,16 +127,6 @@
   {
     "handle": "Linsolentelinguiste",
     "name": "L'insolente linguiste",
-    "themeId": "cult_langues"
-  },
-  {
-    "handle": "MinuteLSF",
-    "name": "Minute Langue des signes",
-    "themeId": "cult_langues"
-  },
-  {
-    "handle": "LaBelge1Minute",
-    "name": "La Belge",
     "themeId": "cult_langues"
   },
   {
@@ -200,7 +180,7 @@
     "themeId": "cult_histoire"
   },
   {
-    "handle": "BonelessArchaeology",
+    "handle": "bonelessarcheologie8221",
     "name": "Boneless",
     "themeId": "cult_histoire"
   },
@@ -215,7 +195,7 @@
     "themeId": "cult_histoire"
   },
   {
-    "handle": "HistoireDaveSheik",
+    "handle": "dave_sheik",
     "name": "Dave Sheik",
     "themeId": "cult_histoire"
   },
@@ -225,7 +205,7 @@
     "themeId": "cult_histoire"
   },
   {
-    "handle": "HistoiredeCivilisations",
+    "handle": "HistoryCivilisations",
     "name": "Histoirede",
     "themeId": "cult_histoire"
   },
@@ -235,7 +215,7 @@
     "themeId": "cult_histoire"
   },
   {
-    "handle": "Histomede",
+    "handle": "histomede9692",
     "name": "Histomède",
     "themeId": "cult_histoire"
   },
@@ -255,7 +235,7 @@
     "themeId": "cult_histoire"
   },
   {
-    "handle": "LaProfHistoire",
+    "handle": "LaProf",
     "name": "La Prof",
     "themeId": "cult_histoire"
   },
@@ -265,7 +245,7 @@
     "themeId": "cult_histoire"
   },
   {
-    "handle": "LeMaterialisteObjets",
+    "handle": "LeMaterialiste",
     "name": "Le matérialiste",
     "themeId": "cult_histoire"
   },
@@ -285,17 +265,17 @@
     "themeId": "cult_histoire"
   },
   {
-    "handle": "LHistoireparlescartes",
+    "handle": "lhistoireparlescartes5850",
     "name": "L'Histoire par les cartes",
     "themeId": "cult_histoire"
   },
   {
-    "handle": "notabenemethode",
+    "handle": "notabenemovies",
     "name": "Nota Bene",
     "themeId": "cult_histoire"
   },
   {
-    "handle": "parlonsy-stoire",
+    "handle": "ParlonsYstoire",
     "name": "Parlons y-stoire",
     "themeId": "cult_histoire"
   },
@@ -310,7 +290,7 @@
     "themeId": "cult_histoire"
   },
   {
-    "handle": "QuestionsdHistoires",
+    "handle": "questionsdhistoire",
     "name": "Questions d'Histoire",
     "themeId": "cult_histoire"
   },
@@ -330,33 +310,13 @@
     "themeId": "cult_histoire"
   },
   {
-    "handle": "GeozoneGeo",
-    "name": "Géozone",
-    "themeId": "cult_geog"
-  },
-  {
-    "handle": "HistoireGeoAuTableau",
-    "name": "Histoire-géo au tableau",
-    "themeId": "cult_geog"
-  },
-  {
-    "handle": "Hugodecrypte",
+    "handle": "HugoDecrypte",
     "name": "Hugo décrypte",
-    "themeId": "cult_geog"
-  },
-  {
-    "handle": "LequatriememurUrbanisme",
-    "name": "Le quatrième mur",
     "themeId": "cult_geog"
   },
   {
     "handle": "MisterGeopolitix",
     "name": "MisterGeopolitix",
-    "themeId": "cult_geog"
-  },
-  {
-    "handle": "PointGGeographie",
-    "name": "Point G",
     "themeId": "cult_geog"
   },
   {
@@ -375,7 +335,7 @@
     "themeId": "cult_societe"
   },
   {
-    "handle": "Accropolis",
+    "handle": "JeanMassiet",
     "name": "Accropolis",
     "themeId": "cult_societe"
   },
@@ -387,26 +347,6 @@
   {
     "handle": "CamilleDecode",
     "name": "Camille décode",
-    "themeId": "cult_societe"
-  },
-  {
-    "handle": "CesJeunesSaitTout",
-    "name": "C'est jeune et ça sait tout",
-    "themeId": "cult_societe"
-  },
-  {
-    "handle": "CodesAndCo",
-    "name": "Codes&Co",
-    "themeId": "cult_societe"
-  },
-  {
-    "handle": "ContraDico",
-    "name": "ContraDico",
-    "themeId": "cult_societe"
-  },
-  {
-    "handle": "DesMediasPresqueParfaits",
-    "name": "Des médias presque parfaits",
     "themeId": "cult_societe"
   },
   {
@@ -435,7 +375,7 @@
     "themeId": "cult_societe"
   },
   {
-    "handle": "MarinePerin",
+    "handle": "Marinette",
     "name": "Marinette, femmes et féminisme",
     "themeId": "cult_societe"
   },
@@ -460,11 +400,6 @@
     "themeId": "cult_societe"
   },
   {
-    "handle": "PostModemSociologie",
-    "name": "Post Modem",
-    "themeId": "cult_societe"
-  },
-  {
     "handle": "ThinkerView",
     "name": "Thinkerview",
     "themeId": "cult_societe"
@@ -475,11 +410,6 @@
     "themeId": "cult_sciences"
   },
   {
-    "handle": "LeComptoirduFutur",
-    "name": "Comptoir du futur",
-    "themeId": "cult_sciences"
-  },
-  {
     "handle": "CuriosityCatalyst",
     "name": "Curiosity Catalyst",
     "themeId": "cult_sciences"
@@ -487,11 +417,6 @@
   {
     "handle": "CyrusNorth",
     "name": "Cyrus North",
-    "themeId": "cult_sciences"
-  },
-  {
-    "handle": "DamastesPhilo",
-    "name": "Damastēs",
     "themeId": "cult_sciences"
   },
   {
@@ -515,7 +440,7 @@
     "themeId": "cult_sciences"
   },
   {
-    "handle": "HackingSocialFr",
+    "handle": "HorizonGull",
     "name": "Horizon Gull",
     "themeId": "cult_sciences"
   },
@@ -525,12 +450,7 @@
     "themeId": "cult_sciences"
   },
   {
-    "handle": "Linstantsceptique",
-    "name": "Instant sceptique",
-    "themeId": "cult_sciences"
-  },
-  {
-    "handle": "LaTroncheenBiais",
+    "handle": "TroncheEnBiais",
     "name": "La tronche en biais",
     "themeId": "cult_sciences"
   },
@@ -540,13 +460,8 @@
     "themeId": "cult_sciences"
   },
   {
-    "handle": "MrSamSceptique",
+    "handle": "MrSam",
     "name": "Mr Sam / Samuel Buisseret",
-    "themeId": "cult_sciences"
-  },
-  {
-    "handle": "MyceliumZet",
-    "name": "Mycélium",
     "themeId": "cult_sciences"
   },
   {
@@ -565,18 +480,8 @@
     "themeId": "cult_sciences"
   },
   {
-    "handle": "ScienciaHuasca",
-    "name": "Sciencia Huasca",
-    "themeId": "cult_sciences"
-  },
-  {
     "handle": "SplineLND",
     "name": "Spline LND",
-    "themeId": "cult_sciences"
-  },
-  {
-    "handle": "TempsMortNettoyeur",
-    "name": "Temps Mort",
     "themeId": "cult_sciences"
   },
   {
@@ -585,7 +490,7 @@
     "themeId": "cult_sciences"
   },
   {
-    "handle": "HeurekaFinance",
+    "handle": "Heureka_eco",
     "name": "Heu?rēka",
     "themeId": "cult_eco"
   },
@@ -615,27 +520,17 @@
     "themeId": "cult_math"
   },
   {
-    "handle": "HansAmbleMaths",
-    "name": "Hans Amble",
-    "themeId": "cult_math"
-  },
-  {
     "handle": "jaicomprismaths",
     "name": "Jaicompris Maths",
     "themeId": "cult_math"
   },
   {
-    "handle": "LaStatistiqueExpliqueeaMonChat",
+    "handle": "LaStatistiqueExpliquee",
     "name": "La statistique expliquée à mon chat",
     "themeId": "cult_math"
   },
   {
-    "handle": "LPBMathvideos",
-    "name": "L.P.B. Mathvidéos",
-    "themeId": "cult_math"
-  },
-  {
-    "handle": "MathUnPeuCa",
+    "handle": "Mathunpeuca",
     "name": "Math un peu ça",
     "themeId": "cult_math"
   },
@@ -660,11 +555,6 @@
     "themeId": "cult_physique"
   },
   {
-    "handle": "AlainBernardPhysique",
-    "name": "Alain Bernard",
-    "themeId": "cult_physique"
-  },
-  {
     "handle": "AstronoGeek",
     "name": "Astronogeek",
     "themeId": "cult_physique"
@@ -680,12 +570,12 @@
     "themeId": "cult_physique"
   },
   {
-    "handle": "DimensionPhysique",
+    "handle": "Dimension_YTB",
     "name": "Dimension",
     "themeId": "cult_physique"
   },
   {
-    "handle": "DocteurNozman",
+    "handle": "DrNozman",
     "name": "Docteur Nozman",
     "themeId": "cult_physique"
   },
@@ -700,28 +590,13 @@
     "themeId": "cult_physique"
   },
   {
-    "handle": "JenskyConferences",
-    "name": "Jensky",
-    "themeId": "cult_physique"
-  },
-  {
     "handle": "HugoLisoir",
     "name": "Hugo Lisoir",
     "themeId": "cult_physique"
   },
   {
-    "handle": "LaChaineSpatiale",
-    "name": "La Chaîne spatiale",
-    "themeId": "cult_physique"
-  },
-  {
     "handle": "LaMinuteScientifique",
     "name": "La minute scientifique",
-    "themeId": "cult_physique"
-  },
-  {
-    "handle": "LaPauseCafeScience",
-    "name": "La pause café science",
     "themeId": "cult_physique"
   },
   {
@@ -740,11 +615,6 @@
     "themeId": "cult_physique"
   },
   {
-    "handle": "MoleculesChimie",
-    "name": "Molécules",
-    "themeId": "cult_physique"
-  },
-  {
     "handle": "PasseScience",
     "name": "Passe-Science",
     "themeId": "cult_physique"
@@ -760,16 +630,6 @@
     "themeId": "cult_physique"
   },
   {
-    "handle": "PromethiumChimie",
-    "name": "Promethium",
-    "themeId": "cult_physique"
-  },
-  {
-    "handle": "ScicosScience",
-    "name": "Scicos",
-    "themeId": "cult_physique"
-  },
-  {
     "handle": "ScienceClic",
     "name": "ScienceClic",
     "themeId": "cult_physique"
@@ -780,12 +640,7 @@
     "themeId": "cult_physique"
   },
   {
-    "handle": "SkyraySpace",
-    "name": "Skyray",
-    "themeId": "cult_physique"
-  },
-  {
-    "handle": "StardustLaChaineEspace",
+    "handle": "Stardust_fr",
     "name": "Stardust-La Chaîne Espace",
     "themeId": "cult_physique"
   },
@@ -800,33 +655,18 @@
     "themeId": "cult_physique"
   },
   {
-    "handle": "WeAreScienceResearch",
-    "name": "We are Science",
-    "themeId": "cult_physique"
-  },
-  {
-    "handle": "Antomologie",
-    "name": "Antomologie",
-    "themeId": "cult_bio"
-  },
-  {
     "handle": "AlexisRastier",
     "name": "Alexis Rastier",
     "themeId": "cult_bio"
   },
   {
-    "handle": "AvisceneMedecine",
+    "handle": "Aviscene",
     "name": "Aviscene",
     "themeId": "cult_bio"
   },
   {
-    "handle": "BioLogiqueCours",
+    "handle": "BioLogique",
     "name": "Bio Logique",
-    "themeId": "cult_bio"
-  },
-  {
-    "handle": "BoboToubib",
-    "name": "Bobo Toubib",
     "themeId": "cult_bio"
   },
   {
@@ -840,13 +680,8 @@
     "themeId": "cult_bio"
   },
   {
-    "handle": "ClimenSante",
+    "handle": "Climen",
     "name": "Climen",
-    "themeId": "cult_bio"
-  },
-  {
-    "handle": "Connecsciences",
-    "name": "Connecsciences",
     "themeId": "cult_bio"
   },
   {
@@ -860,18 +695,8 @@
     "themeId": "cult_bio"
   },
   {
-    "handle": "DocteurMus",
-    "name": "Docteur Mus",
-    "themeId": "cult_bio"
-  },
-  {
     "handle": "GenetiX_Bio",
     "name": "GénétiX",
-    "themeId": "cult_bio"
-  },
-  {
-    "handle": "GoanaEvolution",
-    "name": "Goana",
     "themeId": "cult_bio"
   },
   {
@@ -880,23 +705,8 @@
     "themeId": "cult_bio"
   },
   {
-    "handle": "LaChainedeMOS",
-    "name": "La chaîne de MOS",
-    "themeId": "cult_bio"
-  },
-  {
-    "handle": "LaMinuteNutrition",
-    "name": "La Minute Nutrition",
-    "themeId": "cult_bio"
-  },
-  {
     "handle": "LaptiteJane",
     "name": "La p'tite Jane",
-    "themeId": "cult_bio"
-  },
-  {
-    "handle": "LaSciencedanslaFiction",
-    "name": "La science dans la fiction",
     "themeId": "cult_bio"
   },
   {
@@ -925,7 +735,7 @@
     "themeId": "cult_bio"
   },
   {
-    "handle": "MelvakOceano",
+    "handle": "Melvak",
     "name": "Melvak",
     "themeId": "cult_bio"
   },
@@ -940,7 +750,7 @@
     "themeId": "cult_bio"
   },
   {
-    "handle": "PaleoWorldVulgarisation",
+    "handle": "PaleoWorld",
     "name": "PaléoWorld",
     "themeId": "cult_bio"
   },
@@ -980,7 +790,7 @@
     "themeId": "cult_bio"
   },
   {
-    "handle": "StrangeStuffFunkyThings",
+    "handle": "ssaft",
     "name": "Strange stuff and funky things",
     "themeId": "cult_bio"
   },
@@ -1005,7 +815,7 @@
     "themeId": "cult_bio"
   },
   {
-    "handle": "VincentJaseSciences",
+    "handle": "VincentJase",
     "name": "Vincent jase",
     "themeId": "cult_bio"
   },
@@ -1035,11 +845,6 @@
     "themeId": "cult_tech"
   },
   {
-    "handle": "LePointSecu",
-    "name": "Le Point Sécu",
-    "themeId": "cult_tech"
-  },
-  {
     "handle": "LeoTechMaker",
     "name": "Léo - Techmaker",
     "themeId": "cult_tech"
@@ -1060,33 +865,13 @@
     "themeId": "cult_tech"
   },
   {
-    "handle": "OlivierChambonDIY",
-    "name": "Olivier Chambon",
-    "themeId": "cult_tech"
-  },
-  {
     "handle": "Teeknofil",
     "name": "Teeknofil",
     "themeId": "cult_tech"
   },
   {
-    "handle": "ArtAndMuse",
-    "name": "Art & Muse",
-    "themeId": "cult_art"
-  },
-  {
-    "handle": "lartcomptantpourrien",
-    "name": "Art comptant pour rien",
-    "themeId": "cult_art"
-  },
-  {
-    "handle": "Cestuneautrehistoire",
+    "handle": "cestuneautrehistoire",
     "name": "C'est une autre histoire",
-    "themeId": "cult_art"
-  },
-  {
-    "handle": "CulturonsNous",
-    "name": "Culturons-nous bordel de merde",
     "themeId": "cult_art"
   },
   {
@@ -1095,18 +880,8 @@
     "themeId": "cult_art"
   },
   {
-    "handle": "LartichautCollectif",
-    "name": "L'artichaut",
-    "themeId": "cult_art"
-  },
-  {
     "handle": "GrandPalaisRmn",
     "name": "Le Grand Palais",
-    "themeId": "cult_art"
-  },
-  {
-    "handle": "MisterPAAP",
-    "name": "Mister PAAP",
     "themeId": "cult_art"
   },
   {
@@ -1120,23 +895,13 @@
     "themeId": "cult_art"
   },
   {
-    "handle": "NartHistoireDeLArt",
+    "handle": "Nart",
     "name": "N'art",
-    "themeId": "cult_art"
-  },
-  {
-    "handle": "PallasAtheneIcono",
-    "name": "Pallas Athéné",
     "themeId": "cult_art"
   },
   {
     "handle": "PhotoSyntheseElie",
     "name": "Photo Synthèse",
-    "themeId": "cult_art"
-  },
-  {
-    "handle": "RegArtHistoire",
-    "name": "Reg'Art",
     "themeId": "cult_art"
   },
   {
@@ -1150,19 +915,9 @@
     "themeId": "cult_art"
   },
   {
-    "handle": "SosArtEsthetique",
-    "name": "Sos Art",
-    "themeId": "cult_art"
-  },
-  {
     "handle": "SousLaToileEcoleDuLouvre",
     "name": "Sous la toile",
     "themeId": "cult_art"
-  },
-  {
-    "handle": "1AM_Electronic",
-    "name": "1 AM Musiques électroniques",
-    "themeId": "cult_musique"
   },
   {
     "handle": "AurelienMontero",
@@ -1190,23 +945,8 @@
     "themeId": "cult_musique"
   },
   {
-    "handle": "KemonScienceMusicale",
-    "name": "Kémon: la Science Musicale",
-    "themeId": "cult_musique"
-  },
-  {
     "handle": "KronoMuzik",
     "name": "Kronomusik",
-    "themeId": "cult_musique"
-  },
-  {
-    "handle": "OrganologieInsolite",
-    "name": "L'instrumentarium de l'insolite",
-    "themeId": "cult_musique"
-  },
-  {
-    "handle": "LeCompositeurMAO",
-    "name": "Le Compositeur",
     "themeId": "cult_musique"
   },
   {
@@ -1215,28 +955,8 @@
     "themeId": "cult_musique"
   },
   {
-    "handle": "LeRapporteurRap",
-    "name": "Le Rapporteur",
-    "themeId": "cult_musique"
-  },
-  {
-    "handle": "LesAnecNotesMusique",
-    "name": "Les AnecNotes",
-    "themeId": "cult_musique"
-  },
-  {
     "handle": "Metalliquoi",
     "name": "Métalliquoi",
-    "themeId": "cult_musique"
-  },
-  {
-    "handle": "MonsieurOrnicar",
-    "name": "Monsieur Ornicar",
-    "themeId": "cult_musique"
-  },
-  {
-    "handle": "MusicAntikOtomi",
-    "name": "Music Antik Otomi",
     "themeId": "cult_musique"
   },
   {
@@ -1255,22 +975,7 @@
     "themeId": "cult_musique"
   },
   {
-    "handle": "ScherzandoClassique",
-    "name": "Scherzando",
-    "themeId": "cult_musique"
-  },
-  {
-    "handle": "SiFaSileSolfge",
-    "name": "SiFaSi'le",
-    "themeId": "cult_musique"
-  },
-  {
-    "handle": "SillaBO",
-    "name": "SillaBO",
-    "themeId": "cult_musique"
-  },
-  {
-    "handle": "TyllouPartoche",
+    "handle": "Tyllou",
     "name": "Tyllou",
     "themeId": "cult_musique"
   },
@@ -1280,22 +985,17 @@
     "themeId": "cult_musique"
   },
   {
-    "handle": "VledTapasLeSetBarre",
+    "handle": "VledTapas",
     "name": "Vled Tapas",
     "themeId": "cult_musique"
   },
   {
-    "handle": "MediapasonCollectif",
-    "name": "Médiapason",
-    "themeId": "cult_musique"
-  },
-  {
-    "handle": "AmazingLucyCine",
+    "handle": "AmazingLucy",
     "name": "Amazing Lucy",
     "themeId": "cult_audiovisuel"
   },
   {
-    "handle": "AshikaraGameDesign",
+    "handle": "Ashikara",
     "name": "Ashikara",
     "themeId": "cult_audiovisuel"
   },
@@ -1312,16 +1012,6 @@
   {
     "handle": "ChroniquesDuDesertRouge",
     "name": "Chroniques du désert rouge",
-    "themeId": "cult_audiovisuel"
-  },
-  {
-    "handle": "CulturePorn",
-    "name": "Culture Porn",
-    "themeId": "cult_audiovisuel"
-  },
-  {
-    "handle": "DetectiveGeeleek",
-    "name": "Détective Geeleek",
     "themeId": "cult_audiovisuel"
   },
   {
@@ -1345,11 +1035,6 @@
     "themeId": "cult_audiovisuel"
   },
   {
-    "handle": "FlimCinematographie",
-    "name": "Flim",
-    "themeId": "cult_audiovisuel"
-  },
-  {
     "handle": "GameSpectrum",
     "name": "Game Spectrum",
     "themeId": "cult_audiovisuel"
@@ -1365,28 +1050,13 @@
     "themeId": "cult_audiovisuel"
   },
   {
-    "handle": "LeClapAnalyses",
+    "handle": "LeClap",
     "name": "Le Clap",
     "themeId": "cult_audiovisuel"
   },
   {
-    "handle": "LeFossoyeurdeFilms",
+    "handle": "LeFossoyeurDeFilms",
     "name": "Le fossoyeur de films",
-    "themeId": "cult_audiovisuel"
-  },
-  {
-    "handle": "LeTostCinema",
-    "name": "Le Tost'",
-    "themeId": "cult_audiovisuel"
-  },
-  {
-    "handle": "LesRelousDuGarage",
-    "name": "Les relous du garage",
-    "themeId": "cult_audiovisuel"
-  },
-  {
-    "handle": "LesShowrunnersSeries",
-    "name": "Les showrunners",
     "themeId": "cult_audiovisuel"
   },
   {
@@ -1410,17 +1080,7 @@
     "themeId": "cult_audiovisuel"
   },
   {
-    "handle": "OthersideChronique",
-    "name": "Otherside Chronique",
-    "themeId": "cult_audiovisuel"
-  },
-  {
-    "handle": "PierreJeuVideo",
-    "name": "Pier-re",
-    "themeId": "cult_audiovisuel"
-  },
-  {
-    "handle": "PiloteChroniqueSerie",
+    "handle": "PiloteLaChroniqueSerie",
     "name": "PILOTE la chronique série",
     "themeId": "cult_audiovisuel"
   },
@@ -1430,28 +1090,13 @@
     "themeId": "cult_audiovisuel"
   },
   {
-    "handle": "SimonSeesCinema",
-    "name": "Simon sees",
-    "themeId": "cult_audiovisuel"
-  },
-  {
-    "handle": "SymbolikCinema",
-    "name": "Sweetberry (Symbolik)",
-    "themeId": "cult_audiovisuel"
-  },
-  {
     "handle": "UnBotPourraitFaireCa",
     "name": "Un bot pourrait faire ça",
     "themeId": "cult_audiovisuel"
   },
   {
-    "handle": "UnDropDansLaMare",
+    "handle": "undropdanslamare",
     "name": "Un drop dans la mare",
-    "themeId": "cult_audiovisuel"
-  },
-  {
-    "handle": "VideodromeSocial",
-    "name": "Vidéodrome",
     "themeId": "cult_audiovisuel"
   },
   {
@@ -1460,23 +1105,8 @@
     "themeId": "cult_audiovisuel"
   },
   {
-    "handle": "LUniversdelaNatation",
-    "name": "L'univers de la natation",
-    "themeId": "cult_sport"
-  },
-  {
-    "handle": "PhenomaraSport",
-    "name": "Phenomara",
-    "themeId": "cult_sport"
-  },
-  {
     "handle": "RugbyStory",
     "name": "Rugby Story",
-    "themeId": "cult_sport"
-  },
-  {
-    "handle": "UnBallonPasSiRond",
-    "name": "Un ballon pas si rond",
     "themeId": "cult_sport"
   },
   {
@@ -1490,23 +1120,8 @@
     "themeId": "cult_recherche"
   },
   {
-    "handle": "AxolotBlog",
+    "handle": "axolot",
     "name": "Axolot",
-    "themeId": "cult_recherche"
-  },
-  {
-    "handle": "BackToSchoolVulga",
-    "name": "Back to School",
-    "themeId": "cult_recherche"
-  },
-  {
-    "handle": "BrainWhyNeuro",
-    "name": "BrainWhy",
-    "themeId": "cult_recherche"
-  },
-  {
-    "handle": "CalidoscopeEthno",
-    "name": "Calidoscope les topovaures",
     "themeId": "cult_recherche"
   },
   {
@@ -1550,11 +1165,6 @@
     "themeId": "cult_recherche"
   },
   {
-    "handle": "DouCaVientAnimations",
-    "name": "D'où ça vient?",
-    "themeId": "cult_recherche"
-  },
-  {
     "handle": "epenser",
     "name": "E-penser",
     "themeId": "cult_recherche"
@@ -1570,33 +1180,13 @@
     "themeId": "cult_recherche"
   },
   {
-    "handle": "HeinCultureGenerale",
-    "name": "Hein?",
-    "themeId": "cult_recherche"
-  },
-  {
-    "handle": "jmernervepasjexplique",
-    "name": "J'm'énerve pas, j'explique",
-    "themeId": "cult_recherche"
-  },
-  {
     "handle": "KultureMoi",
     "name": "Kulture-moi",
     "themeId": "cult_recherche"
   },
   {
-    "handle": "LaMinuteScienceInfo",
-    "name": "La minute science",
-    "themeId": "cult_recherche"
-  },
-  {
     "handle": "Lab3Cube",
     "name": "Lab3",
-    "themeId": "cult_recherche"
-  },
-  {
-    "handle": "LaMainBaladeuse",
-    "name": "La Main baladeuse",
     "themeId": "cult_recherche"
   },
   {
@@ -1627,11 +1217,6 @@
   {
     "handle": "MatiereGriseinfo",
     "name": "Matière Grise",
-    "themeId": "cult_recherche"
-  },
-  {
-    "handle": "OutsideTheBoxFR",
-    "name": "Outside the box (OTB)",
     "themeId": "cult_recherche"
   },
   {
@@ -1690,11 +1275,6 @@
     "themeId": "cult_recherche"
   },
   {
-    "handle": "ThisIsScienceChannel",
-    "name": "This is Science",
-    "themeId": "cult_recherche"
-  },
-  {
     "handle": "TrustMyScience",
     "name": "Trust My Science",
     "themeId": "cult_recherche"
@@ -1715,28 +1295,8 @@
     "themeId": "cult_recherche"
   },
   {
-    "handle": "VideoSciences",
-    "name": "Videoscience",
-    "themeId": "cult_recherche"
-  },
-  {
-    "handle": "VideothequedAlexandrie",
-    "name": "Vidéothèque d'Alexandrie",
-    "themeId": "cult_recherche"
-  },
-  {
-    "handle": "CommPsy",
-    "name": "CommPsy",
-    "themeId": "cult_psycho"
-  },
-  {
     "handle": "Cygnification",
     "name": "Cygnification",
-    "themeId": "cult_psycho"
-  },
-  {
-    "handle": "JoulPsycho",
-    "name": "Joul Psycho",
     "themeId": "cult_psycho"
   },
   {
@@ -1747,11 +1307,6 @@
   {
     "handle": "LePsyLab",
     "name": "Le PsyLab",
-    "themeId": "cult_psycho"
-  },
-  {
-    "handle": "MonnaWeirdnesday",
-    "name": "Monna Weirdnesday",
     "themeId": "cult_psycho"
   },
   {
@@ -1770,38 +1325,18 @@
     "themeId": "cult_psycho"
   },
   {
-    "handle": "Bulledop",
+    "handle": "Bulledopjournal",
     "name": "Bulledop Journal",
     "themeId": "cult_apprentissage"
   },
   {
-    "handle": "EdukeyPeda",
-    "name": "Edukey",
-    "themeId": "cult_apprentissage"
-  },
-  {
-    "handle": "MathrixVideos",
+    "handle": "Mathrix",
     "name": "Mathrix",
-    "themeId": "cult_apprentissage"
-  },
-  {
-    "handle": "JeanApprendsCollge",
-    "name": "Jean'apprends",
-    "themeId": "cult_apprentissage"
-  },
-  {
-    "handle": "HenriBecquerelSVT",
-    "name": "Scienticfiz",
     "themeId": "cult_apprentissage"
   },
   {
     "handle": "BillesdeSciences",
     "name": "Billes de sciences",
-    "themeId": "cult_enfants"
-  },
-  {
-    "handle": "CabinetKilinKaba",
-    "name": "Le cabinet de Kilin et Kaba",
     "themeId": "cult_enfants"
   },
   {

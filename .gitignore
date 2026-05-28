@@ -32,3 +32,4 @@ vite.config.js.timestamp-*
 
 # Config admin générée depuis .env (clés Firebase publiques)
 public/admin-config.json
+newsletter/
