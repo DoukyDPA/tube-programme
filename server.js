@@ -7,6 +7,11 @@ import 'dotenv/config';
 
 import syncHandler from './api/sync.js';
 import syncCultureHandler from './api/sync-culture.js';
+import {
+  listUsersHandler,
+  toggleStudioHandler,
+  deleteUserHandler,
+} from './api/admin-users.js';
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
@@ -88,6 +93,13 @@ app.post('/api/hydrate', async (req, res) => {
 
 app.get('/api/sync', syncHandler);
 app.get('/api/sync-culture', syncCultureHandler);
+
+// ---------- Admin des utilisateurs ----------
+// Toutes ces routes vérifient le token Firebase et le claim admin
+// directement dans le handler (cf. api/admin-users.js).
+app.get('/api/admin/users', listUsersHandler);
+app.post('/api/admin/users/:uid/studio', toggleStudioHandler);
+app.delete('/api/admin/users/:uid', deleteUserHandler);
 
 cron.schedule('0 8 * * *', async () => {
   console.log('⏰ CRON : Synchronisation YouTube (standard)');

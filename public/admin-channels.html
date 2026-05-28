@@ -103,6 +103,7 @@
     <button data-tab="tubiscope" class="active">Tubiscope</button>
     <button data-tab="culture">Tubiscope Culture</button>
     <button data-tab="categories">Catégories</button>
+    <button data-tab="users">Utilisateurs</button>
   </div>
 
   <main>
@@ -139,6 +140,39 @@
         <tbody id="channels-tbody"></tbody>
       </table>
       <div id="empty" class="empty hidden">Aucune chaîne ne correspond aux filtres.</div>
+    </section>
+
+    <!-- ============== UTILISATEURS ============== -->
+    <section id="view-users" class="hidden">
+      <div class="notice info">
+        Gestion manuelle des comptes. Le toggle <strong>Studio</strong> bascule <code>users/{uid}.isPremium</code>. La suppression efface le compte Auth + le doc Firestore + les thèmes perso et leurs vidéos.
+      </div>
+      <div class="toolbar">
+        <input id="users-search" type="search" placeholder="Filtrer par email ou UID…">
+        <select id="users-filter">
+          <option value="">Tous les comptes</option>
+          <option value="studio">Studio uniquement</option>
+          <option value="free">Gratuit uniquement</option>
+          <option value="admin">Admins</option>
+          <option value="no-doc">Sans doc Firestore</option>
+        </select>
+        <button class="btn ghost" id="users-reload-btn">↻ Recharger</button>
+        <span class="count" id="users-count"></span>
+      </div>
+      <table>
+        <thead>
+          <tr>
+            <th data-users-sort="email">Email ▲</th>
+            <th data-users-sort="createdAt">Créé le</th>
+            <th data-users-sort="lastSignInAt">Dernière connexion</th>
+            <th data-users-sort="themeCount">Thèmes</th>
+            <th data-users-sort="isPremium">Plan</th>
+            <th>Actions</th>
+          </tr>
+        </thead>
+        <tbody id="users-tbody"></tbody>
+      </table>
+      <div id="users-empty" class="empty hidden">Aucun utilisateur ne correspond aux filtres.</div>
     </section>
 
     <section id="view-categories" class="hidden">
@@ -269,6 +303,12 @@ let reassignTarget = null;
 let editingCatId = null;
 let editChannelTarget = null;
 
+// État onglet Utilisateurs
+let users = [];
+let usersLoaded = false;
+let usersSortBy = 'createdAt';
+let usersSortDir = 'desc';
+
 // ---------- DOM helpers ----------
 const $ = (sel) => document.querySelector(sel);
 const $$ = (sel) => Array.from(document.querySelectorAll(sel));
@@ -365,15 +405,20 @@ async function loadAll() {
 
 // ---------- Render ----------
 function render() {
-  if (activeTab === 'categories') {
-    $('#view-channels').classList.add('hidden');
-    $('#view-categories').classList.remove('hidden');
-    renderCategories();
-  } else {
-    $('#view-channels').classList.remove('hidden');
-    $('#view-categories').classList.add('hidden');
-    renderChannels();
+  // Trois vues mutuellement exclusives
+  const showChannels = (activeTab === 'tubiscope' || activeTab === 'culture');
+  $('#view-channels').classList.toggle('hidden', !showChannels);
+  $('#view-categories').classList.toggle('hidden', activeTab !== 'categories');
+  $('#view-users').classList.toggle('hidden', activeTab !== 'users');
+
+  if (activeTab === 'categories') return renderCategories();
+  if (activeTab === 'users') {
+    // Premier passage : on charge depuis l'API
+    if (!usersLoaded) loadUsers();
+    else renderUsers();
+    return;
   }
+  renderChannels();
 }
 
 function renderChannels() {
@@ -969,6 +1014,169 @@ async function deleteCategory(id) {
     setStatus('Erreur : ' + e.message, 'err');
   }
 }
+
+// =====================================================================
+// Admin Utilisateurs
+// =====================================================================
+async function authedFetch(url, opts = {}) {
+  if (!currentUser) throw new Error('Pas connecté.');
+  const token = await currentUser.getIdToken();
+  const headers = { ...(opts.headers || {}), Authorization: 'Bearer ' + token };
+  if (opts.body && !headers['Content-Type']) headers['Content-Type'] = 'application/json';
+  const r = await fetch(url, { ...opts, headers });
+  const data = await r.json().catch(() => ({}));
+  if (!r.ok || data.success === false) {
+    throw new Error(data.error || `HTTP ${r.status}`);
+  }
+  return data;
+}
+
+async function loadUsers() {
+  setStatus('Chargement des utilisateurs…', 'busy');
+  try {
+    const data = await authedFetch('/api/admin/users');
+    users = data.users || [];
+    usersLoaded = true;
+    setStatus(`${users.length} utilisateurs.`, 'ok');
+    renderUsers();
+  } catch (e) {
+    setStatus('Erreur : ' + e.message, 'err');
+    $('#users-tbody').innerHTML = '';
+    $('#users-empty').classList.remove('hidden');
+    $('#users-empty').textContent = 'Erreur : ' + e.message;
+  }
+}
+
+function renderUsers() {
+  const search = ($('#users-search').value || '').toLowerCase().trim();
+  const filter = $('#users-filter').value;
+
+  let rows = users.slice();
+  if (search) {
+    rows = rows.filter(u =>
+      (u.email || '').toLowerCase().includes(search) ||
+      (u.uid || '').toLowerCase().includes(search) ||
+      (u.displayName || '').toLowerCase().includes(search)
+    );
+  }
+  if (filter === 'studio') rows = rows.filter(u => u.isPremium);
+  if (filter === 'free')   rows = rows.filter(u => !u.isPremium && !u.isAdmin);
+  if (filter === 'admin')  rows = rows.filter(u => u.isAdmin);
+  if (filter === 'no-doc') rows = rows.filter(u => !u.hasFirestoreDoc);
+
+  rows.sort((a, b) => {
+    const dir = usersSortDir === 'asc' ? 1 : -1;
+    const k = usersSortBy;
+    if (k === 'isPremium') return ((a.isPremium ? 1 : 0) - (b.isPremium ? 1 : 0)) * dir;
+    if (k === 'themeCount') return ((a.themeCount || 0) - (b.themeCount || 0)) * dir;
+    if (k === 'createdAt' || k === 'lastSignInAt') {
+      return ((a[k] || 0) - (b[k] || 0)) * dir;
+    }
+    return ('' + (a[k] || '')).localeCompare('' + (b[k] || ''), 'fr') * dir;
+  });
+
+  $('#users-count').textContent = `${rows.length} compte${rows.length > 1 ? 's' : ''}`;
+  $('#users-empty').classList.toggle('hidden', rows.length > 0);
+  $('#users-empty').textContent = 'Aucun utilisateur ne correspond aux filtres.';
+
+  const fmt = (ts) => ts ? new Date(ts).toLocaleDateString('fr-FR') : '—';
+  const tbody = $('#users-tbody');
+  tbody.innerHTML = rows.map(u => {
+    const planBadge = u.isAdmin
+      ? '<span class="badge" style="background:rgba(245,158,11,.2);color:#f59e0b">Admin</span>'
+      : u.isPremium
+        ? '<span class="badge" style="background:rgba(16,185,129,.2);color:#10b981">Studio</span>'
+        : '<span class="badge" style="background:rgba(138,149,184,.2);color:#8a95b8">Gratuit</span>';
+    const noDoc = u.hasFirestoreDoc ? '' : ' <span class="badge" style="background:rgba(239,68,68,.15);color:#ef4444">no doc</span>';
+    const toggleLabel = u.isPremium ? 'Retirer Studio' : 'Passer Studio';
+    const toggleClass = u.isPremium ? 'btn warn' : 'btn ok';
+    return `<tr>
+      <td>
+        <strong>${esc(u.email || '—')}</strong>${noDoc}
+        <div style="color:var(--muted);font-size:11px;font-family:ui-monospace,monospace">${esc(u.uid)}</div>
+      </td>
+      <td>${fmt(u.createdAt)}</td>
+      <td>${fmt(u.lastSignInAt)}</td>
+      <td>${u.themeCount || 0}</td>
+      <td>${planBadge}</td>
+      <td>
+        <div class="actions">
+          <button class="${toggleClass}" data-user-action="toggle" data-uid="${esc(u.uid)}" ${u.isAdmin ? 'disabled title="Compte admin"' : ''}>${toggleLabel}</button>
+          <button class="btn danger" data-user-action="delete" data-uid="${esc(u.uid)}" ${u.isAdmin ? 'disabled title="Compte admin"' : ''}>Supprimer</button>
+        </div>
+      </td>
+    </tr>`;
+  }).join('');
+
+  tbody.querySelectorAll('button[data-user-action]').forEach(btn => {
+    btn.addEventListener('click', () => onUserAction(btn.dataset.userAction, btn.dataset.uid));
+  });
+}
+
+async function onUserAction(action, uid) {
+  const u = users.find(x => x.uid === uid);
+  if (!u) return;
+
+  if (action === 'toggle') {
+    const next = !u.isPremium;
+    const label = next ? 'Passer Studio' : 'Retirer Studio';
+    if (!confirm(`${label} pour ${u.email || uid} ?`)) return;
+    setStatus('Mise à jour…', 'busy');
+    try {
+      await authedFetch(`/api/admin/users/${encodeURIComponent(uid)}/studio`, {
+        method: 'POST',
+        body: JSON.stringify({ isPremium: next }),
+      });
+      // Update local pour éviter un rechargement complet
+      u.isPremium = next;
+      setStatus(`${u.email || uid} : ${next ? 'Studio activé' : 'Studio retiré'}.`, 'ok');
+      renderUsers();
+    } catch (e) {
+      setStatus('Erreur : ' + e.message, 'err');
+      alert('Erreur : ' + e.message);
+    }
+    return;
+  }
+
+  if (action === 'delete') {
+    const warn = `Supprimer DÉFINITIVEMENT ${u.email || uid} ?\n\n` +
+      `• Compte Firebase Auth\n• Doc users/${uid}\n• Sous-collection themes/* + leurs vidéos\n\n` +
+      `Action IRRÉVERSIBLE. Continuer ?`;
+    if (!confirm(warn)) return;
+    const confirmText = prompt(`Pour confirmer, tape l'email exact du compte (${u.email || uid}) :`);
+    if (confirmText !== (u.email || uid)) {
+      return alert('Confirmation incorrecte, suppression annulée.');
+    }
+    setStatus('Suppression…', 'busy');
+    try {
+      const r = await authedFetch(`/api/admin/users/${encodeURIComponent(uid)}`, {
+        method: 'DELETE',
+      });
+      users = users.filter(x => x.uid !== uid);
+      setStatus(
+        `Supprimé. Auth: ${r.authDeleted ? 'oui' : 'non'}, doc: ${r.firestoreDocDeleted ? 'oui' : 'non'}, ${r.deletedThemes} thème(s), ${r.deletedPrograms} vidéo(s).`,
+        'ok'
+      );
+      renderUsers();
+    } catch (e) {
+      setStatus('Erreur : ' + e.message, 'err');
+      alert('Erreur : ' + e.message);
+    }
+  }
+}
+
+// Filtres et tri des users
+$('#users-search').addEventListener('input', renderUsers);
+$('#users-filter').addEventListener('change', renderUsers);
+$('#users-reload-btn').addEventListener('click', () => { usersLoaded = false; loadUsers(); });
+$$('th[data-users-sort]').forEach(th => {
+  th.addEventListener('click', () => {
+    const k = th.dataset.usersSort;
+    if (usersSortBy === k) usersSortDir = usersSortDir === 'asc' ? 'desc' : 'asc';
+    else { usersSortBy = k; usersSortDir = 'asc'; }
+    renderUsers();
+  });
+});
 
 // ---------- YouTube helpers ----------
 const parseDuration = (d) => {
