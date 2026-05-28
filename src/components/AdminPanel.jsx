@@ -1,5 +1,5 @@
 import React, { useState, useMemo } from 'react';
-import { Cpu, BookOpen, Trophy, Mic2, X, CheckCircle2, Loader2, Sparkles, Edit2, Check, Trash2, Tv2 } from 'lucide-react';
+import { Cpu, BookOpen, Trophy, Mic2, X, CheckCircle2, Loader2, Sparkles, Edit2, Check, Trash2, Tv2, ExternalLink, Lock } from 'lucide-react';
 import { db, YOUTUBE_API_KEY } from '../firebase';
 import { collection, doc, setDoc, updateDoc, deleteDoc, writeBatch } from 'firebase/firestore';
 import { useCategories } from '../hooks/useCategories';
@@ -88,9 +88,10 @@ export default function AdminPanel({ user, userData, customThemes = [], isAdmin 
     if (!channelInput.trim()) return alert("Entrez une chaîne.");
     if (!category) return alert("Sélectionnez une thématique.");
 
-    // Si la cible est un scope, seul l'admin peut écrire
-    if (SCOPE_IDS.has(category) && !isAdmin) {
-      return alert("❌ Seul l'admin peut ajouter des chaînes dans les scopes éditeur.");
+    // Les scopes éditeur se gèrent uniquement via /admin-channels.html
+    // pour rester alignés avec la collection /channels (source du cron).
+    if (SCOPE_IDS.has(category)) {
+      return alert("Pour ajouter une chaîne à un scope éditeur, passe par /admin-channels.html.");
     }
 
     setLoading(true);
@@ -178,8 +179,8 @@ export default function AdminPanel({ user, userData, customThemes = [], isAdmin 
     if (!confirm(`Retirer la chaîne "${creatorName}" de cette catégorie ? Les ${programIds.length} vidéo(s) associée(s) seront supprimées.`)) return;
 
     const isScope = SCOPE_IDS.has(category);
-    if (isScope && !isAdmin) {
-      return alert("Seul l'admin peut retirer une chaîne d'un scope éditeur.");
+    if (isScope) {
+      return alert("Pour retirer une chaîne d'un scope éditeur, passe par /admin-channels.html.");
     }
 
     setRemovingChannel(channelId);
@@ -272,17 +273,42 @@ export default function AdminPanel({ user, userData, customThemes = [], isAdmin 
                   <div className="space-y-2">
                     <label className="text-xs font-bold text-slate-500 uppercase tracking-wider">Destination</label>
                     <select className="w-full bg-slate-800 p-4 rounded-xl text-sm border-none text-white focus:ring-2 focus:ring-indigo-500" value={category} onChange={e => setCategory(e.target.value)}>
-                      {isAdmin && <optgroup label="Scopes éditeur">{CATEGORIES.map(c => <option key={c.id} value={c.id}>{c.label}</option>)}</optgroup>}
+                      {isAdmin && <optgroup label="Scopes éditeur (lecture seule)">{CATEGORIES.map(c => <option key={c.id} value={c.id}>{c.label}</option>)}</optgroup>}
                       {customThemes.length > 0 && <optgroup label="Mes Thématiques">{customThemes.map(c => <option key={c.id} value={c.id}>{c.name}</option>)}</optgroup>}
                     </select>
                   </div>
-                  <div className="space-y-2">
-                    <label className="text-xs font-bold text-slate-500 uppercase tracking-wider">Chaîne YouTube</label>
-                    <input className="w-full bg-slate-800 p-4 rounded-xl text-sm text-white focus:ring-2 focus:ring-indigo-500" placeholder="@MonsieurPhi" value={channelInput} onChange={e => setChannelInput(e.target.value)} />
-                  </div>
-                  <button onClick={fetchAndAutoIntegrate} disabled={loading} className="w-full bg-emerald-600 py-4 rounded-xl font-bold text-white flex justify-center items-center gap-2 hover:bg-emerald-500 disabled:opacity-50">
-                    {loading ? <Loader2 className="animate-spin" size={18}/> : <><CheckCircle2 size={18} /> Ajouter la chaîne</>}
-                  </button>
+
+                  {SCOPE_IDS.has(category) ? (
+                    // Scope éditeur : on bloque l'ajout/suppression pour
+                    // éviter la désynchro avec /channels (source du cron).
+                    // L'admin passe par /admin-channels.html.
+                    <div className="p-4 bg-indigo-500/10 border border-indigo-500/30 rounded-xl space-y-3">
+                      <div className="flex items-start gap-3">
+                        <Lock size={18} className="text-indigo-400 shrink-0 mt-0.5" />
+                        <div className="text-xs text-slate-300 leading-relaxed">
+                          Les chaînes des <strong>scopes éditeur</strong> se gèrent dans l'Admin chaînes. Cette interface écrit dans la collection <code>/channels</code>, qui pilote le sync quotidien. Toute modification ici serait écrasée à la prochaine synchro.
+                        </div>
+                      </div>
+                      <a
+                        href="/admin-channels.html"
+                        target="_blank"
+                        rel="noopener noreferrer"
+                        className="w-full bg-indigo-600 hover:bg-indigo-500 py-3 rounded-xl font-bold text-sm text-white flex justify-center items-center gap-2 transition-all"
+                      >
+                        <ExternalLink size={16} /> Ouvrir l'Admin chaînes
+                      </a>
+                    </div>
+                  ) : (
+                    <>
+                      <div className="space-y-2">
+                        <label className="text-xs font-bold text-slate-500 uppercase tracking-wider">Chaîne YouTube</label>
+                        <input className="w-full bg-slate-800 p-4 rounded-xl text-sm text-white focus:ring-2 focus:ring-indigo-500" placeholder="@MonsieurPhi" value={channelInput} onChange={e => setChannelInput(e.target.value)} />
+                      </div>
+                      <button onClick={fetchAndAutoIntegrate} disabled={loading} className="w-full bg-emerald-600 py-4 rounded-xl font-bold text-white flex justify-center items-center gap-2 hover:bg-emerald-500 disabled:opacity-50">
+                        {loading ? <Loader2 className="animate-spin" size={18}/> : <><CheckCircle2 size={18} /> Ajouter la chaîne</>}
+                      </button>
+                    </>
+                  )}
 
                   {/* Liste des chaînes déjà présentes dans la catégorie sélectionnée */}
                   <div className="border-t border-slate-800 pt-5 mt-2">
@@ -295,12 +321,17 @@ export default function AdminPanel({ user, userData, customThemes = [], isAdmin 
 
                     {channelsInCategory.length === 0 ? (
                       <p className="text-xs text-slate-600 italic py-3">
-                        Aucune chaîne pour le moment. Ajoutez-en une avec le formulaire ci-dessus.
+                        {SCOPE_IDS.has(category)
+                          ? "Aucune chaîne pour le moment dans ce scope."
+                          : "Aucune chaîne pour le moment. Ajoutez-en une avec le formulaire ci-dessus."}
                       </p>
                     ) : (
                       <div className="space-y-2 max-h-64 overflow-y-auto pr-1">
                         {channelsInCategory.map(ch => {
-                          const canRemove = isAdmin || !SCOPE_IDS.has(category);
+                          // Suppression interdite sur les scopes éditeur,
+                          // même pour l'admin : ça doit passer par /admin-channels.html
+                          // pour rester aligné avec /channels.
+                          const canRemove = !SCOPE_IDS.has(category);
                           const busy = removingChannel === ch.channelId;
                           return (
                             <div key={ch.channelId} className="flex items-center justify-between bg-slate-800/50 px-3 py-2.5 rounded-lg border border-slate-700/50">
