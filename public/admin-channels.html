@@ -122,9 +122,9 @@
           <option value="0">Pas de date connue</option>
         </select>
         <button class="btn" id="add-channel-btn">+ Ajouter une chaîne</button>
-        <button class="btn ok" id="run-sync-btn">⚡ Lancer le sync</button>
-        <button class="btn ghost" id="refresh-all-btn">Refresh dates (YouTube)</button>
-        <button class="btn ghost hidden" id="import-culture-btn">Importer 270 chaînes Culture</button>
+        <button class="btn ok" id="run-sync-btn">⚡ Sync vidéos maintenant</button>
+        <button class="btn" id="run-newsletter-btn" style="background:#7c3aed;color:#fff">✉️ Générer la newsletter</button>
+        <button class="btn ghost hidden" id="import-culture-btn">Importer la liste Culture</button>
         <span class="count" id="count"></span>
       </div>
       <table>
@@ -533,12 +533,36 @@ const channelCount = (catId) => channels.filter(c => c.categoryId === catId).len
 const esc = (s) => (s == null ? '' : String(s)).replace(/[&<>"]/g, m => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;'}[m]));
 
 // ---------- Tabs ----------
+// Cache le total annoncé dans le fichier source Culture, pour afficher
+// un label honnête « Importer X chaînes Culture » plutôt qu'un nombre figé.
+let cultureSourceTotal = null;
+async function ensureCultureSourceTotal() {
+  if (cultureSourceTotal !== null) return cultureSourceTotal;
+  try {
+    const r = await fetch('/culture-channels-source.json', { cache: 'no-store' });
+    if (!r.ok) throw new Error('source introuvable');
+    const src = await r.json();
+    cultureSourceTotal = src.total ?? null;
+  } catch {
+    cultureSourceTotal = null;
+  }
+  return cultureSourceTotal;
+}
+
 $$('.tabs button').forEach(b => {
-  b.addEventListener('click', () => {
+  b.addEventListener('click', async () => {
     activeTab = b.dataset.tab;
     $$('.tabs button').forEach(x => x.classList.toggle('active', x === b));
     // Le bouton "Importer Culture" n'apparaît que dans l'onglet Culture
-    $('#import-culture-btn').classList.toggle('hidden', activeTab !== 'culture');
+    const importBtn = $('#import-culture-btn');
+    importBtn.classList.toggle('hidden', activeTab !== 'culture');
+    if (activeTab === 'culture') {
+      const total = await ensureCultureSourceTotal();
+      const inBase = channels.filter(c => c.mode === 'culture').length;
+      importBtn.textContent = total
+        ? `Importer la liste Culture (${total} sources, ${inBase} en base)`
+        : 'Importer la liste Culture';
+    }
     render();
   });
 });
@@ -907,26 +931,47 @@ $('#import-culture-btn').addEventListener('click', async () => {
   await loadAll();
 });
 
-$('#refresh-all-btn').addEventListener('click', async () => {
-  const mode = activeTab;
-  const targets = channels.filter(c => c.mode === mode);
-  if (!confirm(`Refresh ${targets.length} chaînes ? Ça consomme du quota YouTube.`)) return;
-  let i = 0;
-  for (const ch of targets) {
-    i++;
-    setStatus(`Refresh ${i}/${targets.length} : ${ch.name}`, 'busy');
-    try {
-      const lastVideoAt = await fetchLastVideoAtFromYT(ch.channelId);
-      await updateDoc(doc(db, 'channels', ch.channelId), {
-        lastVideoAt, lastCheckedAt: Date.now(), updatedAt: Date.now()
-      });
-    } catch (e) {
-      console.warn(ch.channelId, e.message);
+// ---------- Générer la newsletter (admin) ----------
+$('#run-newsletter-btn').addEventListener('click', async () => {
+  const winRaw = prompt('Fenêtre en jours (vidéos publiées depuis combien de temps) ?', '7');
+  if (winRaw === null) return;
+  const maxRaw = prompt('Nombre de picks dans le numéro ?', '5');
+  if (maxRaw === null) return;
+  const windowDays = Math.max(1, Math.min(30, parseInt(winRaw, 10) || 7));
+  const maxPicks = Math.max(1, Math.min(20, parseInt(maxRaw, 10) || 5));
+
+  setStatus('Génération de la newsletter…', 'busy');
+  try {
+    const data = await authedFetch(`/api/admin/newsletter?window=${windowDays}&max=${maxPicks}`);
+    const { issue, html } = data;
+
+    // Aperçu dans un nouvel onglet via blob URL
+    const blob = new Blob([html], { type: 'text/html' });
+    const url = URL.createObjectURL(blob);
+    window.open(url, '_blank', 'noopener');
+    setTimeout(() => URL.revokeObjectURL(url), 60000);
+
+    setStatus(
+      `Newsletter du ${issue.issuePretty} générée (${issue.picks.length} picks sur ${issue.activeThemes} thématiques actives). Fichier : newsletter/${issue.issueDate}.html`,
+      'ok'
+    );
+
+    // Propose le téléchargement du JSON pour rédiger les accroches
+    if (confirm(`Numéro ${issue.issueDate} : ${issue.picks.length} picks générés.\n\nTélécharger aussi le JSON pour rédiger les accroches ?`)) {
+      const j = new Blob([JSON.stringify(issue, null, 2)], { type: 'application/json' });
+      const ju = URL.createObjectURL(j);
+      const a = document.createElement('a');
+      a.href = ju;
+      a.download = `${issue.issueDate}.json`;
+      document.body.appendChild(a);
+      a.click();
+      document.body.removeChild(a);
+      setTimeout(() => URL.revokeObjectURL(ju), 0);
     }
-    await sleep(80);
+  } catch (e) {
+    setStatus('Erreur : ' + e.message, 'err');
+    alert('Erreur : ' + e.message);
   }
-  setStatus(`Refresh terminé (${targets.length} chaînes).`, 'ok');
-  await loadAll();
 });
 
 // ---------- Categories ----------
