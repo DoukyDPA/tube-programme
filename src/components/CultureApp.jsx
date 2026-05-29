@@ -4,11 +4,14 @@ import {
   doc,
   onSnapshot,
   getDoc,
+  getDocs,
   setDoc,
   deleteDoc,
   arrayUnion,
   arrayRemove,
   writeBatch,
+  query,
+  where,
 } from 'firebase/firestore';
 import { onAuthStateChanged, signOut } from 'firebase/auth';
 import {
@@ -338,10 +341,10 @@ export default function CultureApp() {
 
   // -----------------------------------------------------------------
   // Actualisation Culture depuis le navigateur (admin only).
-  // Contourne le besoin d'une clé serveur : on utilise la clé front,
-  // donc YouTube voit un Referer valide. On résout les handles à la
-  // volée, on persiste le mapping en localStorage pour économiser le
-  // quota au prochain clic, puis on applique le delta dans Firestore.
+  // Source de vérité : collection Firestore /channels (mode == 'culture'),
+  // alignée avec /api/sync-culture et la page admin-channels.html. On
+  // n'utilise plus le fichier statique cultureChannels.js : les chaînes
+  // supprimées via l'admin ne réapparaissent donc plus à l'actualisation.
   // -----------------------------------------------------------------
   const syncCultureFromBrowser = async () => {
     if (!YOUTUBE_API_KEY_CULTURE) {
@@ -353,90 +356,44 @@ export default function CultureApp() {
     if (!user) return;
 
     setIsSyncing(true);
-    setSyncMessage('Préparation...');
+    setSyncMessage('Chargement des chaînes Culture...');
     setSyncSubMessage('');
 
-    // Mapping de départ : fichier public + cache localStorage
-    let resolvedMap = { ...(resolved || {}) };
-    try {
-      const ls = JSON.parse(localStorage.getItem('cultureResolved') || '{}');
-      resolvedMap = { ...ls, ...resolvedMap };
-    } catch {
-      // ignore
-    }
-
-    let resolvedNew = 0;
-    let unresolved = 0;
     let totalAdded = 0;
     let totalDeleted = 0;
 
     try {
-      // 1. Résout les handles manquants
-      const handlesToResolve = [];
-      for (const theme of CULTURE_THEMES) {
-        const channels = CULTURE_CHANNELS[theme.id] || [];
-        for (const ch of channels) {
-          if (!resolvedMap[ch.handle]?.channelId) {
-            handlesToResolve.push({ ch, theme });
-          }
-        }
-      }
-
-      if (handlesToResolve.length > 0) {
-        setSyncMessage(
-          `Première étape : identification des chaînes YouTube (${handlesToResolve.length})`
-        );
-        setSyncSubMessage(
-          'Cette étape ne tourne qu\'au premier lancement, puis le résultat est mis en cache.'
-        );
-        let i = 0;
-        for (const { ch, theme } of handlesToResolve) {
-          i++;
-          if (i % 10 === 0 || i === handlesToResolve.length) {
-            setSyncSubMessage(`Chaîne ${i} sur ${handlesToResolve.length}`);
-          }
-          try {
-            const r = await fetch(
-              `https://www.googleapis.com/youtube/v3/channels?key=${YOUTUBE_API_KEY_CULTURE}&forHandle=@${encodeURIComponent(
-                ch.handle
-              )}&part=id,snippet`
-            );
-            const d = await r.json();
-            if (d.items?.[0]) {
-              resolvedMap[ch.handle] = {
-                channelId: d.items[0].id,
-                themeId: theme.id,
-                name: ch.name,
-              };
-              resolvedNew++;
-            } else {
-              unresolved++;
-            }
-          } catch (e) {
-            unresolved++;
-            console.warn(`Résolution @${ch.handle} échouée:`, e.message);
-          }
-        }
-      }
-
-      // Persiste le mapping pour le prochain clic
+      // Purge le vieux cache localStorage de l'ancienne logique
+      // (handle -> channelId), qui pouvait ressusciter des chaînes
+      // supprimées depuis la console admin.
       try {
-        localStorage.setItem('cultureResolved', JSON.stringify(resolvedMap));
+        localStorage.removeItem('cultureResolved');
       } catch {
-        // quota localStorage plein, on ignore
+        // ignore
       }
 
-      // 2. Pour chaque thématique, agrège les vidéos
-      const themesWithChannels = CULTURE_THEMES.filter((t) =>
-        Object.values(resolvedMap).some((info) => info?.themeId === t.id)
+      // 1. Lit toutes les chaînes Culture depuis Firestore
+      const chSnap = await getDocs(
+        query(collection(db, 'channels'), where('mode', '==', 'culture'))
+      );
+      const allChannels = chSnap.docs
+        .map((d) => ({ id: d.id, ...d.data() }))
+        .filter((c) => c.channelId && c.categoryId);
+
+      // Groupe par catégorie / thématique
+      const byTheme = {};
+      for (const ch of allChannels) {
+        (byTheme[ch.categoryId] ||= []).push(ch);
+      }
+
+      const themesWithChannels = CULTURE_THEMES.filter(
+        (t) => (byTheme[t.id] || []).length > 0
       );
 
       let themeIdx = 0;
       for (const theme of themesWithChannels) {
         themeIdx++;
-        const channels = Object.entries(resolvedMap)
-          .filter(([, info]) => info && info.themeId === theme.id)
-          .map(([handle, info]) => ({ handle, ...info }));
+        const channels = byTheme[theme.id] || [];
         if (channels.length === 0) continue;
 
         setSyncMessage(
@@ -559,13 +516,9 @@ export default function CultureApp() {
         }
       }
 
-      const parts = [
-        `${totalAdded} vidéos ajoutées`,
-        `${totalDeleted} supprimées`,
-      ];
-      if (resolvedNew > 0) parts.push(`${resolvedNew} chaînes résolues`);
-      if (unresolved > 0) parts.push(`${unresolved} chaînes introuvables`);
-      alert(`Sync Culture terminée : ${parts.join(', ')}.`);
+      alert(
+        `Sync Culture terminée : ${totalAdded} vidéos ajoutées, ${totalDeleted} supprimées (sur ${allChannels.length} chaînes en base).`
+      );
     } catch (e) {
       alert(`Erreur sync : ${e.message}`);
     } finally {

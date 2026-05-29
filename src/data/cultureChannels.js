@@ -137,7 +137,6 @@ export const CULTURE_CHANNELS = {
     { name: 'Aldreius', handle: 'Aldreius' },
     { name: 'Curiosity Catalyst', handle: 'CuriosityCatalyst' },
     { name: 'Cyrus North', handle: 'CyrusNorth' },
-    { name: 'Dany Caligula', handle: 'DanyCaligula' },
     { name: 'DeBunker des Etoiles', handle: 'DeBunkerdesEtoiles' },
     { name: 'Defakator', handle: 'Defakator' },
     { name: 'Esprit Critique', handle: 'Tzitzimitl' },
