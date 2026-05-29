@@ -30,6 +30,14 @@ export default function ProgramCard({ prog, large, small, onSelect, onRemove, cu
       <div className={`relative bg-slate-900 overflow-hidden shadow-lg border border-slate-800/50 group-hover:border-slate-500 transition-colors rounded-xl ${cardHeight}`}>
         <img
           src={`https://img.youtube.com/vi/${prog.youtubeId}/maxresdefault.jpg`}
+          onLoad={(e) => {
+            // YouTube renvoie une placeholder grise 120x90 avec un statut 200
+            // quand maxresdefault.jpg n'existe pas. On bascule alors sur
+            // hqdefault.jpg, qui est garanti pour toutes les vidéos.
+            if (e.target.naturalWidth > 0 && e.target.naturalWidth <= 120) {
+              e.target.src = `https://img.youtube.com/vi/${prog.youtubeId}/hqdefault.jpg`;
+            }
+          }}
           onError={(e) => { e.target.onerror = null; e.target.src = `https://img.youtube.com/vi/${prog.youtubeId}/hqdefault.jpg`; }}
           className="w-full h-full object-cover transition-transform duration-700 group-hover:scale-105"
           alt={decodeHTML(prog.title)}
