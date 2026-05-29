@@ -1,5 +1,5 @@
 import React, { useState, useMemo } from 'react';
-import { Cpu, BookOpen, Trophy, Mic2, X, CheckCircle2, Loader2, Sparkles, Edit2, Check, Trash2, Tv2, ExternalLink, Lock } from 'lucide-react';
+import { Cpu, BookOpen, Trophy, Mic2, X, CheckCircle2, Loader2, Sparkles, Edit2, Check, Trash2, Tv2, ExternalLink, Lock, Mail, Download, Eye } from 'lucide-react';
 import { db, YOUTUBE_API_KEY } from '../firebase';
 import { collection, doc, setDoc, updateDoc, deleteDoc, writeBatch } from 'firebase/firestore';
 import { useCategories } from '../hooks/useCategories';
@@ -36,6 +36,61 @@ export default function AdminPanel({ user, userData, customThemes = [], isAdmin 
 
   const [channelInput, setChannelInput] = useState('');
   const [category, setCategory] = useState(isAdmin ? 'ia' : (customThemes[0]?.id || ''));
+
+  // ------- Newsletter (admin) -------
+  const [nlLoading, setNlLoading] = useState(false);
+  const [nlIssue, setNlIssue] = useState(null);
+  const [nlHtml, setNlHtml] = useState('');
+  const [nlError, setNlError] = useState('');
+  const [nlWindow, setNlWindow] = useState(7);
+  const [nlMax, setNlMax] = useState(5);
+
+  const handleGenerateNewsletter = async () => {
+    setNlLoading(true);
+    setNlError('');
+    setNlIssue(null);
+    setNlHtml('');
+    try {
+      const token = await user.getIdToken();
+      const r = await fetch(`/api/admin/newsletter?window=${nlWindow}&max=${nlMax}`, {
+        headers: { Authorization: 'Bearer ' + token },
+      });
+      const data = await r.json().catch(() => ({}));
+      if (!r.ok || data.success === false) {
+        throw new Error(data.error || `HTTP ${r.status}`);
+      }
+      setNlIssue(data.issue);
+      setNlHtml(data.html);
+    } catch (e) {
+      setNlError(e.message);
+    } finally {
+      setNlLoading(false);
+    }
+  };
+
+  const openNewsletterPreview = () => {
+    if (!nlHtml) return;
+    const blob = new Blob([nlHtml], { type: 'text/html' });
+    const url = URL.createObjectURL(blob);
+    window.open(url, '_blank', 'noopener');
+    // libère le blob après une courte fenêtre, le temps que l'onglet charge
+    setTimeout(() => URL.revokeObjectURL(url), 60000);
+  };
+
+  const downloadNewsletter = (kind) => {
+    if (!nlIssue) return;
+    const content = kind === 'json' ? JSON.stringify(nlIssue, null, 2) : nlHtml;
+    const mime = kind === 'json' ? 'application/json' : 'text/html';
+    const blob = new Blob([content], { type: mime });
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement('a');
+    a.href = url;
+    a.download = `${nlIssue.issueDate}.${kind}`;
+    document.body.appendChild(a);
+    a.click();
+    document.body.removeChild(a);
+    setTimeout(() => URL.revokeObjectURL(url), 0);
+  };
 
   const handleCreateTheme = async () => {
     if (!themeName.trim()) return;
@@ -204,13 +259,97 @@ export default function AdminPanel({ user, userData, customThemes = [], isAdmin 
     <div className="fixed inset-0 z-[100] bg-slate-950/95 backdrop-blur-xl flex items-center justify-center p-4">
       <div className="bg-slate-900 border border-slate-800 w-full max-w-lg rounded-[2rem] overflow-hidden shadow-2xl flex flex-col max-h-[90vh]">
         <div className="flex border-b border-slate-800 shrink-0">
-          <button onClick={() => setTab('channel')} className={`flex-1 py-4 text-xs font-bold uppercase tracking-widest ${tab === 'channel' ? 'text-indigo-400 bg-indigo-500/5' : 'text-slate-500 hover:text-slate-300'}`}>+ Ajouter Chaîne</button>
-          <button onClick={() => setTab('theme')} className={`flex-1 py-4 text-xs font-bold uppercase tracking-widest ${tab === 'theme' ? 'text-indigo-400 bg-indigo-500/5' : 'text-slate-500 hover:text-slate-300'}`}>Mes Thèmes</button>
+          <button onClick={() => setTab('channel')} className={`flex-1 py-4 text-xs font-bold uppercase tracking-widest ${tab === 'channel' ? 'text-indigo-400 bg-indigo-500/5' : 'text-slate-500 hover:text-slate-300'}`}>+ Chaîne</button>
+          <button onClick={() => setTab('theme')} className={`flex-1 py-4 text-xs font-bold uppercase tracking-widest ${tab === 'theme' ? 'text-indigo-400 bg-indigo-500/5' : 'text-slate-500 hover:text-slate-300'}`}>Thèmes</button>
+          {isAdmin && (
+            <button onClick={() => setTab('newsletter')} className={`flex-1 py-4 text-xs font-bold uppercase tracking-widest ${tab === 'newsletter' ? 'text-indigo-400 bg-indigo-500/5' : 'text-slate-500 hover:text-slate-300'}`}>Newsletter</button>
+          )}
           <button onClick={onClose} className="p-4 text-slate-500 hover:text-white"><X size={20}/></button>
         </div>
 
         <div className="p-8 overflow-y-auto">
-          {tab === 'theme' ? (
+          {tab === 'newsletter' && isAdmin ? (
+            <div className="space-y-6">
+              <div className="flex items-start gap-3 p-4 bg-indigo-500/10 border border-indigo-500/30 rounded-xl">
+                <Mail size={20} className="text-indigo-400 shrink-0 mt-0.5" />
+                <div className="text-xs text-slate-300 leading-relaxed">
+                  Génère le numéro hebdo « Le coup d'œil de la semaine » à partir des vidéos Culture publiées dans la fenêtre choisie. Le fichier est aussi sauvegardé dans <code>newsletter/{`{date}`}.html</code>.
+                </div>
+              </div>
+
+              <div className="grid grid-cols-2 gap-3">
+                <div>
+                  <label className="text-[10px] font-bold text-slate-500 uppercase tracking-widest block mb-2">Fenêtre (jours)</label>
+                  <input
+                    type="number"
+                    min="1"
+                    max="30"
+                    value={nlWindow}
+                    onChange={(e) => setNlWindow(parseInt(e.target.value || '7', 10))}
+                    className="w-full bg-slate-800 p-3 rounded-xl text-white outline-none focus:ring-2 focus:ring-indigo-500 text-sm"
+                  />
+                </div>
+                <div>
+                  <label className="text-[10px] font-bold text-slate-500 uppercase tracking-widest block mb-2">Nb de picks</label>
+                  <input
+                    type="number"
+                    min="1"
+                    max="20"
+                    value={nlMax}
+                    onChange={(e) => setNlMax(parseInt(e.target.value || '5', 10))}
+                    className="w-full bg-slate-800 p-3 rounded-xl text-white outline-none focus:ring-2 focus:ring-indigo-500 text-sm"
+                  />
+                </div>
+              </div>
+
+              <button
+                onClick={handleGenerateNewsletter}
+                disabled={nlLoading}
+                className="w-full bg-indigo-600 hover:bg-indigo-500 py-4 rounded-xl font-bold text-white flex justify-center items-center gap-2 disabled:opacity-50"
+              >
+                {nlLoading ? <Loader2 className="animate-spin" size={18}/> : <><Sparkles size={18}/> Générer la newsletter</>}
+              </button>
+
+              {nlError && (
+                <div className="p-3 bg-red-500/10 border border-red-500/30 rounded-xl text-red-300 text-xs">
+                  {nlError}
+                </div>
+              )}
+
+              {nlIssue && (
+                <div className="space-y-4">
+                  <div className="p-4 bg-slate-800/50 border border-slate-700/50 rounded-xl">
+                    <div className="text-xs text-slate-400 mb-1">Numéro du {nlIssue.issuePretty}</div>
+                    <div className="text-sm text-slate-200 font-semibold">
+                      {nlIssue.picks.length} pick(s) sur {nlIssue.activeThemes} thématique(s) actives
+                    </div>
+                  </div>
+
+                  <div className="space-y-2 max-h-64 overflow-y-auto pr-1">
+                    {nlIssue.picks.map((p) => (
+                      <div key={p.youtubeId} className="bg-slate-800/40 border border-slate-700/40 rounded-lg p-3">
+                        <div className="text-[10px] uppercase tracking-widest text-indigo-300 font-bold mb-1">{p.themeLabel}</div>
+                        <div className="text-sm text-slate-100 font-semibold leading-tight">{p.title}</div>
+                        <div className="text-xs text-slate-400 mt-1">{p.creatorName} · {p.publishedPretty}</div>
+                      </div>
+                    ))}
+                  </div>
+
+                  <div className="grid grid-cols-3 gap-2">
+                    <button onClick={openNewsletterPreview} className="bg-slate-800 hover:bg-slate-700 py-3 rounded-xl text-sm text-white flex justify-center items-center gap-2">
+                      <Eye size={14}/> Aperçu
+                    </button>
+                    <button onClick={() => downloadNewsletter('html')} className="bg-slate-800 hover:bg-slate-700 py-3 rounded-xl text-sm text-white flex justify-center items-center gap-2">
+                      <Download size={14}/> HTML
+                    </button>
+                    <button onClick={() => downloadNewsletter('json')} className="bg-slate-800 hover:bg-slate-700 py-3 rounded-xl text-sm text-white flex justify-center items-center gap-2">
+                      <Download size={14}/> JSON
+                    </button>
+                  </div>
+                </div>
+              )}
+            </div>
+          ) : tab === 'theme' ? (
             <div className="space-y-8">
               <div className="space-y-4">
                 <div>

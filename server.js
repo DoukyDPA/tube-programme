@@ -12,6 +12,7 @@ import {
   toggleStudioHandler,
   deleteUserHandler,
 } from './api/admin-users.js';
+import generateNewsletterHandler from './api/generate-newsletter.js';
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
@@ -101,8 +102,13 @@ app.get('/api/admin/users', listUsersHandler);
 app.post('/api/admin/users/:uid/studio', toggleStudioHandler);
 app.delete('/api/admin/users/:uid', deleteUserHandler);
 
+// ---------- Newsletter (admin) ----------
+app.get('/api/admin/newsletter', generateNewsletterHandler);
+
+// Le serveur tourne en UTC chez l'hébergeur. On force l'heure de Paris
+// pour que '0 8 * * *' signifie bien 8h heure locale (et pas 10h en été).
 cron.schedule('0 8 * * *', async () => {
-  console.log('⏰ CRON : Synchronisation YouTube (standard)');
+  console.log('⏰ CRON : Synchronisation YouTube (standard) à', new Date().toString());
   try {
     const req = {};
     const res = {
@@ -124,7 +130,9 @@ cron.schedule('0 8 * * *', async () => {
   } catch (err) {
     console.error('Erreur lors du CRON sync-culture:', err);
   }
-});
+}, { timezone: 'Europe/Paris' });
+
+console.log("⏰ CRON programmé : 08:00 Europe/Paris (sync + sync-culture).");
 
 app.use(express.static(path.join(__dirname, 'dist')));
 

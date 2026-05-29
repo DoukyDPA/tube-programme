@@ -9,14 +9,17 @@
 //   - On retient les thématiques qui ont au moins une vidéo publiée
 //     depuis moins de WINDOW_DAYS jours.
 //   - On en sélectionne MAX_PICKS (par défaut 5), en privilégiant les
-//     thématiques avec la vidéo la plus récente, tout en gardant une
-//     variété de thèmes.
+//     thématiques avec la vidéo la plus récente.
 //   - Pour chaque pick, on génère un JSON exploitable + un HTML.
 //
-// Usage :
+// Usage CLI :
 //   node scripts/generate-newsletter.js              # numéro de la semaine en cours
 //   node scripts/generate-newsletter.js --max=5      # forcer le nombre de picks
 //   node scripts/generate-newsletter.js --window=10  # élargir la fenêtre à 10 jours
+//
+// Usage programmatique (depuis /api/generate-newsletter) :
+//   import { generateNewsletter } from './scripts/generate-newsletter.js';
+//   const { issue, html } = await generateNewsletter({ maxPicks: 5, windowDays: 7 });
 //
 // Les accroches éditoriales sont laissées vides dans le JSON et un
 // placeholder est inséré dans le HTML. À toi de les rédiger avant envoi.
@@ -33,17 +36,7 @@ import { CULTURE_THEMES } from '../src/data/cultureChannels.js';
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = dirname(__filename);
 
-// ---- Args CLI ----
-const args = Object.fromEntries(
-  process.argv.slice(2).map((a) => {
-    const m = a.match(/^--(\w+)=?(.*)$/);
-    return m ? [m[1], m[2] || true] : [a, true];
-  })
-);
-const MAX_PICKS = parseInt(args.max || '5', 10);
-const WINDOW_DAYS = parseInt(args.window || '7', 10);
-
-// ---- Init Firebase Admin ----
+// ---- Init Firebase Admin (idempotent) ----
 const initAdmin = () => {
   if (getApps().length > 0) return getFirestore();
   let credential;
@@ -58,86 +51,7 @@ const initAdmin = () => {
   return getFirestore();
 };
 
-const db = initAdmin();
-
-// ---- Récupère la vidéo la plus récente de chaque thématique ----
-const since = Date.now() - WINDOW_DAYS * 24 * 3600 * 1000;
-const themeBest = [];
-
-for (const theme of CULTURE_THEMES) {
-  const snap = await db
-    .collection('scopes')
-    .doc(theme.id)
-    .collection('programs')
-    .orderBy('publishedAt', 'desc')
-    .limit(5)
-    .get();
-
-  const recent = snap.docs.map((d) => d.data()).filter((v) => v.publishedAt >= since);
-  if (recent.length === 0) continue;
-  const best = recent[0];
-  themeBest.push({
-    themeId: theme.id,
-    themeLabel: theme.label,
-    youtubeId: best.youtubeId,
-    title: best.title,
-    creatorName: best.creatorName,
-    publishedAt: best.publishedAt,
-  });
-}
-
-// ---- Sélection finale : on trie par date desc et on garde MAX_PICKS ----
-themeBest.sort((a, b) => b.publishedAt - a.publishedAt);
-const picks = themeBest.slice(0, MAX_PICKS);
-
-if (picks.length === 0) {
-  console.error(`Aucune vidéo récente trouvée (fenêtre ${WINDOW_DAYS}j). Lance d'abord sync-culture.`);
-  process.exit(1);
-}
-
-// ---- Format du numéro : YYYY-MM-DD ----
-const today = new Date();
-const issueDate = today.toISOString().slice(0, 10);
-const issuePretty = today.toLocaleDateString('fr-FR', { day: 'numeric', month: 'long', year: 'numeric' });
-
-const issue = {
-  issueDate,
-  issuePretty,
-  picks: picks.map((p) => ({
-    themeId: p.themeId,
-    themeLabel: p.themeLabel,
-    youtubeId: p.youtubeId,
-    title: p.title,
-    creatorName: p.creatorName,
-    publishedAt: p.publishedAt,
-    publishedPretty: new Date(p.publishedAt).toLocaleDateString('fr-FR', { day: 'numeric', month: 'long' }),
-    url: `https://www.youtube.com/watch?v=${p.youtubeId}`,
-    thumb: `https://i.ytimg.com/vi/${p.youtubeId}/hqdefault.jpg`,
-    blurb: '', // à remplir manuellement
-  })),
-};
-
-// ---- Sortie JSON ----
-const outDir = join(__dirname, '..', 'newsletter');
-mkdirSync(outDir, { recursive: true });
-const jsonPath = join(outDir, `${issueDate}.json`);
-writeFileSync(jsonPath, JSON.stringify(issue, null, 2));
-
-// ---- Génération HTML ----
-const renderPick = (p, idx) => `
-    <article class="pick">
-      <span class="theme">${p.themeLabel}</span>
-      <a class="thumb" href="${p.url}">
-        <img src="${p.thumb}" alt="" />
-        <span class="play"></span>
-      </a>
-      <h2><a href="${p.url}">${p.title}</a></h2>
-      <div class="creator"><strong>${p.creatorName}</strong> · publié le ${p.publishedPretty}</div>
-      <p class="blurb">${p.blurb || '<em style="color:#7a7a92">[à rédiger : 2-3 phrases d&rsquo;accroche éditoriale]</em>'}</p>
-      <a class="cta" href="${p.url}">Regarder sur YouTube →</a>
-    </article>
-`;
-
+// ---- Génération du HTML ----
 const STYLES = `
     *{box-sizing:border-box;margin:0;padding:0}
     body{font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',Roboto,sans-serif;background:#0f0f1a;color:#e8e8f0;line-height:1.6;padding:32px 16px}
@@ -167,12 +81,26 @@ const STYLES = `
     .btn{display:inline-block;background:linear-gradient(135deg,#4f46e5 0%,#7c3aed 100%);color:#fff;padding:12px 28px;border-radius:10px;font-weight:600;font-size:15px;text-decoration:none;box-shadow:0 6px 20px rgba(79,70,229,.35)}
 `;
 
-const html = `<!DOCTYPE html>
+const renderPick = (p) => `
+    <article class="pick">
+      <span class="theme">${p.themeLabel}</span>
+      <a class="thumb" href="${p.url}">
+        <img src="${p.thumb}" alt="" />
+        <span class="play"></span>
+      </a>
+      <h2><a href="${p.url}">${p.title}</a></h2>
+      <div class="creator"><strong>${p.creatorName}</strong> · publié le ${p.publishedPretty}</div>
+      <p class="blurb">${p.blurb || '<em style="color:#7a7a92">[à rédiger : 2-3 phrases d&rsquo;accroche éditoriale]</em>'}</p>
+      <a class="cta" href="${p.url}">Regarder sur YouTube →</a>
+    </article>
+`;
+
+const renderHtml = (issue) => `<!DOCTYPE html>
 <html lang="fr">
 <head>
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-  <title>Tubiscope — Le coup d'œil de la semaine · ${issuePretty}</title>
+  <title>Tubiscope — Le coup d'œil de la semaine · ${issue.issuePretty}</title>
   <style>${STYLES}</style>
 </head>
 <body>
@@ -183,7 +111,7 @@ const html = `<!DOCTYPE html>
         Tubiscope
       </div>
       <h1>Le coup d'œil de la semaine</h1>
-      <div class="meta">${issuePretty}</div>
+      <div class="meta">${issue.issuePretty}</div>
     </header>
     <section class="intro">
       <p>Les vidéos repérées cette semaine sur les chaînes recensées par le ministère de la Culture. Une par thème, pas plus.</p>
@@ -199,15 +127,122 @@ const html = `<!DOCTYPE html>
 </html>
 `;
 
-const htmlPath = join(outDir, `${issueDate}.html`);
-writeFileSync(htmlPath, html);
+// ---------------------------------------------------------------------
+// Fonction exportée : génère un numéro et retourne {issue, html}.
+// N'écrit AUCUN fichier. Utilisable depuis l'API ou un script CLI.
+// ---------------------------------------------------------------------
+export async function generateNewsletter({ maxPicks = 5, windowDays = 7 } = {}) {
+  const db = initAdmin();
+  const since = Date.now() - windowDays * 24 * 3600 * 1000;
 
-console.log(`\nNuméro généré : ${issueDate}`);
-console.log(`  JSON : ${jsonPath}`);
-console.log(`  HTML : ${htmlPath}`);
-console.log(`  ${picks.length} pick(s) sur ${themeBest.length} thématique(s) actives dans la fenêtre ${WINDOW_DAYS}j.\n`);
-for (const p of picks) {
-  console.log(`  · [${p.themeLabel}] ${p.creatorName} — ${p.title}`);
+  const themeBest = [];
+  for (const theme of CULTURE_THEMES) {
+    const snap = await db
+      .collection('scopes')
+      .doc(theme.id)
+      .collection('programs')
+      .orderBy('publishedAt', 'desc')
+      .limit(5)
+      .get();
+
+    const recent = snap.docs
+      .map((d) => d.data())
+      .filter((v) => v.publishedAt >= since);
+    if (recent.length === 0) continue;
+    const best = recent[0];
+    themeBest.push({
+      themeId: theme.id,
+      themeLabel: theme.label,
+      youtubeId: best.youtubeId,
+      title: best.title,
+      creatorName: best.creatorName,
+      publishedAt: best.publishedAt,
+    });
+  }
+
+  themeBest.sort((a, b) => b.publishedAt - a.publishedAt);
+  const picks = themeBest.slice(0, maxPicks);
+
+  if (picks.length === 0) {
+    throw new Error(
+      `Aucune vidéo récente trouvée (fenêtre ${windowDays}j). Lance d'abord sync-culture.`
+    );
+  }
+
+  const today = new Date();
+  const issueDate = today.toISOString().slice(0, 10);
+  const issuePretty = today.toLocaleDateString('fr-FR', {
+    day: 'numeric',
+    month: 'long',
+    year: 'numeric',
+  });
+
+  const issue = {
+    issueDate,
+    issuePretty,
+    windowDays,
+    maxPicks,
+    activeThemes: themeBest.length,
+    picks: picks.map((p) => ({
+      themeId: p.themeId,
+      themeLabel: p.themeLabel,
+      youtubeId: p.youtubeId,
+      title: p.title,
+      creatorName: p.creatorName,
+      publishedAt: p.publishedAt,
+      publishedPretty: new Date(p.publishedAt).toLocaleDateString('fr-FR', {
+        day: 'numeric',
+        month: 'long',
+      }),
+      url: `https://www.youtube.com/watch?v=${p.youtubeId}`,
+      thumb: `https://i.ytimg.com/vi/${p.youtubeId}/hqdefault.jpg`,
+      blurb: '',
+    })),
+  };
+
+  const html = renderHtml(issue);
+  return { issue, html };
 }
-console.log('\nPensez à rédiger les accroches dans le JSON puis régénérer le HTML.');
-process.exit(0);
+
+// ---------------------------------------------------------------------
+// Mode CLI : exécuté si le fichier est lancé directement avec `node`.
+// Écrit le JSON et le HTML dans le dossier newsletter/.
+// ---------------------------------------------------------------------
+const isMain = process.argv[1] && fileURLToPath(import.meta.url) === process.argv[1];
+
+if (isMain) {
+  const args = Object.fromEntries(
+    process.argv.slice(2).map((a) => {
+      const m = a.match(/^--(\w+)=?(.*)$/);
+      return m ? [m[1], m[2] || true] : [a, true];
+    })
+  );
+  const maxPicks = parseInt(args.max || '5', 10);
+  const windowDays = parseInt(args.window || '7', 10);
+
+  try {
+    const { issue, html } = await generateNewsletter({ maxPicks, windowDays });
+
+    const outDir = join(__dirname, '..', 'newsletter');
+    mkdirSync(outDir, { recursive: true });
+    const jsonPath = join(outDir, `${issue.issueDate}.json`);
+    const htmlPath = join(outDir, `${issue.issueDate}.html`);
+    writeFileSync(jsonPath, JSON.stringify(issue, null, 2));
+    writeFileSync(htmlPath, html);
+
+    console.log(`\nNuméro généré : ${issue.issueDate}`);
+    console.log(`  JSON : ${jsonPath}`);
+    console.log(`  HTML : ${htmlPath}`);
+    console.log(
+      `  ${issue.picks.length} pick(s) sur ${issue.activeThemes} thématique(s) actives dans la fenêtre ${windowDays}j.\n`
+    );
+    for (const p of issue.picks) {
+      console.log(`  · [${p.themeLabel}] ${p.creatorName} — ${p.title}`);
+    }
+    console.log('\nPensez à rédiger les accroches dans le JSON puis régénérer le HTML.');
+    process.exit(0);
+  } catch (e) {
+    console.error(e.message);
+    process.exit(1);
+  }
+}
