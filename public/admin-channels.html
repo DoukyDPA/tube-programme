@@ -125,6 +125,7 @@
         <button class="btn" id="add-channel-btn">+ Ajouter une chaîne</button>
         <button class="btn ok" id="run-sync-btn">⚡ Sync vidéos maintenant</button>
         <button class="btn" id="run-newsletter-btn" style="background:#7c3aed;color:#fff">✉️ Générer la newsletter</button>
+        <button class="btn ghost" id="fix-dates-btn" title="Rattrape les chaînes dont la date affiche 'Jamais'">🩹 Rattraper les dates « Jamais »</button>
         <button class="btn ghost hidden" id="import-culture-btn">Importer la liste Culture</button>
         <span class="count" id="count"></span>
       </div>
@@ -1005,6 +1006,46 @@ $('#import-culture-btn').addEventListener('click', async () => {
   await loadAll();
 });
 
+// ---------- Rattraper les dates 'Jamais' ----------
+// Cible UNIQUEMENT les chaînes dont lastVideoAt vaut 0 ou est absent,
+// dans le mode de l'onglet actif. Coût quota ~ 2 unités par chaîne.
+$('#fix-dates-btn').addEventListener('click', async () => {
+  const mode = activeTab;
+  if (mode !== 'tubiscope' && mode !== 'culture') {
+    return alert('Lance ce rattrapage depuis l\'onglet Tubiscope ou Culture.');
+  }
+  const targets = channels.filter(c => c.mode === mode && (!c.lastVideoAt || c.lastVideoAt === 0));
+  if (targets.length === 0) {
+    return alert('Aucune chaîne marquée « Jamais » dans cet onglet. Rien à rattraper.');
+  }
+  if (!confirm(`Rattraper ${targets.length} chaîne(s) sans date connue ?\nCoût estimé : ~${targets.length * 2} unités de quota YouTube.`)) return;
+
+  let updated = 0;
+  let stillEmpty = 0;
+  for (let i = 0; i < targets.length; i++) {
+    const ch = targets[i];
+    setStatus(`Rattrapage ${i + 1}/${targets.length} : ${ch.name}`, 'busy');
+    try {
+      const lastVideoAt = await fetchLastVideoAtFromYT(ch.channelId);
+      if (lastVideoAt > 0) {
+        await updateDoc(doc(db, 'channels', ch.channelId), {
+          lastVideoAt, lastCheckedAt: Date.now(), updatedAt: Date.now(),
+        });
+        updated++;
+      } else {
+        stillEmpty++;
+      }
+    } catch (e) {
+      stillEmpty++;
+      console.warn(ch.channelId, e.message);
+    }
+    await sleep(80);
+  }
+  setStatus(`Rattrapage terminé : ${updated} chaîne(s) corrigée(s), ${stillEmpty} sans vidéo trouvée.`, 'ok');
+  alert(`Terminé.\n${updated} chaîne(s) corrigée(s).\n${stillEmpty} restent sans date (chaînes vides ou supprimées).`);
+  await loadAll();
+});
+
 // ---------- Générer la newsletter (admin) ----------
 $('#run-newsletter-btn').addEventListener('click', async () => {
   const winRaw = prompt('Fenêtre en jours (vidéos publiées depuis combien de temps) ?', '7');
@@ -1444,22 +1485,30 @@ const parseDuration = (d) => {
   return (parseInt(m[1]||0,10)*3600) + (parseInt(m[2]||0,10)*60) + parseInt(m[3]||0,10);
 };
 
+// Renvoie la date de la dernière vidéo LONGUE de la chaîne (>= 180s).
+// Le filtre est volontaire : on ne veut pas que les shorts polluent la
+// colonne « Dernière vidéo » du tableau. On regarde 50 vidéos en arrière
+// pour s'assurer de trouver du format long même quand la chaîne enchaîne
+// des shorts dans la playlist UU.
 async function fetchLastVideoAtFromYT(channelId) {
   const playlistId = channelId.replace(/^UC/, 'UU');
-  const res = await fetch(`https://www.googleapis.com/youtube/v3/playlistItems?key=${YOUTUBE_API_KEY}&playlistId=${playlistId}&part=contentDetails,snippet&maxResults=10`);
+  const res = await fetch(`https://www.googleapis.com/youtube/v3/playlistItems?key=${YOUTUBE_API_KEY}&playlistId=${playlistId}&part=contentDetails,snippet&maxResults=50`);
   const data = await res.json();
   if (data.error) throw new Error(data.error.message);
   if (!data.items?.length) return 0;
   const videoIds = data.items.map(v => v.contentDetails.videoId).join(',');
   const det = await fetch(`https://www.googleapis.com/youtube/v3/videos?key=${YOUTUBE_API_KEY}&id=${videoIds}&part=contentDetails,snippet`);
   const dData = await det.json();
+  if (dData.error) throw new Error(dData.error.message);
+  let latest = 0;
   for (const it of data.items) {
     const d = dData.items?.find(x => x.id === it.contentDetails.videoId);
     if (!d) continue;
     if (parseDuration(d.contentDetails.duration) < 180) continue;
-    return new Date(d.snippet?.publishedAt || it.snippet.publishedAt).getTime();
+    const pub = new Date(d.snippet?.publishedAt || it.snippet.publishedAt).getTime();
+    if (pub > latest) latest = pub;
   }
-  return 0;
+  return latest;
 }
 
 const sleep = (ms) => new Promise(r => setTimeout(r, ms));

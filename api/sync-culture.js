@@ -68,16 +68,16 @@ async function fetchRecentLongVideos(channelId, apiKey, limit = 10) {
     data = await res.json();
   } catch (e) {
     console.warn(`  ${channelId} : fetch failed (${e.message})`);
-    return { ok: false, videos: [] };
+    return { ok: false, videos: [], latestPublishedAt: 0 };
   }
   if (data.error) {
     console.warn(`  ${channelId} : ${data.error.message}`);
-    return { ok: false, videos: [] };
+    return { ok: false, videos: [], latestPublishedAt: 0 };
   }
-  if (!data.items?.length) return { ok: true, videos: [] };
+  if (!data.items?.length) return { ok: true, videos: [], latestPublishedAt: 0 };
 
   const videoIds = data.items.map((v) => v.contentDetails.videoId).join(',');
-  if (!videoIds) return { ok: true, videos: [] };
+  if (!videoIds) return { ok: true, videos: [], latestPublishedAt: 0 };
 
   let detData;
   try {
@@ -87,29 +87,35 @@ async function fetchRecentLongVideos(channelId, apiKey, limit = 10) {
     detData = await detRes.json();
   } catch (e) {
     console.warn(`  ${channelId} : details fetch failed (${e.message})`);
-    return { ok: false, videos: [] };
+    return { ok: false, videos: [], latestPublishedAt: 0 };
   }
   if (detData.error) {
     console.warn(`  ${channelId} : details ${detData.error.message}`);
-    return { ok: false, videos: [] };
+    return { ok: false, videos: [], latestPublishedAt: 0 };
   }
 
+  // On parcourt les vidéos en gardant les longues. La plus récente
+  // d'entre elles donne latestPublishedAt. Les shorts sont exclus, et
+  // c'est voulu : ils polluent et ne sont pas du format Tubiscope.
+  let latestPublishedAt = 0;
   const long = [];
   for (const it of data.items) {
     const det = detData.items?.find((d) => d.id === it.contentDetails.videoId);
     if (!det) continue;
     if (parseDuration(det.contentDetails.duration) < MIN_DURATION_S) continue;
+    const pub = new Date(
+      det.snippet?.publishedAt || it.snippet.publishedAt
+    ).getTime();
+    if (pub > latestPublishedAt) latestPublishedAt = pub;
     long.push({
       youtubeId: it.contentDetails.videoId,
       channelId,
-      publishedAt: new Date(
-        det.snippet?.publishedAt || it.snippet.publishedAt
-      ).getTime(),
+      publishedAt: pub,
       title: det.snippet?.title || it.snippet.title || '',
       creatorName: det.snippet?.channelTitle || '',
     });
   }
-  return { ok: true, videos: long };
+  return { ok: true, videos: long, latestPublishedAt };
 }
 
 export default async function handler(req, res) {
@@ -163,25 +169,25 @@ export default async function handler(req, res) {
       let failedChannels = 0;
       for (const ch of channels) {
         try {
-          const { ok, videos: v } = await fetchRecentLongVideos(
+          const { ok, videos: v, latestPublishedAt } = await fetchRecentLongVideos(
             ch.channelId,
             YOUTUBE_API_KEY,
-            10
+            50
           );
           if (!ok) {
             failedChannels++;
             continue;
           }
           candidates.push(...v);
-          // last video by channel (max publishedAt parmi les longues)
-          if (v.length > 0) {
-            const maxAt = Math.max(...v.map((x) => x.publishedAt));
+          // lastVideoAt = vraie dernière vidéo de la chaîne (shorts inclus),
+          // pas seulement parmi les longues qui entrent dans les programs.
+          if (latestPublishedAt > 0) {
             channelStats[ch.channelId] = channelStats[ch.channelId] || {
               lastVideoAt: 0,
               videoCount: 0,
             };
-            if (maxAt > channelStats[ch.channelId].lastVideoAt) {
-              channelStats[ch.channelId].lastVideoAt = maxAt;
+            if (latestPublishedAt > channelStats[ch.channelId].lastVideoAt) {
+              channelStats[ch.channelId].lastVideoAt = latestPublishedAt;
             }
           }
         } catch (e) {

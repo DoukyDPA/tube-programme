@@ -54,11 +54,18 @@ const MIN_DURATION_S = 180;
 const TOP_N = 5;
 
 // Récupère les TOP_N dernières vidéos longues d'une chaîne avec leurs métadonnées.
-// Retourne { ok: boolean, videos: [...] }. ok=false si YouTube a renvoyé une
-// erreur ou si l'appel a planté : dans ce cas, ne JAMAIS purger l'existant.
+// Retourne { ok, videos, latestPublishedAt } :
+//   - videos              : top N filtrées par durée (>= MIN_DURATION_S), pour les programs
+//   - latestPublishedAt   : date de la dernière vidéo LONGUE publiée. Le filtre 180s
+//                           est conservé pour exclure les shorts qui polluent. On
+//                           regarde 50 vidéos en arrière pour s'assurer de trouver
+//                           du format long même si la chaîne enchaîne des shorts.
+//   - ok=false si YouTube a renvoyé une erreur ou si l'appel a planté : dans
+//     ce cas, ne JAMAIS purger l'existant.
 async function fetchTopVideos(channelId, apiKey) {
   const playlistId = channelId.replace(/^UC/, 'UU');
-  const url = `https://www.googleapis.com/youtube/v3/playlistItems?key=${apiKey}&playlistId=${playlistId}&part=contentDetails,snippet&maxResults=15`;
+  // 50 = max autorisé par l'API en un appel. Coût quota : 1 unité.
+  const url = `https://www.googleapis.com/youtube/v3/playlistItems?key=${apiKey}&playlistId=${playlistId}&part=contentDetails,snippet&maxResults=50`;
   let data;
   try {
     const res = await fetch(url);
@@ -69,10 +76,10 @@ async function fetchTopVideos(channelId, apiKey) {
   }
   if (data.error) {
     console.warn(`  ${channelId} : ${data.error.message}`);
-    return { ok: false, videos: [] };
+    return { ok: false, videos: [], latestPublishedAt: 0 };
   }
   // Pas d'erreur, mais playlist vide : c'est un état légitime (chaîne sans vidéos).
-  if (!data.items?.length) return { ok: true, videos: [] };
+  if (!data.items?.length) return { ok: true, videos: [], latestPublishedAt: 0 };
 
   const videoIds = data.items.map((v) => v.contentDetails.videoId).join(',');
   let detData;
@@ -83,29 +90,36 @@ async function fetchTopVideos(channelId, apiKey) {
     detData = await detRes.json();
   } catch (e) {
     console.warn(`  ${channelId} : details fetch failed (${e.message})`);
-    return { ok: false, videos: [] };
+    return { ok: false, videos: [], latestPublishedAt: 0 };
   }
   if (detData.error) {
     console.warn(`  ${channelId} : details ${detData.error.message}`);
-    return { ok: false, videos: [] };
+    return { ok: false, videos: [], latestPublishedAt: 0 };
   }
 
+  // On parcourt les 50 vidéos en gardant les longues. Date de la plus
+  // récente d'entre elles = lastVideoAt. Les shorts sont exclus, comme
+  // partout ailleurs dans Tubiscope.
+  let latestPublishedAt = 0;
   const out = [];
   for (const it of data.items) {
     const det = detData.items?.find((d) => d.id === it.contentDetails.videoId);
     if (!det) continue;
     if (parseDuration(det.contentDetails.duration) < MIN_DURATION_S) continue;
-    out.push({
-      youtubeId: it.contentDetails.videoId,
-      title: det.snippet?.title || '',
-      creatorName: det.snippet?.channelTitle || '',
-      publishedAt: new Date(
-        det.snippet?.publishedAt || it.snippet.publishedAt
-      ).getTime(),
-    });
-    if (out.length === TOP_N) break;
+    const pub = new Date(
+      det.snippet?.publishedAt || it.snippet.publishedAt
+    ).getTime();
+    if (pub > latestPublishedAt) latestPublishedAt = pub;
+    if (out.length < TOP_N) {
+      out.push({
+        youtubeId: it.contentDetails.videoId,
+        title: det.snippet?.title || '',
+        creatorName: det.snippet?.channelTitle || '',
+        publishedAt: pub,
+      });
+    }
   }
-  return { ok: true, videos: out };
+  return { ok: true, videos: out, latestPublishedAt };
 }
 
 export default async function handler(req, res) {
@@ -153,7 +167,7 @@ export default async function handler(req, res) {
       }
 
       // 2. Fetch top N vidéos depuis YouTube
-      const { ok, videos: top } = await fetchTopVideos(
+      const { ok, videos: top, latestPublishedAt } = await fetchTopVideos(
         channelId,
         YOUTUBE_API_KEY
       );
@@ -231,9 +245,10 @@ export default async function handler(req, res) {
         await batch.commit();
       }
 
-      // 6. Mettre à jour /channels avec lastVideoAt et videoCount
+      // 6. Mettre à jour /channels avec lastVideoAt et videoCount.
+      // lastVideoAt = vraie dernière vidéo (shorts compris), pas le top filtré.
       const newCount = existing.length - toDelete.length + toAdd.length;
-      const lastVideoAt = top[0]?.publishedAt || ch.lastVideoAt || 0;
+      const lastVideoAt = latestPublishedAt || ch.lastVideoAt || 0;
       await db.collection('channels').doc(channelId).set(
         {
           lastVideoAt,
