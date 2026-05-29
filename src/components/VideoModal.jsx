@@ -1,7 +1,12 @@
 import React from 'react';
 import { X } from 'lucide-react';
+import useBackButtonClose from '../hooks/useBackButtonClose';
 
 export default function VideoModal({ prog, onClose }) {
+  // Bouton Précédent du navigateur = ferme la modale au lieu de quitter
+  // l'app. Échap aussi. Cf. src/hooks/useBackButtonClose.js.
+  useBackButtonClose(!!prog, onClose, 'video');
+
   if (!prog) return null;
 
   return (

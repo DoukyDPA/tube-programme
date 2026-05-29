@@ -8,6 +8,7 @@ import {
 } from 'firebase/auth';
 import { addDoc, collection, serverTimestamp } from 'firebase/firestore';
 import { X, Lock, Mail, Loader2, CheckCircle, AlertCircle, Send, Sparkles } from 'lucide-react';
+import useBackButtonClose from '../hooks/useBackButtonClose';
 
 /**
  * Modal de gestion du compte personnel.
@@ -17,6 +18,9 @@ import { X, Lock, Mail, Loader2, CheckCircle, AlertCircle, Send, Sparkles } from
  *  3. Proposer une chaîne à la rédaction (Studio uniquement)
  */
 export default function AccountModal({ user, onClose, isStudio = false, categories = [] }) {
+  // Bouton Précédent du navigateur = ferme le compte.
+  useBackButtonClose(true, onClose, 'account');
+
   const [currentPwd, setCurrentPwd] = useState('');
   const [newPwd, setNewPwd] = useState('');
   const [confirmPwd, setConfirmPwd] = useState('');

@@ -3,6 +3,7 @@ import { Cpu, BookOpen, Trophy, Mic2, X, CheckCircle2, Loader2, Sparkles, Edit2,
 import { db, YOUTUBE_API_KEY } from '../firebase';
 import { collection, doc, setDoc, updateDoc, deleteDoc, writeBatch } from 'firebase/firestore';
 import { useCategories } from '../hooks/useCategories';
+import useBackButtonClose from '../hooks/useBackButtonClose';
 
 const ICONS = [
   { id: 'ia', icon: <Cpu size={18}/> },
@@ -20,6 +21,9 @@ const parseDuration = (duration) => {
 };
 
 export default function AdminPanel({ user, userData, customThemes = [], isAdmin = false, hydratedPrograms = [], onClose }) {
+  // Bouton Précédent du navigateur = ferme le panneau Admin.
+  useBackButtonClose(true, onClose, 'admin');
+
   // Catégories Tubiscope chargées depuis Firestore (avec fallback)
   const CATEGORIES = useCategories('tubiscope');
   const SCOPE_IDS = useMemo(() => new Set(CATEGORIES.map(c => c.id)), [CATEGORIES]);

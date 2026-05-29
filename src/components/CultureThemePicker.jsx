@@ -8,6 +8,7 @@ import {
 } from '../data/cultureChannels';
 import { CultureIcon } from '../data/cultureIcons';
 import { useCategories } from '../hooks/useCategories';
+import useBackButtonClose from '../hooks/useBackButtonClose';
 
 // Sélecteur des 7 thématiques Culture parmi les 19 disponibles.
 // S'affiche au premier accès ou via "Configurer mes thématiques" depuis le menu.
@@ -18,6 +19,10 @@ import { useCategories } from '../hooks/useCategories';
 //   onClose()            : fermer sans sauver
 //   onSaved(themeIds)    : callback après save réussi
 export default function CultureThemePicker({ user, initialSelected = [], onClose, onSaved }) {
+  // Bouton Précédent du navigateur = ferme le picker (si onClose existe).
+  // Au premier accès on a onClose=undefined, le picker reste donc bloquant.
+  useBackButtonClose(!!onClose, onClose, 'picker');
+
   // Catégories Culture depuis Firestore (avec fallback)
   const CULTURE_THEMES = useCategories('culture');
 

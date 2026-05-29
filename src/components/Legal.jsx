@@ -1,5 +1,6 @@
 import React, { useState } from 'react';
 import { X, Scale, ShieldCheck, FileText } from 'lucide-react';
+import useBackButtonClose from '../hooks/useBackButtonClose';
 
 // =====================================================================
 // Documents légaux Tubiscope
@@ -17,6 +18,9 @@ const EMAIL_CONTACT = 'daniel.p.angelini@gmail.com';
 const URL_SITE = 'tubiscope.up.railway.app';
 
 export default function Legal({ onClose, initialTab = 'mentions' }) {
+  // Bouton Précédent du navigateur = ferme le panneau Légal.
+  useBackButtonClose(true, onClose, 'legal');
+
   const [tab, setTab] = useState(initialTab);
 
   return (
