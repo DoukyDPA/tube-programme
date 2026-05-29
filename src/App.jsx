@@ -18,6 +18,7 @@ import { MODE_STANDARD } from './data/appMode';
 import { Sparkles, Home, Settings, Loader2, RefreshCw, LogOut, Cpu, BookOpen, Trophy, Mic2, Clapperboard, Info, UserCircle, ChevronDown } from 'lucide-react';
 import { useCategories } from './hooks/useCategories';
 import { getCategoryIcon } from './data/categoryIcons';
+import { capProgramsPerChannel } from './utils/programs';
 
 // Logo TubiScope avec sous-titre Studio optionnel.
 // On garde le bleu indigo de Tubiscope (par opposition au fuchsia Culture).
@@ -781,7 +782,9 @@ export default function App() {
 
               {/* Rangées des scopes éditeur */}
               {CATEGORIES.map(cat => {
-                const catProgs = hydratedPrograms.filter(p => p.categoryId === cat.id);
+                const catProgs = capProgramsPerChannel(
+                  hydratedPrograms.filter(p => p.categoryId === cat.id)
+                );
                 if (catProgs.length === 0) return null;
                 return (
                   <ProgramRow
@@ -813,7 +816,9 @@ export default function App() {
 
               {/* Rangées des thématiques personnelles */}
               {customThemes.map(ct => {
-                const catProgs = hydratedPrograms.filter(p => p.categoryId === ct.id);
+                const catProgs = capProgramsPerChannel(
+                  hydratedPrograms.filter(p => p.categoryId === ct.id)
+                );
                 if (catProgs.length === 0) return null;
                 return (
                   <ProgramRow
@@ -832,7 +837,9 @@ export default function App() {
             </>
           ) : (
             <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-6 px-4 md:px-0">
-              {hydratedPrograms.filter(p => p.categoryId === activeTab).map(prog => (
+              {capProgramsPerChannel(
+                hydratedPrograms.filter(p => p.categoryId === activeTab)
+              ).map(prog => (
                  <ProgramCard
                    key={prog.id}
                    prog={prog}

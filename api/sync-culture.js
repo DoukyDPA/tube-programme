@@ -26,6 +26,9 @@ const __dirname = dirname(__filename);
 // Hardcodé pour éviter de dépendre de cultureChannels.js maintenant que
 // /channels est la source de vérité.
 const CULTURE_VIDEOS_PER_THEME = 25;
+// Pour qu'une chaîne très active n'écrase pas toutes les autres dans
+// une thématique, on cap à 5 vidéos par chaîne avant de prendre le top.
+const MAX_PER_CHANNEL = 5;
 const MIN_DURATION_S = 180;
 
 const initAdmin = () => {
@@ -196,9 +199,18 @@ export default async function handler(req, res) {
         }
       }
 
-      // 3. Top CULTURE_VIDEOS_PER_THEME les plus récentes
+      // 3. Tri par date, cap MAX_PER_CHANNEL par chaîne, puis on garde
+      //    les CULTURE_VIDEOS_PER_THEME plus récentes du résultat.
       candidates.sort((a, b) => b.publishedAt - a.publishedAt);
-      const top = candidates.slice(0, CULTURE_VIDEOS_PER_THEME);
+      const seenPerChannel = new Map();
+      const capped = [];
+      for (const v of candidates) {
+        const n = seenPerChannel.get(v.channelId) || 0;
+        if (n >= MAX_PER_CHANNEL) continue;
+        seenPerChannel.set(v.channelId, n + 1);
+        capped.push(v);
+      }
+      const top = capped.slice(0, CULTURE_VIDEOS_PER_THEME);
       const topIds = new Set(top.map((v) => v.youtubeId));
 
       // 4. Lire l'existant

@@ -34,6 +34,7 @@ import {
 import { CultureIcon } from '../data/cultureIcons';
 import { MODE_CULTURE } from '../data/appMode';
 import { useCategories } from '../hooks/useCategories';
+import { capProgramsPerChannel } from '../utils/programs';
 
 import Auth from './Auth';
 import ProgramRow from './ProgramRow';
@@ -1075,7 +1076,7 @@ export default function CultureApp() {
                 />
               )}
               {orderedUserThemes.map((t) => {
-                const progs = hydrated[t.id] || [];
+                const progs = capProgramsPerChannel(hydrated[t.id] || []);
                 if (progs.length === 0) return null;
                 return (
                   <ThemeRow
@@ -1104,7 +1105,7 @@ export default function CultureApp() {
           ) : (
             <ThemeDetail
               theme={CULTURE_THEMES.find((t) => t.id === activeTab)}
-              programs={hydrated[activeTab] || []}
+              programs={capProgramsPerChannel(hydrated[activeTab] || [])}
               onSelect={setSelectedProg}
               onRemove={removeProgram}
               isAdmin={isAdmin}
