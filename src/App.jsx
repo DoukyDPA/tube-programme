@@ -19,13 +19,26 @@ import { Sparkles, Home, Settings, Loader2, RefreshCw, LogOut, Cpu, BookOpen, Tr
 import { useCategories } from './hooks/useCategories';
 import { getCategoryIcon } from './data/categoryIcons';
 
-// Nouveau composant d'icône TubiScope
-const AppIcon = () => (
-  <div className="w-10 h-10 bg-gradient-to-br from-indigo-500 to-indigo-700 rounded-xl flex items-center justify-center shadow-lg shadow-indigo-500/20 shrink-0">
-    <svg viewBox="0 0 24 24" fill="none" stroke="white" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round" className="w-6 h-6">
-      <circle cx="12" cy="12" r="10" />
-      <polygon points="10 8 16 12 10 16 10 8" fill="white" />
-    </svg>
+// Logo TubiScope avec sous-titre Studio optionnel.
+// On garde le bleu indigo de Tubiscope (par opposition au fuchsia Culture).
+const AppLogo = ({ studio = false }) => (
+  <div className="flex items-center gap-3">
+    <div className="w-10 h-10 bg-gradient-to-br from-indigo-500 to-indigo-700 rounded-xl flex items-center justify-center shadow-lg shadow-indigo-500/20 shrink-0">
+      <svg viewBox="0 0 24 24" fill="none" stroke="white" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round" className="w-6 h-6">
+        <circle cx="12" cy="12" r="10" />
+        <polygon points="10 8 16 12 10 16 10 8" fill="white" />
+      </svg>
+    </div>
+    <div className="flex flex-col leading-tight">
+      <h1 className="text-xl font-black text-white tracking-tight">
+        Tubi<span className="text-indigo-500">Scope</span>
+      </h1>
+      {studio && (
+        <span className="text-[10px] font-bold text-indigo-300/90 uppercase tracking-widest">
+          Studio
+        </span>
+      )}
+    </div>
   </div>
 );
 
@@ -491,9 +504,34 @@ export default function App() {
     };
   };
 
-  // Avec le nouveau modèle, tous les programmes lus sont déjà personnalisés pour ce user :
-  // ses propres thèmes + les scopes éditeur. Pas de filtrage supplémentaire nécessaire.
-  const personalizedLatestPrograms = hydratedPrograms;
+  // Studio = abonné premium. Il peut choisir de masquer les Scopes éditeur
+  // pour ne voir que ses propres thèmes. Pour les comptes gratuits, on
+  // garde toujours les Scopes visibles (sinon plus rien à afficher).
+  const isStudio = !!userData?.isPremium;
+  const showScopes = !isStudio || userData?.showScopes !== false;
+
+  const toggleShowScopes = async () => {
+    if (!user || !isStudio) return;
+    const next = !showScopes;
+    try {
+      await setDoc(doc(db, 'users', user.uid), { showScopes: next }, { merge: true });
+      setUserData((prev) => ({ ...prev, showScopes: next }));
+      // Si l'onglet courant pointe vers un Scope qu'on vient de masquer,
+      // on rebascule sur Accueil pour éviter une page vide.
+      if (!next && SCOPE_IDS.includes(activeTab)) {
+        setActiveTab('accueil');
+      }
+    } catch (e) {
+      alert('Impossible de mettre à jour la préférence : ' + e.message);
+    }
+  };
+
+  // Programmes affichés sur la home et dans la nav. Si le Studio a masqué
+  // les Scopes, on ne garde que les vidéos issues de ses thèmes perso.
+  const visiblePrograms = showScopes
+    ? hydratedPrograms
+    : hydratedPrograms.filter((p) => p._source !== 'scope');
+  const personalizedLatestPrograms = visiblePrograms;
 
   if (loading) return <div className="h-screen bg-slate-950 flex items-center justify-center"><Loader2 className="animate-spin text-indigo-500" size={40} /></div>;
   if (!user) return <Auth />;
@@ -506,9 +544,8 @@ export default function App() {
 
       {/* SIDEBAR PC */}
       <aside className="hidden md:flex w-[260px] bg-slate-950/95 border-r border-slate-800/50 flex-col z-50 shadow-2xl h-screen">
-        <div className="p-8 flex items-center gap-3 shrink-0">
-          <AppIcon />
-          <h1 className="text-xl font-black text-white tracking-tight">Tubi<span className="text-indigo-500">Scope</span></h1>
+        <div className="p-8 shrink-0">
+          <AppLogo studio={!!userData?.isPremium} />
         </div>
 
         <nav className="flex-1 px-4 py-4 space-y-1 overflow-y-auto overflow-x-visible">
@@ -516,8 +553,10 @@ export default function App() {
             <Home size={18} /> Accueil
           </button>
 
-          <div className="mt-8 mb-3 px-4 text-[10px] font-bold text-slate-600 uppercase tracking-widest">Catégories</div>
-          {CATEGORIES.map(cat => {
+          {showScopes && (
+            <div className="mt-8 mb-3 px-4 text-[10px] font-bold text-slate-600 uppercase tracking-widest">Catégories</div>
+          )}
+          {showScopes && CATEGORIES.map(cat => {
             const { count, names } = getChannelsForCategory(cat.id);
             const isExpanded = expandedCat === cat.id;
             const isActive = activeTab === cat.id;
@@ -608,9 +647,31 @@ export default function App() {
             </>
           )}
 
+          {/* Toggle Studio : voir ou pas les chaînes des Scopes éditeur
+              en plus des thèmes perso. Visible seulement pour les Studio. */}
+          {isStudio && (
+            <div className="mt-8 mb-2 px-4">
+              <button
+                onClick={toggleShowScopes}
+                className="w-full flex items-center justify-between gap-3 px-3 py-3 bg-slate-800/40 hover:bg-slate-800 rounded-xl border border-slate-700/40 transition-all"
+                title="Afficher ou masquer les chaînes éditoriales Tubiscope"
+              >
+                <div className="flex flex-col items-start text-left">
+                  <span className="text-[11px] font-bold text-slate-200">Scopes éditeur</span>
+                  <span className="text-[9px] text-slate-500 mt-0.5">
+                    {showScopes ? 'Visibles dans la nav' : 'Masqués, thèmes perso seuls'}
+                  </span>
+                </div>
+                <span className={`shrink-0 w-9 h-5 rounded-full relative transition-colors ${showScopes ? 'bg-indigo-500' : 'bg-slate-700'}`}>
+                  <span className={`absolute top-0.5 w-4 h-4 bg-white rounded-full transition-all ${showScopes ? 'left-[18px]' : 'left-0.5'}`} />
+                </span>
+              </button>
+            </div>
+          )}
+
           {/* Séparateur : les boutons ci-dessous ne sont pas des chaînes
               mais des actions de niveau application. */}
-          <div className="mt-8 mb-3 mx-4">
+          <div className="mt-6 mb-3 mx-4">
             <div className="h-px bg-slate-800/70" />
           </div>
 
@@ -659,9 +720,8 @@ export default function App() {
       <main className="flex-1 overflow-y-auto h-screen pb-24 md:pb-0 relative">
         <DiscoverBanner mode={MODE_STANDARD} />
         <header className="flex justify-between items-center p-4 md:p-10 pb-4 md:pb-8">
-          <div className="flex items-center gap-3 md:hidden">
-            <AppIcon />
-            <h1 className="text-xl font-black text-white tracking-tight">Tubi<span className="text-indigo-500">Scope</span></h1>
+          <div className="md:hidden">
+            <AppLogo studio={!!userData?.isPremium} />
           </div>
 
           <h2 className="hidden md:block text-2xl md:text-3xl font-bold text-white tracking-tight">
@@ -792,7 +852,14 @@ export default function App() {
       {selectedProg && <VideoModal prog={selectedProg} onClose={() => setSelectedProg(null)} />}
       {isAdminOpen && <AdminPanel user={user} userData={userData} customThemes={customThemes} isAdmin={isAdmin} hydratedPrograms={hydratedPrograms} onClose={() => setIsAdminOpen(false)} />}
       {legalTab && <Legal initialTab={legalTab} onClose={() => setLegalTab(null)} />}
-      {showAccount && <AccountModal user={user} onClose={() => setShowAccount(false)} />}
+      {showAccount && (
+        <AccountModal
+          user={user}
+          onClose={() => setShowAccount(false)}
+          isStudio={isStudio}
+          categories={CATEGORIES}
+        />
+      )}
     </div>
   );
 }

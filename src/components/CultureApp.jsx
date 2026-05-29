@@ -1128,7 +1128,14 @@ export default function CultureApp() {
           onSaved={() => setShowPicker(false)}
         />
       )}
-      {showAccount && <AccountModal user={user} onClose={() => setShowAccount(false)} />}
+      {showAccount && (
+        <AccountModal
+          user={user}
+          onClose={() => setShowAccount(false)}
+          isStudio={!!userData?.isPremium}
+          categories={CULTURE_THEMES}
+        />
+      )}
       {legalTab && <Legal initialTab={legalTab} onClose={() => setLegalTab(null)} />}
       {isSyncing && (
         <SyncOverlay message={syncMessage} subMessage={syncSubMessage} />

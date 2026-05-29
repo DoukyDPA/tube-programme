@@ -1,25 +1,85 @@
 import React, { useState } from 'react';
-import { auth } from '../firebase';
+import { auth, db } from '../firebase';
 import {
   EmailAuthProvider,
   reauthenticateWithCredential,
   updatePassword,
   sendPasswordResetEmail,
 } from 'firebase/auth';
-import { X, Lock, Mail, Loader2, CheckCircle, AlertCircle } from 'lucide-react';
+import { addDoc, collection, serverTimestamp } from 'firebase/firestore';
+import { X, Lock, Mail, Loader2, CheckCircle, AlertCircle, Send, Sparkles } from 'lucide-react';
 
 /**
  * Modal de gestion du compte personnel.
- * Deux actions :
+ * Trois sections :
  *  1. Changer le mot de passe (re-auth requise par Firebase)
  *  2. Envoyer un email de réinitialisation
+ *  3. Proposer une chaîne à la rédaction (Studio uniquement)
  */
-export default function AccountModal({ user, onClose }) {
+export default function AccountModal({ user, onClose, isStudio = false, categories = [] }) {
   const [currentPwd, setCurrentPwd] = useState('');
   const [newPwd, setNewPwd] = useState('');
   const [confirmPwd, setConfirmPwd] = useState('');
   const [busy, setBusy] = useState(false);
   const [msg, setMsg] = useState(null); // { type: 'success' | 'error', text: string }
+
+  // Proposition de chaîne
+  const [propHandle, setPropHandle] = useState('');
+  const [propCat, setPropCat] = useState(categories[0]?.id || '');
+  const [propReason, setPropReason] = useState('');
+  const [propBusy, setPropBusy] = useState(false);
+  const [propMsg, setPropMsg] = useState(null);
+
+  const handleProposeChannel = async (e) => {
+    e.preventDefault();
+    setPropMsg(null);
+
+    const raw = propHandle.trim();
+    if (!raw) {
+      setPropMsg({ type: 'error', text: 'Indique au moins le handle ou l\'URL de la chaîne.' });
+      return;
+    }
+    if (!propCat) {
+      setPropMsg({ type: 'error', text: 'Choisis une catégorie suggérée.' });
+      return;
+    }
+
+    setPropBusy(true);
+    try {
+      // Normalise un peu : on retire l'URL si elle est complète, on garde
+      // le handle ou le channelId brut. Le tri définitif est fait côté admin.
+      const cleaned = raw
+        .replace(/^https?:\/\/(www\.)?youtube\.com\//, '')
+        .replace(/^@/, '');
+
+      await addDoc(collection(db, 'channelProposals'), {
+        handle: cleaned,
+        rawInput: raw,
+        suggestedCategoryId: propCat,
+        reason: propReason.trim().slice(0, 500),
+        status: 'pending',
+        proposedBy: user.uid,
+        proposedByEmail: user.email || null,
+        createdAt: Date.now(),
+        createdAtServer: serverTimestamp(),
+      });
+
+      setPropHandle('');
+      setPropReason('');
+      setPropMsg({
+        type: 'success',
+        text: 'Merci ! Ta proposition est envoyée. La rédaction de Tubiscope va l\'examiner.',
+      });
+      setTimeout(() => setPropMsg(null), 6000);
+    } catch (err) {
+      setPropMsg({
+        type: 'error',
+        text: 'Impossible d\'envoyer la proposition : ' + (err.message || 'erreur inconnue'),
+      });
+    } finally {
+      setPropBusy(false);
+    }
+  };
 
   const showMsg = (type, text) => {
     setMsg({ type, text });
@@ -177,6 +237,77 @@ export default function AccountModal({ user, onClose }) {
               Envoyer le lien de réinitialisation
             </button>
           </div>
+
+          {/* Proposer une chaîne (Studio seulement) */}
+          {isStudio && (
+            <>
+              <div className="flex items-center gap-3 text-xs text-slate-600">
+                <div className="flex-1 h-px bg-slate-800" />
+                Studio
+                <div className="flex-1 h-px bg-slate-800" />
+              </div>
+
+              <form onSubmit={handleProposeChannel} className="space-y-3">
+                <div className="flex items-center gap-2 text-sm font-semibold text-indigo-300 mb-1">
+                  <Sparkles size={14} /> Proposer une chaîne à Tubiscope
+                </div>
+                <p className="text-xs text-slate-500 mb-2 leading-relaxed">
+                  Tu repères une chaîne YouTube qui a sa place ici ? Envoie-la nous.
+                  Tu proposes, la rédaction choisit.
+                </p>
+
+                <input
+                  type="text"
+                  placeholder="Handle ou URL YouTube (ex: @MonsieurPhi)"
+                  value={propHandle}
+                  onChange={(e) => setPropHandle(e.target.value)}
+                  className="w-full bg-slate-800 p-3 rounded-xl text-white text-sm outline-none focus:ring-2 focus:ring-indigo-500"
+                />
+
+                <select
+                  value={propCat}
+                  onChange={(e) => setPropCat(e.target.value)}
+                  className="w-full bg-slate-800 p-3 rounded-xl text-white text-sm outline-none focus:ring-2 focus:ring-indigo-500"
+                >
+                  <option value="">Catégorie suggérée…</option>
+                  {categories.map((c) => (
+                    <option key={c.id} value={c.id}>
+                      {c.label}
+                    </option>
+                  ))}
+                </select>
+
+                <textarea
+                  placeholder="Pourquoi cette chaîne mérite sa place (facultatif, 500 caractères max)"
+                  value={propReason}
+                  onChange={(e) => setPropReason(e.target.value.slice(0, 500))}
+                  rows={3}
+                  className="w-full bg-slate-800 p-3 rounded-xl text-white text-sm outline-none focus:ring-2 focus:ring-indigo-500 resize-none"
+                />
+
+                {propMsg && (
+                  <div className={`flex items-start gap-2 p-3 rounded-xl text-sm ${
+                    propMsg.type === 'success'
+                      ? 'bg-emerald-500/10 border border-emerald-500/30 text-emerald-300'
+                      : 'bg-red-500/10 border border-red-500/30 text-red-300'
+                  }`}>
+                    {propMsg.type === 'success'
+                      ? <CheckCircle size={16} className="shrink-0 mt-0.5" />
+                      : <AlertCircle size={16} className="shrink-0 mt-0.5" />}
+                    <span>{propMsg.text}</span>
+                  </div>
+                )}
+
+                <button
+                  type="submit"
+                  disabled={propBusy}
+                  className="w-full py-3 bg-indigo-600 hover:bg-indigo-500 disabled:bg-slate-700 disabled:cursor-not-allowed text-white rounded-xl font-bold text-sm transition-all flex items-center justify-center gap-2"
+                >
+                  {propBusy ? <Loader2 className="animate-spin" size={18} /> : (<><Send size={14} /> Envoyer la proposition</>)}
+                </button>
+              </form>
+            </>
+          )}
         </div>
       </div>
     </div>

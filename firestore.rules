@@ -158,6 +158,31 @@ service cloud.firestore {
     }
 
     // =========================================================
+    // 8. Collection /channelProposals (Studio propose, rédaction tranche)
+    // =========================================================
+    // - create : tout user authentifié, en se déclarant lui-même comme
+    //            auteur. status forcé à 'pending'. Le serveur ne fait pas
+    //            confiance à isPremium côté client : on accepte tous les
+    //            users signed-in, la modération suit côté admin.
+    // - read   : auteur (peut suivre l'état de sa proposition) ou admin.
+    // - update / delete : admin only (changement de status, archivage).
+    function isValidProposalCreate(data) {
+      return data.keys().hasAll(['handle', 'suggestedCategoryId', 'status', 'proposedBy', 'createdAt'])
+          && data.handle is string && data.handle.size() > 0 && data.handle.size() < 200
+          && data.suggestedCategoryId is string
+          && data.status == 'pending'
+          && data.proposedBy == request.auth.uid
+          && data.createdAt is number;
+    }
+
+    match /channelProposals/{proposalId} {
+      allow create: if isSignedIn() && isValidProposalCreate(request.resource.data);
+      allow read:   if isAdmin()
+                    || (isSignedIn() && resource.data.proposedBy == request.auth.uid);
+      allow update, delete: if isAdmin();
+    }
+
+    // =========================================================
     // 8. Fallback : tout le reste est interdit par défaut
     // =========================================================
     match /{document=**} {

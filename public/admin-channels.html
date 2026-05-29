@@ -104,6 +104,7 @@
     <button data-tab="culture">Tubiscope Culture</button>
     <button data-tab="categories">Catégories</button>
     <button data-tab="users">Utilisateurs</button>
+    <button data-tab="proposals">Propositions <span id="proposals-badge" class="hidden" style="display:inline-block;background:#7c3aed;color:#fff;border-radius:10px;padding:1px 7px;font-size:11px;margin-left:4px"></span></button>
   </div>
 
   <main>
@@ -184,6 +185,38 @@
       <h3 style="margin-top: 28px;">Tubiscope Culture</h3>
       <div id="cat-culture-list"></div>
     </section>
+
+    <!-- ============== PROPOSITIONS ============== -->
+    <section id="view-proposals" class="hidden">
+      <div class="notice info">
+        Propositions de chaînes envoyées par les abonnés Studio. <strong>Accepter</strong> ouvre le formulaire d'ajout pré-rempli, <strong>Refuser</strong> ferme la proposition.
+      </div>
+      <div class="toolbar">
+        <select id="proposals-filter">
+          <option value="pending">À traiter</option>
+          <option value="accepted">Acceptées</option>
+          <option value="rejected">Refusées</option>
+          <option value="">Toutes</option>
+        </select>
+        <button class="btn ghost" id="proposals-reload-btn">↻ Recharger</button>
+        <span class="count" id="proposals-count"></span>
+      </div>
+      <table>
+        <thead>
+          <tr>
+            <th>Date</th>
+            <th>Auteur</th>
+            <th>Chaîne proposée</th>
+            <th>Catégorie suggérée</th>
+            <th>Motivation</th>
+            <th>Statut</th>
+            <th>Actions</th>
+          </tr>
+        </thead>
+        <tbody id="proposals-tbody"></tbody>
+      </table>
+      <div id="proposals-empty" class="empty hidden">Aucune proposition.</div>
+    </section>
   </main>
 </div>
 
@@ -263,7 +296,7 @@ import {
   getAuth, signInWithEmailAndPassword, signOut, onAuthStateChanged, getIdTokenResult
 } from 'https://www.gstatic.com/firebasejs/10.13.0/firebase-auth.js';
 import {
-  getFirestore, collection, doc, getDocs, getDoc, setDoc, deleteDoc, updateDoc, writeBatch, query, where
+  getFirestore, collection, doc, getDocs, getDoc, setDoc, deleteDoc, updateDoc, writeBatch, query, where, orderBy
 } from 'https://www.gstatic.com/firebasejs/10.13.0/firebase-firestore.js';
 
 // =====================================================================
@@ -308,6 +341,11 @@ let users = [];
 let usersLoaded = false;
 let usersSortBy = 'createdAt';
 let usersSortDir = 'desc';
+
+// État onglet Propositions
+let proposals = [];
+let proposalsLoaded = false;
+let pendingProposalAcceptance = null; // proposalId en cours de validation via la modale d'ajout
 
 // ---------- DOM helpers ----------
 const $ = (sel) => document.querySelector(sel);
@@ -361,6 +399,9 @@ onAuthStateChanged(auth, async (u) => {
   $('#app').classList.remove('hidden');
   $('#user-info').textContent = u.email;
   await loadAll();
+  // Précharge silencieusement les propositions pour afficher le badge
+  // « X à traiter » sur l'onglet sans attendre que l'admin clique dessus.
+  loadProposals().catch(() => {});
 });
 
 // ---------- Load ----------
@@ -405,17 +446,22 @@ async function loadAll() {
 
 // ---------- Render ----------
 function render() {
-  // Trois vues mutuellement exclusives
+  // Quatre vues mutuellement exclusives
   const showChannels = (activeTab === 'tubiscope' || activeTab === 'culture');
   $('#view-channels').classList.toggle('hidden', !showChannels);
   $('#view-categories').classList.toggle('hidden', activeTab !== 'categories');
   $('#view-users').classList.toggle('hidden', activeTab !== 'users');
+  $('#view-proposals').classList.toggle('hidden', activeTab !== 'proposals');
 
   if (activeTab === 'categories') return renderCategories();
   if (activeTab === 'users') {
-    // Premier passage : on charge depuis l'API
     if (!usersLoaded) loadUsers();
     else renderUsers();
+    return;
+  }
+  if (activeTab === 'proposals') {
+    if (!proposalsLoaded) loadProposals();
+    else renderProposals();
     return;
   }
   renderChannels();
@@ -586,7 +632,15 @@ $('#filter-age').addEventListener('change', renderChannels);
 function openModal(id) { $(id).classList.add('open'); }
 function closeModal(id) { $(id).classList.remove('open'); }
 document.querySelectorAll('[data-close]').forEach(b => {
-  b.addEventListener('click', () => b.closest('.modal-bg').classList.remove('open'));
+  b.addEventListener('click', () => {
+    const modalBg = b.closest('.modal-bg');
+    modalBg.classList.remove('open');
+    // Si on ferme la modale d'ajout sans valider, on annule l'acceptation
+    // en cours pour éviter qu'une prochaine validation ne marque la mauvaise.
+    if (modalBg.id === 'modal-add-channel') {
+      pendingProposalAcceptance = null;
+    }
+  });
 });
 
 // ---------- Add channel ----------
@@ -628,6 +682,26 @@ $('#confirm-add-channel').addEventListener('click', async () => {
     }, { merge: true });
 
     setStatus(`Ajoutée : ${name}`, 'ok');
+
+    // Si on validait une proposition Studio, on la marque acceptée maintenant.
+    if (pendingProposalAcceptance) {
+      try {
+        await updateDoc(doc(db, 'channelProposals', pendingProposalAcceptance), {
+          status: 'accepted',
+          decidedAt: Date.now(),
+          decidedBy: currentUser?.uid || null,
+          resolvedChannelId: channelId,
+        });
+        const p = proposals.find(x => x.id === pendingProposalAcceptance);
+        if (p) p.status = 'accepted';
+        updateProposalsBadge();
+      } catch (err) {
+        console.warn('Impossible de marquer la proposition acceptée :', err.message);
+      } finally {
+        pendingProposalAcceptance = null;
+      }
+    }
+
     closeModal('#modal-add-channel');
     await loadAll();
   } catch (e) {
@@ -1222,6 +1296,145 @@ $$('th[data-users-sort]').forEach(th => {
     renderUsers();
   });
 });
+
+// =====================================================================
+// Admin Propositions de chaînes
+// =====================================================================
+async function loadProposals() {
+  setStatus('Chargement des propositions…', 'busy');
+  try {
+    const snap = await getDocs(
+      query(collection(db, 'channelProposals'), orderBy('createdAt', 'desc'))
+    );
+    proposals = snap.docs.map(d => ({ id: d.id, ...d.data() }));
+    proposalsLoaded = true;
+    updateProposalsBadge();
+    setStatus(`${proposals.length} proposition(s).`, 'ok');
+    renderProposals();
+  } catch (e) {
+    setStatus('Erreur : ' + e.message, 'err');
+    $('#proposals-tbody').innerHTML = '';
+    $('#proposals-empty').classList.remove('hidden');
+    $('#proposals-empty').textContent = 'Erreur : ' + e.message;
+  }
+}
+
+function updateProposalsBadge() {
+  const pending = proposals.filter(p => p.status === 'pending').length;
+  const badge = $('#proposals-badge');
+  if (pending > 0) {
+    badge.textContent = pending;
+    badge.classList.remove('hidden');
+  } else {
+    badge.classList.add('hidden');
+  }
+}
+
+function renderProposals() {
+  const statusFilter = $('#proposals-filter').value;
+  let rows = proposals;
+  if (statusFilter) rows = rows.filter(p => p.status === statusFilter);
+
+  $('#proposals-count').textContent = `${rows.length} proposition${rows.length > 1 ? 's' : ''}`;
+  $('#proposals-empty').classList.toggle('hidden', rows.length > 0);
+
+  const tbody = $('#proposals-tbody');
+  tbody.innerHTML = rows.map(p => {
+    const cat = categories.find(c => c.id === p.suggestedCategoryId);
+    const catLabel = cat ? esc(cat.label) : `<em>${esc(p.suggestedCategoryId || '?')}</em>`;
+    const date = p.createdAt
+      ? new Date(p.createdAt).toLocaleDateString('fr-FR', { day: '2-digit', month: 'short', year: 'numeric' })
+      : '—';
+    const statusBadge = {
+      pending:  '<span style="background:#7c3aed;color:#fff;border-radius:6px;padding:2px 8px;font-size:11px">À traiter</span>',
+      accepted: '<span style="background:#059669;color:#fff;border-radius:6px;padding:2px 8px;font-size:11px">Acceptée</span>',
+      rejected: '<span style="background:#475569;color:#fff;border-radius:6px;padding:2px 8px;font-size:11px">Refusée</span>',
+    }[p.status] || esc(p.status || '');
+    const reasonShort = (p.reason || '').slice(0, 80) + ((p.reason || '').length > 80 ? '…' : '');
+    const actions = p.status === 'pending'
+      ? `<div class="actions">
+           <button class="btn ok" data-proposal-action="accept" data-id="${p.id}">Accepter</button>
+           <button class="btn warn" data-proposal-action="reject" data-id="${p.id}">Refuser</button>
+         </div>`
+      : `<button class="btn ghost" data-proposal-action="reopen" data-id="${p.id}">Rouvrir</button>`;
+    return `
+      <tr>
+        <td>${date}</td>
+        <td>${esc(p.proposedByEmail || p.proposedBy || '?')}</td>
+        <td><strong>${esc(p.handle || p.rawInput || '?')}</strong></td>
+        <td>${catLabel}</td>
+        <td title="${esc(p.reason || '')}">${esc(reasonShort) || '<em style="color:#94a3b8">—</em>'}</td>
+        <td>${statusBadge}</td>
+        <td>${actions}</td>
+      </tr>
+    `;
+  }).join('');
+
+  tbody.querySelectorAll('button[data-proposal-action]').forEach(btn => {
+    btn.addEventListener('click', () => onProposalAction(btn.dataset.proposalAction, btn.dataset.id));
+  });
+}
+
+async function onProposalAction(action, proposalId) {
+  const p = proposals.find(x => x.id === proposalId);
+  if (!p) return;
+
+  if (action === 'reject') {
+    if (!confirm(`Refuser la proposition de ${p.handle} ?`)) return;
+    try {
+      await updateDoc(doc(db, 'channelProposals', proposalId), {
+        status: 'rejected',
+        decidedAt: Date.now(),
+        decidedBy: currentUser?.uid || null,
+      });
+      p.status = 'rejected';
+      updateProposalsBadge();
+      renderProposals();
+    } catch (e) {
+      alert('Erreur : ' + e.message);
+    }
+    return;
+  }
+
+  if (action === 'reopen') {
+    try {
+      await updateDoc(doc(db, 'channelProposals', proposalId), {
+        status: 'pending',
+        reopenedAt: Date.now(),
+      });
+      p.status = 'pending';
+      updateProposalsBadge();
+      renderProposals();
+    } catch (e) {
+      alert('Erreur : ' + e.message);
+    }
+    return;
+  }
+
+  if (action === 'accept') {
+    // Bascule sur l'onglet adapté à la catégorie suggérée (tubiscope ou
+    // culture) pour que la modale d'ajout connaisse le bon mode.
+    const cat = categories.find(c => c.id === p.suggestedCategoryId);
+    if (!cat) {
+      if (!confirm("La catégorie suggérée n'existe plus. Continuer quand même ?")) return;
+    } else {
+      activeTab = cat.mode || 'tubiscope';
+      $$('.tabs button').forEach(b =>
+        b.classList.toggle('active', b.dataset.tab === activeTab)
+      );
+    }
+    // Pré-remplit la modale d'ajout
+    const mode = activeTab;
+    $('#new-cat').innerHTML = categories.filter(c => c.mode === mode)
+      .map(c => `<option value="${c.id}" ${c.id === p.suggestedCategoryId ? 'selected' : ''}>${esc(c.label)}</option>`).join('');
+    $('#new-handle').value = p.handle || p.rawInput || '';
+    pendingProposalAcceptance = proposalId;
+    openModal('#modal-add-channel');
+  }
+}
+
+$('#proposals-filter').addEventListener('change', renderProposals);
+$('#proposals-reload-btn').addEventListener('click', () => { proposalsLoaded = false; loadProposals(); });
 
 // ---------- YouTube helpers ----------
 const parseDuration = (d) => {
