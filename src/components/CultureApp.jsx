@@ -40,6 +40,7 @@ import { capProgramsPerChannel } from '../utils/programs';
 
 import Auth from './Auth';
 import ProgramRow from './ProgramRow';
+import ProgramGrid from './ProgramGrid';
 import VideoModal from './VideoModal';
 import CultureThemePicker from './CultureThemePicker';
 import DiscoverBanner from './DiscoverBanner';
@@ -1375,8 +1376,7 @@ function ThemeDetail({
           {channels.length} chaînes, jusqu'à {programs.length} vidéos récentes.
         </p>
       </div>
-      <ProgramRow
-        title={null}
+      <ProgramGrid
         programs={programs}
         onSelect={onSelect}
         onRemove={onRemove}

@@ -7,24 +7,32 @@ const decodeHTML = (html) => {
   return doc.documentElement.textContent;
 };
 
-export default function ProgramCard({ prog, large, small, onSelect, onRemove, currentUser, isAdmin, toggleWatchLater, isWatchLater }) {
+export default function ProgramCard({ prog, large, small, grid, onSelect, onRemove, currentUser, isAdmin, toggleWatchLater, isWatchLater }) {
   const displayDate = prog.publishedAt || prog.createdAt;
   const canDelete = isAdmin || prog.addedBy === currentUser?.uid;
 
-  // 3 tailles possibles : large (À la Une), small (Regarder plus tard), standard
+  // 4 tailles possibles : large (À la Une), small (Regarder plus tard),
+  // grid (page rubrique en grille multi-lignes), standard (carousel).
   let cardWidth = 'w-[240px] md:w-[280px]';
   let cardHeight = 'h-[135px] md:h-[157px]';
+  let cardFlow = 'shrink-0 snap-center';
   if (large) {
     cardWidth = 'w-[80vw] md:w-[480px]';
     cardHeight = 'h-[200px] md:h-[270px]';
   } else if (small) {
     cardWidth = 'w-[180px] md:w-[220px]';
     cardHeight = 'h-[101px] md:h-[124px]';
+  } else if (grid) {
+    // Carte qui occupe toute la largeur de sa cellule de grille.
+    // Pas de shrink-0 ni de snap : la grille gère le placement.
+    cardWidth = 'w-full';
+    cardHeight = 'aspect-video';
+    cardFlow = '';
   }
 
   return (
     <div
-      className={`group relative flex-col shrink-0 snap-center cursor-pointer transition-all duration-300 ${cardWidth}`}
+      className={`group relative flex-col cursor-pointer transition-all duration-300 ${cardFlow} ${cardWidth}`}
       onClick={() => onSelect(prog)}
     >
       <div className={`relative bg-slate-900 overflow-hidden shadow-lg border border-slate-800/50 group-hover:border-slate-500 transition-colors rounded-xl ${cardHeight}`}>
