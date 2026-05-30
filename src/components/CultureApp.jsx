@@ -198,12 +198,23 @@ export default function CultureApp() {
     const unsubs = listenedThemeIds.map((themeId) => {
       const q = collection(db, 'scopes', themeId, 'programs');
       return onSnapshot(q, (snap) => {
-        const docs = snap.docs.map((d) => ({
+        const raw = snap.docs.map((d) => ({
           id: d.id,
           ...d.data(),
           _source: 'scope',
           _scopeId: themeId,
         }));
+        // Déduplication défensive par youtubeId : un sync partiel
+        // (quota Firestore coupé en cours) peut laisser plusieurs docs
+        // pour la même vidéo. On garde le plus récent par createdAt.
+        const byYid = new Map();
+        for (const p of raw) {
+          const existing = byYid.get(p.youtubeId);
+          if (!existing || (p.createdAt || 0) > (existing.createdAt || 0)) {
+            byYid.set(p.youtubeId, p);
+          }
+        }
+        const docs = Array.from(byYid.values());
         setThemePrograms((prev) => ({ ...prev, [themeId]: docs }));
       });
     });

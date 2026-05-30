@@ -25,6 +25,19 @@ export default function ProgramRow({
 
   if (!programs || programs.length === 0) return null;
 
+  // Dédup finale au niveau du rendu : on ne montre jamais deux fois la
+  // même youtubeId, même si les couches en amont laissent passer un
+  // doublon. Garde le premier de la liste (l'ordre est déjà fixé par
+  // capProgramsPerChannel ou par la dédup du listener).
+  const seenYid = new Set();
+  const uniquePrograms = [];
+  for (const p of programs) {
+    const key = p.youtubeId || p.id;
+    if (seenYid.has(key)) continue;
+    seenYid.add(key);
+    uniquePrograms.push(p);
+  }
+
   return (
     <div className="mb-10 relative group">
       {title && <h2 className="text-xl md:text-2xl font-bold text-white mb-4 pl-2 md:pl-0 tracking-tight">{title}</h2>}
@@ -34,9 +47,9 @@ export default function ProgramRow({
       </button>
 
       <div ref={scrollRef} className="flex gap-4 md:gap-6 overflow-x-auto no-scrollbar snap-x snap-mandatory px-4 md:px-0 pb-4">
-        {programs.map(prog => (
+        {uniquePrograms.map(prog => (
           <ProgramCard
-            key={prog.id}
+            key={prog.youtubeId || prog.id}
             prog={prog}
             large={large}
             small={small}
