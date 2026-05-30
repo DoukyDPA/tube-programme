@@ -1,0 +1,296 @@
+<!doctype html>
+<html lang="fr">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>Tubiscope — YouTube cultivé, à votre rythme</title>
+  <meta name="description" content="Tubiscope filtre YouTube et vous propose des vidéos longues, organisées par thématique. Deux versions : Culture (200 chaînes du ministère) et personnelle." />
+  <script src="https://cdn.tailwindcss.com"></script>
+  <script>
+    tailwind.config = {
+      theme: {
+        extend: {
+          fontFamily: { sans: ['Inter', 'system-ui', 'sans-serif'] },
+        },
+      },
+    };
+  </script>
+  <link rel="preconnect" href="https://fonts.googleapis.com" />
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;600;700;900&display=swap" rel="stylesheet" />
+  <style>
+    body { background: #0a0f1c; }
+    .gradient-text-culture { background: linear-gradient(135deg, #d946ef 0%, #6366f1 100%); -webkit-background-clip: text; background-clip: text; color: transparent; }
+    .gradient-text-tubi { background: linear-gradient(135deg, #6366f1 0%, #10b981 100%); -webkit-background-clip: text; background-clip: text; color: transparent; }
+    .screenshot-placeholder {
+      background: repeating-linear-gradient(45deg, #111827, #111827 10px, #1f2937 10px, #1f2937 20px);
+      border: 2px dashed #4b5563;
+    }
+  </style>
+</head>
+<body class="text-slate-200 font-sans antialiased">
+
+  <!-- HEADER -->
+  <header class="border-b border-slate-800/60 sticky top-0 bg-slate-950/80 backdrop-blur-lg z-50">
+    <div class="max-w-6xl mx-auto px-6 py-4 flex items-center justify-between">
+      <div class="flex items-center gap-3">
+        <div class="w-10 h-10 bg-gradient-to-br from-fuchsia-500 to-indigo-700 rounded-xl flex items-center justify-center shadow-lg">
+          <svg viewBox="0 0 24 24" fill="none" stroke="white" stroke-width="2.5" class="w-6 h-6">
+            <circle cx="12" cy="12" r="10" />
+            <polygon points="10 8 16 12 10 16 10 8" fill="white" />
+          </svg>
+        </div>
+        <span class="text-xl font-black text-white tracking-tight">Tubi<span class="text-fuchsia-400">Scope</span></span>
+      </div>
+      <nav class="flex items-center gap-3 text-sm">
+        <a href="https://tubiscope.fr" class="hidden sm:inline px-4 py-2 text-fuchsia-300 hover:text-fuchsia-200 font-semibold">Culture</a>
+        <a href="https://tubiscope.com" class="hidden sm:inline px-4 py-2 text-indigo-300 hover:text-indigo-200 font-semibold">Personnel</a>
+        <a href="#choisir" class="px-4 py-2 bg-fuchsia-600 hover:bg-fuchsia-500 text-white font-bold rounded-xl transition-colors">Commencer</a>
+      </nav>
+    </div>
+  </header>
+
+  <!-- HERO -->
+  <section class="max-w-6xl mx-auto px-6 pt-20 pb-16 text-center">
+    <span class="inline-block px-3 py-1 bg-fuchsia-500/10 border border-fuchsia-500/30 text-fuchsia-300 text-xs font-bold uppercase tracking-widest rounded-full mb-6">
+      Bêta publique gratuite
+    </span>
+    <h1 class="text-4xl md:text-6xl font-black text-white leading-tight mb-6">
+      YouTube cultivé,<br />
+      <span class="gradient-text-culture">à votre rythme</span>
+    </h1>
+    <p class="text-lg md:text-xl text-slate-400 max-w-2xl mx-auto mb-10 leading-relaxed">
+      Tubiscope filtre le bruit de YouTube et vous propose des vidéos longues, classées par thématique. Vous choisissez ce qui vous intéresse, on vous remonte ce qui vaut le coup.
+    </p>
+    <div class="flex flex-col sm:flex-row gap-3 justify-center">
+      <a href="https://tubiscope.fr" class="px-6 py-3 bg-gradient-to-r from-fuchsia-600 to-indigo-600 hover:from-fuchsia-500 hover:to-indigo-500 text-white font-bold rounded-xl shadow-xl shadow-fuchsia-500/20 transition-all">
+        Découvrir Tubiscope Culture
+      </a>
+      <a href="https://tubiscope.com" class="px-6 py-3 bg-slate-800 hover:bg-slate-700 text-white font-bold rounded-xl border border-slate-700 transition-all">
+        Créer mon Tubiscope perso
+      </a>
+    </div>
+
+    <!-- Hero screenshot placeholder -->
+    <div class="mt-16 max-w-4xl mx-auto">
+      <div class="screenshot-placeholder rounded-2xl aspect-video flex items-center justify-center">
+        <div class="text-center">
+          <p class="text-slate-500 font-mono text-sm mb-2">[ Capture 1 ]</p>
+          <p class="text-slate-400 font-bold">Vue d'ensemble de l'accueil Tubiscope Culture</p>
+          <p class="text-slate-600 text-xs mt-1">1600 x 900 px conseillé</p>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <!-- COMMENT ÇA MARCHE -->
+  <section class="max-w-6xl mx-auto px-6 py-16 border-t border-slate-800/60">
+    <div class="text-center mb-14">
+      <h2 class="text-3xl md:text-4xl font-black text-white mb-3">Trois étapes, pas plus</h2>
+      <p class="text-slate-400 max-w-xl mx-auto">Pas de paramétrage compliqué, pas d'algorithme opaque. Vous restez aux commandes.</p>
+    </div>
+    <div class="grid md:grid-cols-3 gap-6">
+      <div class="bg-slate-900/50 border border-slate-800 rounded-2xl p-6">
+        <div class="w-10 h-10 bg-fuchsia-500/15 text-fuchsia-300 rounded-xl flex items-center justify-center font-black text-lg mb-4">1</div>
+        <h3 class="text-lg font-bold text-white mb-2">Vous choisissez vos thématiques</h3>
+        <p class="text-sm text-slate-400 leading-relaxed">Histoire, sciences, économie, arts, sport... 19 univers culturels sur Tubiscope Culture, ou créez les vôtres sur la version perso.</p>
+      </div>
+      <div class="bg-slate-900/50 border border-slate-800 rounded-2xl p-6">
+        <div class="w-10 h-10 bg-fuchsia-500/15 text-fuchsia-300 rounded-xl flex items-center justify-center font-black text-lg mb-4">2</div>
+        <h3 class="text-lg font-bold text-white mb-2">On synchronise YouTube</h3>
+        <p class="text-sm text-slate-400 leading-relaxed">Chaque matin à 8h, Tubiscope va chercher les dernières vidéos longues (plus de 3 minutes) des chaînes de vos thématiques. Pas de shorts, pas de pollution.</p>
+      </div>
+      <div class="bg-slate-900/50 border border-slate-800 rounded-2xl p-6">
+        <div class="w-10 h-10 bg-fuchsia-500/15 text-fuchsia-300 rounded-xl flex items-center justify-center font-black text-lg mb-4">3</div>
+        <h3 class="text-lg font-bold text-white mb-2">Vous regardez ce qui vous plaît</h3>
+        <p class="text-sm text-slate-400 leading-relaxed">Une interface claire, organisée par thème. Mettez de côté pour plus tard, partagez avec un ami, ouvrez sur YouTube. Vous gardez le contrôle.</p>
+      </div>
+    </div>
+
+    <!-- Screenshot 2 -->
+    <div class="mt-12 max-w-4xl mx-auto">
+      <div class="screenshot-placeholder rounded-2xl aspect-video flex items-center justify-center">
+        <div class="text-center">
+          <p class="text-slate-500 font-mono text-sm mb-2">[ Capture 2 ]</p>
+          <p class="text-slate-400 font-bold">Sélecteur de thématiques Culture (CultureThemePicker)</p>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <!-- LES DEUX VERSIONS -->
+  <section class="max-w-6xl mx-auto px-6 py-16 border-t border-slate-800/60">
+    <div class="text-center mb-14">
+      <h2 class="text-3xl md:text-4xl font-black text-white mb-3">Deux versions, un seul esprit</h2>
+      <p class="text-slate-400 max-w-2xl mx-auto">Choisissez selon ce que vous cherchez : la curation culturelle d'un côté, la liberté totale de l'autre.</p>
+    </div>
+
+    <div class="grid md:grid-cols-2 gap-6">
+      <!-- Culture -->
+      <div class="bg-gradient-to-br from-fuchsia-900/30 to-slate-900 border border-fuchsia-500/30 rounded-2xl p-8 relative overflow-hidden">
+        <div class="absolute top-0 right-0 p-3 text-fuchsia-400/10">
+          <svg class="w-32 h-32" fill="currentColor" viewBox="0 0 24 24"><path d="M12 2L2 7l10 5 10-5-10-5zm0 13l-10-5v6l10 5 10-5v-6l-10 5z"/></svg>
+        </div>
+        <span class="inline-block px-3 py-1 bg-fuchsia-500/20 text-fuchsia-200 text-xs font-bold uppercase tracking-widest rounded-full mb-4 relative z-10">tubiscope.fr</span>
+        <h3 class="text-2xl font-black text-white mb-3 relative z-10">Tubiscope Culture</h3>
+        <p class="text-fuchsia-100/80 text-sm mb-6 relative z-10 leading-relaxed">Une bibliothèque vidéo culturelle prête à l'emploi. 19 thématiques curatées, environ 200 chaînes vivantes sélectionnées et mises à jour.</p>
+        <ul class="space-y-2 text-sm text-slate-300 mb-6 relative z-10">
+          <li class="flex items-start gap-2"><span class="text-fuchsia-300 font-bold">✓</span> Aucune chaîne à chercher, tout est déjà en place</li>
+          <li class="flex items-start gap-2"><span class="text-fuchsia-300 font-bold">✓</span> Jusqu'à 7 thématiques par compte</li>
+          <li class="flex items-start gap-2"><span class="text-fuchsia-300 font-bold">✓</span> Sélection éditoriale d'origine ministérielle</li>
+          <li class="flex items-start gap-2"><span class="text-fuchsia-300 font-bold">✓</span> Gratuit, sans abonnement</li>
+        </ul>
+        <a href="https://tubiscope.fr" class="inline-block px-5 py-3 bg-fuchsia-600 hover:bg-fuchsia-500 text-white font-bold rounded-xl shadow-lg shadow-fuchsia-500/20 relative z-10 transition-colors">
+          Ouvrir Tubiscope Culture
+        </a>
+      </div>
+
+      <!-- Standard -->
+      <div class="bg-gradient-to-br from-indigo-900/30 to-slate-900 border border-indigo-500/30 rounded-2xl p-8 relative overflow-hidden">
+        <div class="absolute top-0 right-0 p-3 text-indigo-400/10">
+          <svg class="w-32 h-32" fill="currentColor" viewBox="0 0 24 24"><path d="M12 2C6.48 2 2 6.48 2 12s4.48 10 10 10 10-4.48 10-10S17.52 2 12 2zm-2 15l-5-5 1.41-1.41L10 14.17l7.59-7.59L19 8l-9 9z"/></svg>
+        </div>
+        <span class="inline-block px-3 py-1 bg-indigo-500/20 text-indigo-200 text-xs font-bold uppercase tracking-widest rounded-full mb-4 relative z-10">tubiscope.com</span>
+        <h3 class="text-2xl font-black text-white mb-3 relative z-10">Tubiscope personnel</h3>
+        <p class="text-indigo-100/80 text-sm mb-6 relative z-10 leading-relaxed">Pour celles et ceux qui veulent leur propre TubiScope. Ajoutez vos chaînes YouTube préférées, classez-les dans vos thèmes, suivez vos centres d'intérêt sans algorithme.</p>
+        <ul class="space-y-2 text-sm text-slate-300 mb-6 relative z-10">
+          <li class="flex items-start gap-2"><span class="text-indigo-300 font-bold">✓</span> Vos chaînes YouTube favorites, regroupées par thème</li>
+          <li class="flex items-start gap-2"><span class="text-indigo-300 font-bold">✓</span> Scopes éditeur curatés (IA, Cinéma, Économie...)</li>
+          <li class="flex items-start gap-2"><span class="text-indigo-300 font-bold">✓</span> 2 thématiques perso en gratuit, illimité avec Studio</li>
+          <li class="flex items-start gap-2"><span class="text-indigo-300 font-bold">✓</span> Pas de pub, pas de tracking</li>
+        </ul>
+        <a href="https://tubiscope.com" class="inline-block px-5 py-3 bg-indigo-600 hover:bg-indigo-500 text-white font-bold rounded-xl shadow-lg shadow-indigo-500/20 relative z-10 transition-colors">
+          Créer mon Tubiscope
+        </a>
+      </div>
+    </div>
+
+    <!-- Screenshot 3 -->
+    <div class="mt-12 max-w-5xl mx-auto">
+      <div class="screenshot-placeholder rounded-2xl aspect-video flex items-center justify-center">
+        <div class="text-center">
+          <p class="text-slate-500 font-mono text-sm mb-2">[ Capture 3 ]</p>
+          <p class="text-slate-400 font-bold">Page d'une rubrique en grille (vue détail thématique)</p>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <!-- ORIGINE / MINISTÈRE -->
+  <section class="max-w-6xl mx-auto px-6 py-16 border-t border-slate-800/60">
+    <div class="bg-gradient-to-br from-slate-900 to-slate-950 border border-slate-800 rounded-3xl p-8 md:p-12">
+      <div class="flex items-center gap-3 mb-6">
+        <div class="w-12 h-12 bg-fuchsia-500/15 rounded-xl flex items-center justify-center">
+          <svg class="w-6 h-6 text-fuchsia-300" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24">
+            <path d="M3 21h18M3 10h18M5 6l7-3 7 3M4 10v11M20 10v11M8 14v3M12 14v3M16 14v3"/>
+          </svg>
+        </div>
+        <span class="text-xs font-bold text-fuchsia-300 uppercase tracking-widest">Une origine institutionnelle</span>
+      </div>
+      <h2 class="text-3xl md:text-4xl font-black text-white mb-4">D'un répertoire ministériel<br/>à une bibliothèque vivante</h2>
+      <p class="text-slate-300 text-lg leading-relaxed mb-6 max-w-3xl">
+        En 2018, le ministère de la Culture publiait une sélection de
+        <b class="text-white">350 chaînes YouTube culturelles</b> destinées à
+        rendre visible la richesse francophone du web. Un travail remarquable,
+        mais figé dans le temps : depuis, beaucoup de chaînes ont disparu, se
+        sont tues, ou ont changé de cap.
+      </p>
+      <p class="text-slate-300 text-lg leading-relaxed mb-6 max-w-3xl">
+        Tubiscope Culture est parti de cette base, l'a nettoyée des chaînes
+        éteintes et complétée par des créateurs apparus depuis. Le projet
+        compte aujourd'hui environ
+        <b class="text-fuchsia-300">200 chaînes vivantes</b>, réparties dans
+        19 thématiques, et continue de croître.
+      </p>
+      <p class="text-slate-400 text-sm leading-relaxed max-w-3xl">
+        L'objectif est le même qu'à l'origine : rendre accessible au plus
+        grand nombre une culture YouTube de qualité, sans algorithme
+        d'attention, sans pub, sans dépendance à un goût personnel
+        algorithmique.
+      </p>
+    </div>
+  </section>
+
+  <!-- FONCTIONNALITÉS -->
+  <section class="max-w-6xl mx-auto px-6 py-16 border-t border-slate-800/60">
+    <div class="text-center mb-14">
+      <h2 class="text-3xl md:text-4xl font-black text-white mb-3">Ce qu'on a soigné</h2>
+      <p class="text-slate-400 max-w-xl mx-auto">Les petits détails qui font la différence à l'usage.</p>
+    </div>
+
+    <div class="grid md:grid-cols-2 gap-6">
+      <div class="bg-slate-900/50 border border-slate-800 rounded-2xl p-6">
+        <h3 class="text-lg font-bold text-white mb-2">À regarder plus tard</h3>
+        <p class="text-sm text-slate-400 leading-relaxed">Une vidéo qui vous tente mais pas le temps tout de suite ? Un clic, elle est sauvegardée. Elle survivra à la synchronisation du lendemain.</p>
+      </div>
+      <div class="bg-slate-900/50 border border-slate-800 rounded-2xl p-6">
+        <h3 class="text-lg font-bold text-white mb-2">Partage entre amis</h3>
+        <p class="text-sm text-slate-400 leading-relaxed">Un bouton Partager sur chaque vidéo. Lien direct vers l'app, vos amis arrivent sur la même page que vous.</p>
+      </div>
+      <div class="bg-slate-900/50 border border-slate-800 rounded-2xl p-6">
+        <h3 class="text-lg font-bold text-white mb-2">Découverte transversale</h3>
+        <p class="text-sm text-slate-400 leading-relaxed">En bas de votre accueil, les rubriques que vous n'avez pas choisies. Un clic suffit pour explorer un nouveau domaine.</p>
+      </div>
+      <div class="bg-slate-900/50 border border-slate-800 rounded-2xl p-6">
+        <h3 class="text-lg font-bold text-white mb-2">PWA, installable</h3>
+        <p class="text-sm text-slate-400 leading-relaxed">Tubiscope s'installe comme une application sur votre téléphone ou votre ordinateur. Plus rapide, plus pratique, hors-ligne partiel.</p>
+      </div>
+    </div>
+
+    <!-- Screenshot 4 -->
+    <div class="mt-12 max-w-4xl mx-auto">
+      <div class="screenshot-placeholder rounded-2xl aspect-video flex items-center justify-center">
+        <div class="text-center">
+          <p class="text-slate-500 font-mono text-sm mb-2">[ Capture 4 ]</p>
+          <p class="text-slate-400 font-bold">Bouton Partager dans la modale vidéo</p>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <!-- CTA FINAL -->
+  <section id="choisir" class="max-w-6xl mx-auto px-6 py-20 border-t border-slate-800/60">
+    <div class="text-center mb-10">
+      <h2 class="text-3xl md:text-5xl font-black text-white mb-4">Par où commencer ?</h2>
+      <p class="text-slate-400 text-lg max-w-xl mx-auto">Vous pouvez créer un compte sur les deux. Vos préférences restent indépendantes.</p>
+    </div>
+    <div class="grid sm:grid-cols-2 gap-4 max-w-3xl mx-auto">
+      <a href="https://tubiscope.fr" class="group bg-gradient-to-br from-fuchsia-600 to-indigo-700 hover:from-fuchsia-500 hover:to-indigo-600 rounded-2xl p-8 text-center shadow-2xl shadow-fuchsia-500/20 transition-all">
+        <div class="text-3xl font-black text-white mb-2">Culture</div>
+        <div class="text-fuchsia-100 text-sm mb-4">Sélection prête à l'emploi</div>
+        <span class="inline-block px-4 py-2 bg-white/10 text-white text-sm font-bold rounded-lg group-hover:bg-white/20 transition-colors">tubiscope.fr →</span>
+      </a>
+      <a href="https://tubiscope.com" class="group bg-gradient-to-br from-indigo-600 to-emerald-700 hover:from-indigo-500 hover:to-emerald-600 rounded-2xl p-8 text-center shadow-2xl shadow-indigo-500/20 transition-all">
+        <div class="text-3xl font-black text-white mb-2">Personnel</div>
+        <div class="text-indigo-100 text-sm mb-4">Vos chaînes, vos thèmes</div>
+        <span class="inline-block px-4 py-2 bg-white/10 text-white text-sm font-bold rounded-lg group-hover:bg-white/20 transition-colors">tubiscope.com →</span>
+      </a>
+    </div>
+  </section>
+
+  <!-- FOOTER -->
+  <footer class="border-t border-slate-800/60 mt-10">
+    <div class="max-w-6xl mx-auto px-6 py-8 flex flex-col md:flex-row items-center justify-between gap-4 text-sm text-slate-500">
+      <div class="flex items-center gap-3">
+        <div class="w-7 h-7 bg-gradient-to-br from-fuchsia-500 to-indigo-700 rounded-lg flex items-center justify-center">
+          <svg viewBox="0 0 24 24" fill="white" class="w-4 h-4"><polygon points="10 8 16 12 10 16 10 8"/></svg>
+        </div>
+        <span>TubiScope, bêta publique gratuite</span>
+      </div>
+      <div class="flex items-center gap-5">
+        <a href="https://tubiscope.fr" class="hover:text-fuchsia-300">Culture</a>
+        <a href="https://tubiscope.com" class="hover:text-indigo-300">Personnel</a>
+        <a href="https://tubiscope.com/?legal=mentions" class="hover:text-slate-300">Mentions légales</a>
+      </div>
+    </div>
+    <div class="max-w-6xl mx-auto px-6 pb-6 text-xs text-slate-600 text-center">
+      Tubiscope est un client de l'API YouTube Data v3. Les vidéos restent hébergées par YouTube.
+      L'utilisation du service implique l'acceptation des
+      <a href="https://www.youtube.com/t/terms" class="underline hover:text-slate-400">conditions YouTube</a>
+      et de la
+      <a href="https://policies.google.com/privacy" class="underline hover:text-slate-400">politique de confidentialité Google</a>.
+    </div>
+  </footer>
+
+</body>
+</html>

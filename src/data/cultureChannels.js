@@ -2,7 +2,10 @@
 // src/data/cultureChannels.js
 // =====================================================================
 // Liste figée des 19 thématiques et de leurs chaînes pour Tubiscope Culture.
-// Source : sélection du ministère de la Culture (350+ chaînes YouTube).
+// Source initiale : sélection de 350 chaînes YouTube publiée en 2018 par
+// le ministère de la Culture. Tubiscope Culture s'appuie sur cette base,
+// nettoyée des chaînes éteintes et réactualisée vers ~200 chaînes actives
+// réparties dans 19 thématiques.
 //
 // Les `handle` sont les handles YouTube (commençant par @). Ils sont
 // résolus en `channelId` (UC...) par le script scripts/seed-culture-channels.js

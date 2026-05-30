@@ -1486,8 +1486,8 @@ function SyncOverlay({ message, subMessage }) {
           <p className="text-sm text-slate-400 mb-3">{subMessage}</p>
         )}
         <p className="text-xs text-slate-500">
-          Ne fermez pas cet onglet. La première synchronisation interroge plus
-          de 350 chaînes YouTube et peut prendre quelques minutes.
+          Ne fermez pas cet onglet. La première synchronisation interroge
+          environ 200 chaînes YouTube et peut prendre quelques minutes.
         </p>
       </div>
     </div>

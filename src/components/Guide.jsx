@@ -1,5 +1,13 @@
 import React from 'react';
-import { BookOpen, Sparkles, Scale, ShieldCheck, Clock, FileText } from 'lucide-react';
+import {
+  BookOpen,
+  Sparkles,
+  Scale,
+  ShieldCheck,
+  Clock,
+  FileText,
+  Landmark,
+} from 'lucide-react';
 
 export default function Guide({ onOpenLegal }) {
   return (
@@ -65,6 +73,48 @@ export default function Guide({ onOpenLegal }) {
             <li>✨ Parrainage entre membres Studio</li>
           </ul>
         </div>
+      </div>
+
+      {/* Tubiscope Culture */}
+      <div className="bg-gradient-to-br from-fuchsia-900/20 to-slate-900/50 border border-fuchsia-500/20 rounded-2xl p-6 md:p-8">
+        <div className="flex items-center gap-3 mb-4">
+          <div className="w-12 h-12 bg-fuchsia-500/15 rounded-xl flex items-center justify-center">
+            <Landmark className="text-fuchsia-300" size={22} />
+          </div>
+          <h3 className="text-xl font-bold text-white">Tubiscope Culture</h3>
+        </div>
+        <p className="text-slate-300 text-sm mb-4 leading-relaxed">
+          Tubiscope Culture est une version dédiée à la connaissance et à la
+          transmission culturelle. Vous choisissez jusqu'à 7 thématiques parmi
+          19 (Histoire, Sciences, Lettres, Arts, Économie, Philosophie, etc.)
+          et nous vous proposons les dernières vidéos longues des chaînes
+          curatées dans chaque domaine.
+        </p>
+        <div className="bg-slate-900/60 border border-slate-800 rounded-xl p-4 mb-4">
+          <p className="text-xs text-fuchsia-300 font-bold uppercase tracking-widest mb-2">
+            Origine
+          </p>
+          <p className="text-sm text-slate-300 leading-relaxed">
+            Le projet s'appuie sur une sélection de <b>350 chaînes YouTube
+            culturelles</b> publiée en 2018 par le <b>ministère de la Culture</b>.
+            Cette base a été nettoyée des chaînes éteintes ou peu actives, puis
+            réactualisée. Tubiscope Culture compte aujourd'hui environ
+            <b> 200 chaînes vivantes</b>, réparties dans les 19 thématiques,
+            et la sélection continue d'évoluer.
+          </p>
+        </div>
+        <p className="text-sm text-slate-400 leading-relaxed">
+          Rendez-vous sur{' '}
+          <a
+            href="https://tubiscope.fr"
+            target="_blank"
+            rel="noopener noreferrer"
+            className="text-fuchsia-300 font-semibold hover:underline"
+          >
+            tubiscope.fr
+          </a>{' '}
+          pour explorer Tubiscope Culture. Gratuit, sans abonnement requis.
+        </p>
       </div>
 
       {/* Documents légaux */}
