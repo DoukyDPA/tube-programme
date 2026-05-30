@@ -24,6 +24,8 @@ import {
   Settings,
   Info,
   RefreshCw,
+  Compass,
+  Plus,
 } from 'lucide-react';
 
 import { auth, db, YOUTUBE_API_KEY_CULTURE } from '../firebase';
@@ -126,6 +128,14 @@ export default function CultureApp() {
   const [activeTab, setActiveTab] = useState('accueil');
   const [legalTab, setLegalTab] = useState(null);
 
+  // Thématiques que l'utilisateur consulte sans les avoir sélectionnées.
+  // Alimenté quand on clique sur une rubrique « à découvrir ». Le listener
+  // Firestore s'abonne aux programmes correspondants, sans modifier le
+  // doc user. L'utilisateur peut ensuite ajouter la rubrique à ses
+  // thématiques via le bouton dédié en haut de la page de détail.
+  const [previewThemeIds, setPreviewThemeIds] = useState([]);
+  const [addingTheme, setAddingTheme] = useState(false);
+
   const resolved = useResolvedChannels();
 
   // -- Auth + chargement userData --
@@ -170,13 +180,22 @@ export default function CultureApp() {
   const userThemeIds = userData?.culturePrefs?.themes || [];
   const hasConfigured = userThemeIds.length > 0;
 
-  // -- Listener sur les programmes de chaque thématique choisie --
+  // Thématiques effectivement écoutées : celles choisies + celles en preview.
+  // Mémoïsé pour éviter de rebrancher le listener à chaque rendu.
+  const listenedThemeIds = useMemo(() => {
+    const set = new Set(userThemeIds);
+    previewThemeIds.forEach((id) => set.add(id));
+    return Array.from(set);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [JSON.stringify(userThemeIds), JSON.stringify(previewThemeIds)]);
+
+  // -- Listener sur les programmes de chaque thématique écoutée --
   useEffect(() => {
-    if (!user || userThemeIds.length === 0) {
+    if (!user || listenedThemeIds.length === 0) {
       setThemePrograms({});
       return;
     }
-    const unsubs = userThemeIds.map((themeId) => {
+    const unsubs = listenedThemeIds.map((themeId) => {
       const q = collection(db, 'scopes', themeId, 'programs');
       return onSnapshot(q, (snap) => {
         const docs = snap.docs.map((d) => ({
@@ -190,7 +209,7 @@ export default function CultureApp() {
     });
     return () => unsubs.forEach((u) => u());
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [user, JSON.stringify(userThemeIds)]);
+  }, [user, JSON.stringify(listenedThemeIds)]);
 
   // Liste plate des programmes pour hydratation
   const allPrograms = useMemo(
@@ -846,6 +865,59 @@ export default function CultureApp() {
     return null; // placeholder, on construit l'URL au moment du clic via le handle
   };
 
+  // -----------------------------------------------------------------
+  // Ouverture d'une rubrique non choisie : on l'ajoute aux thématiques
+  // en preview (listener Firestore se branche) et on navigue dessus.
+  // Pas d'écriture dans le doc user à ce stade.
+  // -----------------------------------------------------------------
+  const openThemePreview = (themeId) => {
+    setPreviewThemeIds((prev) =>
+      prev.includes(themeId) ? prev : [...prev, themeId]
+    );
+    setActiveTab(themeId);
+  };
+
+  // -----------------------------------------------------------------
+  // Ajout d'une thématique en preview à la sélection de l'utilisateur.
+  // Une écriture Firestore unique sur users/{uid}. Respecte la limite
+  // CULTURE_MAX_USER_THEMES (importée plus bas pour rester local).
+  // -----------------------------------------------------------------
+  const addPreviewToUserThemes = async (themeId) => {
+    if (!user) return;
+    const MAX = 7; // CULTURE_MAX_USER_THEMES
+    if (userThemeIds.includes(themeId)) {
+      setPreviewThemeIds((prev) => prev.filter((id) => id !== themeId));
+      return;
+    }
+    if (userThemeIds.length >= MAX) {
+      alert(
+        `Vous avez déjà ${MAX} thématiques. Retirez-en une depuis « Modifier mes thématiques » pour en ajouter une nouvelle.`
+      );
+      return;
+    }
+    setAddingTheme(true);
+    try {
+      const next = [...userThemeIds, themeId];
+      await setDoc(
+        doc(db, 'users', user.uid),
+        {
+          culturePrefs: {
+            themes: next,
+            setAt: Date.now(),
+          },
+        },
+        { merge: true }
+      );
+      // La thématique passe officiellement dans la sélection : on la
+      // retire de la liste preview pour éviter le doublon dans le listener.
+      setPreviewThemeIds((prev) => prev.filter((id) => id !== themeId));
+    } catch (e) {
+      alert(`Erreur : ${e.message}`);
+    } finally {
+      setAddingTheme(false);
+    }
+  };
+
   if (loading) {
     return (
       <div className="h-screen bg-slate-950 flex items-center justify-center">
@@ -871,6 +943,18 @@ export default function CultureApp() {
   const orderedUserThemes = CULTURE_THEMES.filter((t) =>
     userThemeIds.includes(t.id)
   );
+
+  // Thématiques non choisies, dans l'ordre canonique. Utilisées pour la
+  // ligne « Découvrez nos autres rubriques ».
+  const unselectedThemes = CULTURE_THEMES.filter(
+    (t) => !userThemeIds.includes(t.id)
+  );
+
+  // True si l'utilisateur regarde une rubrique qu'il n'a pas choisie.
+  const isPreviewingActive =
+    activeTab !== 'accueil' &&
+    activeTab !== 'guide' &&
+    !userThemeIds.includes(activeTab);
 
   return (
     <div className="min-h-screen md:h-screen bg-[#0a0f1c] text-slate-200 flex flex-col md:flex-row font-sans overflow-hidden">
@@ -1101,6 +1185,12 @@ export default function CultureApp() {
                   isSyncing={isSyncing}
                 />
               )}
+              {unselectedThemes.length > 0 && (
+                <DiscoverRubriquesRow
+                  themes={unselectedThemes}
+                  onPick={openThemePreview}
+                />
+              )}
             </>
           ) : (
             <ThemeDetail
@@ -1113,6 +1203,10 @@ export default function CultureApp() {
               watchLaterList={userData?.watchLaterCulture || []}
               currentUser={user}
               resolved={resolved}
+              isPreview={isPreviewingActive}
+              onAddToMyThemes={() => addPreviewToUserThemes(activeTab)}
+              addingTheme={addingTheme}
+              canAddMore={userThemeIds.length < 7}
             />
           )}
         </div>
@@ -1211,11 +1305,60 @@ function ChannelList({ channels, resolved }) {
 }
 
 // --- Vue détail d'une thématique : vidéos en haut, chaînes en liste dessous ---
-function ThemeDetail({ theme, programs, onSelect, onRemove, isAdmin, toggleWatchLater, watchLaterList, currentUser, resolved }) {
+function ThemeDetail({
+  theme,
+  programs,
+  onSelect,
+  onRemove,
+  isAdmin,
+  toggleWatchLater,
+  watchLaterList,
+  currentUser,
+  resolved,
+  isPreview = false,
+  onAddToMyThemes,
+  addingTheme = false,
+  canAddMore = true,
+}) {
   if (!theme) return null;
   const channels = CULTURE_CHANNELS[theme.id] || [];
   return (
     <>
+      {isPreview && (
+        <div className="px-4 md:px-0 mb-4">
+          <div className="bg-gradient-to-r from-fuchsia-500/10 to-indigo-500/10 border border-fuchsia-500/30 rounded-xl p-4 flex flex-col md:flex-row md:items-center gap-3">
+            <Sparkles size={18} className="text-fuchsia-300 shrink-0" />
+            <div className="flex-1">
+              <p className="text-sm font-bold text-white">
+                Vous découvrez cette rubrique
+              </p>
+              <p className="text-xs text-slate-300">
+                Elle n'est pas encore dans votre sélection. Ajoutez-la pour la
+                retrouver à chaque visite.
+              </p>
+            </div>
+            <button
+              onClick={onAddToMyThemes}
+              disabled={addingTheme || !canAddMore}
+              className="bg-fuchsia-600 hover:bg-fuchsia-500 text-white px-4 py-2 rounded-xl text-sm font-bold disabled:opacity-50 shrink-0 inline-flex items-center justify-center gap-2"
+              title={
+                canAddMore
+                  ? 'Ajouter cette rubrique à mes thématiques'
+                  : 'Limite de 7 thématiques atteinte'
+              }
+            >
+              {addingTheme ? (
+                <Loader2 size={14} className="animate-spin" />
+              ) : (
+                <Plus size={14} />
+              )}
+              {canAddMore
+                ? 'Ajouter à mes thématiques'
+                : 'Limite de 7 atteinte'}
+            </button>
+          </div>
+        </div>
+      )}
       <div className="px-4 md:px-0 mb-6">
         <p className="text-sm text-slate-400">
           {channels.length} chaînes, jusqu'à {programs.length} vidéos récentes.
@@ -1233,6 +1376,45 @@ function ThemeDetail({ theme, programs, onSelect, onRemove, isAdmin, toggleWatch
       />
       <ChannelList channels={channels} resolved={resolved} />
     </>
+  );
+}
+
+// --- Ligne « Découvrez nos autres rubriques » : boutons cliquables
+//     vers les thématiques non choisies. Style inspiré de Molotov. ---
+function DiscoverRubriquesRow({ themes, onPick }) {
+  if (!themes || themes.length === 0) return null;
+  return (
+    <div className="mb-12 mt-4">
+      <div className="px-4 md:px-0 mb-3">
+        <h2 className="text-xl md:text-2xl font-bold text-white tracking-tight flex items-center gap-2">
+          <span className="text-fuchsia-300">
+            <Compass size={22} />
+          </span>
+          Découvrez nos autres rubriques
+        </h2>
+        <p className="text-xs text-slate-500 mt-1">
+          Ces thématiques ne sont pas dans votre sélection. Cliquez pour
+          parcourir leurs vidéos.
+        </p>
+      </div>
+      <div className="px-4 md:px-0">
+        <div className="flex flex-wrap gap-2">
+          {themes.map((t) => (
+            <button
+              key={t.id}
+              onClick={() => onPick(t.id)}
+              className="group flex items-center gap-2 px-4 py-2.5 rounded-full bg-slate-900/60 hover:bg-fuchsia-500/15 border border-slate-800 hover:border-fuchsia-500/40 text-slate-200 hover:text-fuchsia-200 text-sm font-semibold transition-colors"
+              title={`Découvrir « ${t.label} »`}
+            >
+              <span className="text-slate-500 group-hover:text-fuchsia-300">
+                <CultureIcon themeId={t.id} size={16} />
+              </span>
+              {t.label}
+            </button>
+          ))}
+        </div>
+      </div>
+    </div>
   );
 }
 
