@@ -36,6 +36,7 @@ import {
 import { CultureIcon } from '../data/cultureIcons';
 import { MODE_CULTURE } from '../data/appMode';
 import { useCategories } from '../hooks/useCategories';
+import { useCultureChannels } from '../hooks/useCultureChannels';
 import { capProgramsPerChannel } from '../utils/programs';
 
 import Auth from './Auth';
@@ -108,6 +109,18 @@ export default function CultureApp() {
   // Catégories Culture (19 thématiques) chargées depuis Firestore avec fallback.
   // Remplace l'ancien import CULTURE_THEMES de cultureChannels.js.
   const CULTURE_THEMES = useCategories('culture');
+
+  // Chaînes Culture live depuis Firestore. Source de vérité côté UI :
+  // si l'admin supprime une chaîne dans /admin-channels.html, elle
+  // disparaît tout de suite des listes « à découvrir ». L'ancien import
+  // statique CULTURE_CHANNELS sert juste de repli tant que le premier
+  // snapshot Firestore n'est pas arrivé.
+  const liveChannels = useCultureChannels();
+  const liveLoaded = useMemo(
+    () => Object.values(liveChannels || {}).some((arr) => arr && arr.length > 0),
+    [liveChannels]
+  );
+  const channelsByTheme = liveLoaded ? liveChannels : CULTURE_CHANNELS;
 
   const [user, setUser] = useState(null);
   const [userData, setUserData] = useState(null);
@@ -712,10 +725,13 @@ export default function CultureApp() {
     const themeLabel = (id) =>
       CULTURE_THEMES.find((t) => t.id === id)?.label || id;
 
-    // 1) Construit la liste complète des handles déclarés
+    // 1) Construit la liste complète des handles déclarés. On part
+    // d'abord de Firestore (source de vérité, post-suppressions admin),
+    // avec repli sur le fichier statique tant que rien n'est chargé.
+    const sourceMap = liveLoaded ? liveChannels : CULTURE_CHANNELS;
     const declared = [];
     for (const theme of CULTURE_THEMES) {
-      const list = CULTURE_CHANNELS[theme.id] || [];
+      const list = sourceMap[theme.id] || [];
       for (const ch of list) {
         declared.push({ handle: ch.handle, name: ch.name, themeId: theme.id });
       }
@@ -992,7 +1008,7 @@ export default function CultureApp() {
             Vos thématiques
           </div>
           {orderedUserThemes.map((t) => {
-            const count = (CULTURE_CHANNELS[t.id] || []).length;
+            const count = (channelsByTheme[t.id] || []).length;
             const isActive = activeTab === t.id;
             return (
               <button
@@ -1207,6 +1223,7 @@ export default function CultureApp() {
           ) : (
             <ThemeDetail
               theme={CULTURE_THEMES.find((t) => t.id === activeTab)}
+              channels={channelsByTheme[activeTab] || []}
               programs={capProgramsPerChannel(hydrated[activeTab] || [])}
               onSelect={setSelectedProg}
               onRemove={removeProgram}
@@ -1288,13 +1305,15 @@ function ChannelList({ channels, resolved }) {
       </h3>
       <div className="grid grid-cols-1 sm:grid-cols-2 xl:grid-cols-3 gap-2">
         {channels.map((ch) => {
-          const r = resolved?.[ch.handle];
-          const url = r?.channelId
-            ? `https://www.youtube.com/channel/${r.channelId}`
+          // Live data inclut déjà channelId. Sinon repli sur le mapping
+          // résolu, puis sur l'URL @handle.
+          const channelId = ch.channelId || resolved?.[ch.handle]?.channelId;
+          const url = channelId
+            ? `https://www.youtube.com/channel/${channelId}`
             : `https://www.youtube.com/@${ch.handle}`;
           return (
             <a
-              key={ch.handle}
+              key={ch.channelId || ch.handle}
               href={url}
               target="_blank"
               rel="noopener noreferrer"
@@ -1319,6 +1338,7 @@ function ChannelList({ channels, resolved }) {
 // --- Vue détail d'une thématique : vidéos en haut, chaînes en liste dessous ---
 function ThemeDetail({
   theme,
+  channels = [],
   programs,
   onSelect,
   onRemove,
@@ -1333,7 +1353,6 @@ function ThemeDetail({
   canAddMore = true,
 }) {
   if (!theme) return null;
-  const channels = CULTURE_CHANNELS[theme.id] || [];
   return (
     <>
       {isPreview && (

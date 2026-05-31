@@ -8,6 +8,7 @@ import {
 } from '../data/cultureChannels';
 import { CultureIcon } from '../data/cultureIcons';
 import { useCategories } from '../hooks/useCategories';
+import { useCultureChannels } from '../hooks/useCultureChannels';
 import useBackButtonClose from '../hooks/useBackButtonClose';
 
 // Sélecteur des 7 thématiques Culture parmi les 19 disponibles.
@@ -25,6 +26,15 @@ export default function CultureThemePicker({ user, initialSelected = [], onClose
 
   // Catégories Culture depuis Firestore (avec fallback)
   const CULTURE_THEMES = useCategories('culture');
+
+  // Chaînes Culture live depuis Firestore. Compteur affiché par carte.
+  // Repli sur l'import statique tant que le premier snapshot n'est pas
+  // arrivé.
+  const liveChannels = useCultureChannels();
+  const liveLoaded = Object.values(liveChannels || {}).some(
+    (arr) => arr && arr.length > 0
+  );
+  const channelsByTheme = liveLoaded ? liveChannels : CULTURE_CHANNELS;
 
   const [selected, setSelected] = useState(new Set(initialSelected));
   const [saving, setSaving] = useState(false);
@@ -104,7 +114,7 @@ export default function CultureThemePicker({ user, initialSelected = [], onClose
           <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-3">
             {CULTURE_THEMES.map((t) => {
               const isOn = selected.has(t.id);
-              const channelCount = (CULTURE_CHANNELS[t.id] || []).length;
+              const channelCount = (channelsByTheme[t.id] || []).length;
               return (
                 <button
                   key={t.id}
