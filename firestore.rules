@@ -140,10 +140,12 @@ service cloud.firestore {
     // =========================================================
     // 6. Collection /channels (gestion centralisée des chaînes YouTube)
     // =========================================================
-    // Source de vérité unifiée Tubiscope + Culture. Lecture admin only
-    // (outil interne, pas exposé aux end users). Écriture admin only.
+    // Source de vérité unifiée Tubiscope + Culture. Lecture authentifiée
+    // (le hook useCultureChannels alimente la liste des chaînes affichée
+    // dans la page publique CultureApp, sinon l'UI retombe sur le fallback
+    // statique src/data/cultureChannels.js). Écriture admin only.
     match /channels/{channelId} {
-      allow read:  if isAdmin();
+      allow read:  if isSignedIn();
       allow write: if isAdmin();
     }
 
