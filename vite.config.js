@@ -83,5 +83,18 @@ export default defineConfig({
   ],
   build: {
     chunkSizeWarningLimit: 1000,
-  }
+  },
+  server: {
+    // En dev (npm run dev), Vite sert le front sur 5173 mais ne connaît
+    // pas les routes /api/* qui vivent dans server.js. On proxy donc vers
+    // Express (port 3000) pour que les hooks qui tapent /api/* marchent
+    // sans dépendre du build prod. Lance Express en parallèle :
+    //   node server.js (ou npm start)
+    proxy: {
+      '/api': {
+        target: 'http://localhost:3000',
+        changeOrigin: true,
+      },
+    },
+  },
 })
