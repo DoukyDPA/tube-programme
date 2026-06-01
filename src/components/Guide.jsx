@@ -22,7 +22,10 @@ export default function Guide({ onOpenLegal }) {
           Bienvenue sur Tubi<span className="text-indigo-500">Scope</span>
         </h2>
         <p className="text-slate-400 text-lg max-w-2xl relative z-10">
-          Votre organisateur vidéo personnel. TubiScope filtre le bruit de YouTube pour ne vous proposer que des contenus longs, pertinents et organisés selon vos propres centres d'intérêt.
+          Votre curiosité remplace l'algorithme. Vous choisissez vos thématiques
+          et vos chaînes YouTube, Tubiscope vous remonte les vidéos longues
+          publiées par les créateurs que vous avez décidé de suivre. Pas de
+          recommandation opaque, pas de capture d'attention.
         </p>
       </div>
 
@@ -50,7 +53,7 @@ export default function Guide({ onOpenLegal }) {
               <span className="text-indigo-500 font-bold shrink-0">4.</span>
               <span>
                 <b>Sauvegardez vos découvertes :</b> survolez une vidéo et cliquez sur l'icône <Clock size={14} className="inline mx-1 text-slate-300" />
-                pour l'ajouter à votre ligne <b>À regarder plus tard</b> (10 vidéos max). Ces vidéos y resteront stockées et survivront au nettoyage quotidien.
+                pour l'ajouter à votre ligne <b>À regarder plus tard</b> (10 vidéos max). Ces vidéos sont protégées du nettoyage quotidien pendant 30 jours après leur ajout. Au-delà, elles suivent la rotation normale.
               </span>
             </li>
           </ul>
