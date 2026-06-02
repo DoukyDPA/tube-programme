@@ -8,6 +8,7 @@ import 'dotenv/config';
 import syncHandler from './api/sync.js';
 import syncCultureHandler from './api/sync-culture.js';
 import channelsCultureHandler from './api/channels-culture.js';
+import channelsTubiscopeHandler from './api/channels-tubiscope.js';
 import {
   listUsersHandler,
   toggleStudioHandler,
@@ -99,6 +100,11 @@ app.get('/api/sync-culture', syncCultureHandler);
 // Liste des chaînes Culture servie depuis un cache mémoire (TTL 1h).
 // Évite que chaque ouverture de Culture côté client lise /channels Firestore.
 app.get('/api/channels/culture', channelsCultureHandler);
+
+// Pendant pour les scopes éditeur Tubiscope. Sert la liste /channels
+// mode=tubiscope, utilisée par l'AdminPanel pour afficher toutes les
+// chaînes d'un scope même celles sans vidéo encore synchronisée.
+app.get('/api/channels/tubiscope', channelsTubiscopeHandler);
 
 // ---------- Admin des utilisateurs ----------
 // Toutes ces routes vérifient le token Firebase et le claim admin

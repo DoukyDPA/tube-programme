@@ -3,6 +3,7 @@ import { Cpu, BookOpen, Trophy, Mic2, X, CheckCircle2, Loader2, Sparkles, Edit2,
 import { db, YOUTUBE_API_KEY } from '../firebase';
 import { collection, doc, setDoc, updateDoc, deleteDoc, writeBatch } from 'firebase/firestore';
 import { useCategories } from '../hooks/useCategories';
+import { useTubiscopeChannels } from '../hooks/useTubiscopeChannels';
 import useBackButtonClose from '../hooks/useBackButtonClose';
 
 const ICONS = [
@@ -27,6 +28,12 @@ export default function AdminPanel({ user, userData, customThemes = [], isAdmin 
   // Catégories Tubiscope chargées depuis Firestore (avec fallback)
   const CATEGORIES = useCategories('tubiscope');
   const SCOPE_IDS = useMemo(() => new Set(CATEGORIES.map(c => c.id)), [CATEGORIES]);
+
+  // Chaînes /channels mode=tubiscope, groupées par scopeId. Source de
+  // vérité pour la liste affichée des scopes éditeur : sans ça, une
+  // chaîne sans vidéo synchronisée n'apparaîtrait pas dans l'admin
+  // (alors qu'elle est bien déclarée dans /admin-channels.html).
+  const tubiscopeChannels = useTubiscopeChannels();
 
   const [tab, setTab] = useState('channel');
   const [loading, setLoading] = useState(false);
@@ -213,24 +220,60 @@ export default function AdminPanel({ user, userData, customThemes = [], isAdmin 
     finally { setLoading(false); }
   };
 
-  // Liste des chaînes uniques pour la catégorie sélectionnée
-  // On lit hydratedPrograms qui contient le creatorName récupéré depuis l'API YouTube.
-  // Les docs Firestore bruts ne stockent que channelId et youtubeId.
+  // Liste des chaînes pour la catégorie sélectionnée.
+  //
+  // Deux logiques selon le type de catégorie :
+  //
+  // - Scope éditeur : la source est /channels (mode=tubiscope), récupérée
+  //   via useTubiscopeChannels. C'est la même source que
+  //   /admin-channels.html, donc on affiche bien les 4 chaînes déclarées
+  //   et pas seulement les 2 qui ont déjà des vidéos en base. Le nombre
+  //   de vidéos par chaîne se calcule en parallèle à partir de
+  //   hydratedPrograms (intersection avec channelId).
+  //
+  // - Thème perso : la source reste hydratedPrograms, parce qu'il n'y a
+  //   pas de collection /channels parallèle pour les thèmes user.
   const channelsInCategory = useMemo(() => {
     if (!category) return [];
+
+    const isScope = SCOPE_IDS.has(category);
     const programs = hydratedPrograms.filter(p => p.categoryId === category);
-    const map = new Map(); // channelId → { creatorName, programIds: [] }
+
+    // Index des programmes par channelId : on s'en sert dans les deux
+    // branches (compteur côté scope, dédup côté thème).
+    const progsByChannel = new Map(); // channelId → { creatorName, programIds: [] }
     programs.forEach(p => {
       if (!p.channelId) return;
-      if (!map.has(p.channelId)) {
-        map.set(p.channelId, { creatorName: p.creatorName || '(sans nom)', programIds: [] });
+      if (!progsByChannel.has(p.channelId)) {
+        progsByChannel.set(p.channelId, {
+          creatorName: p.creatorName || '(sans nom)',
+          programIds: [],
+        });
       }
-      map.get(p.channelId).programIds.push(p.id);
+      progsByChannel.get(p.channelId).programIds.push(p.id);
     });
-    return Array.from(map.entries())
+
+    if (isScope) {
+      // Source de vérité = /channels. Une chaîne sans vidéo apparaît
+      // quand même, avec un compteur à 0.
+      const declared = tubiscopeChannels?.[category] || [];
+      return declared
+        .map(ch => {
+          const stats = progsByChannel.get(ch.channelId);
+          return {
+            channelId: ch.channelId,
+            creatorName: ch.name || ch.handle || stats?.creatorName || '(sans nom)',
+            programIds: stats?.programIds || [],
+          };
+        })
+        .sort((a, b) => a.creatorName.localeCompare(b.creatorName, 'fr'));
+    }
+
+    // Thème perso : on dérive depuis les programs comme avant.
+    return Array.from(progsByChannel.entries())
       .map(([channelId, data]) => ({ channelId, ...data }))
       .sort((a, b) => a.creatorName.localeCompare(b.creatorName, 'fr'));
-  }, [category, hydratedPrograms]);
+  }, [category, hydratedPrograms, tubiscopeChannels, SCOPE_IDS]);
 
   // Supprime toutes les vidéos d'une chaîne dans la catégorie sélectionnée.
   // Utilise un batch Firestore pour rester atomique (max 500 docs, on est très loin).
