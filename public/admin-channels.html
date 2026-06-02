@@ -126,6 +126,7 @@
         <button class="btn ok" id="run-sync-btn">⚡ Sync vidéos maintenant</button>
         <button class="btn" id="run-newsletter-btn" style="background:#7c3aed;color:#fff">✉️ Générer la newsletter</button>
         <button class="btn ghost" id="fix-dates-btn" title="Rattrape les chaînes dont la date affiche 'Jamais'">🩹 Rattraper les dates « Jamais »</button>
+        <button class="btn ghost" id="recompute-counts-btn" title="Scan complet des programs : à utiliser après une purge ou si videoCount semble faux. Coûte beaucoup de reads Firestore.">🔄 Recompter les vidéos</button>
         <button class="btn ghost hidden" id="import-culture-btn">Importer la liste Culture</button>
         <span class="count" id="count"></span>
       </div>
@@ -297,7 +298,7 @@ import {
   getAuth, signInWithEmailAndPassword, signOut, onAuthStateChanged, getIdTokenResult
 } from 'https://www.gstatic.com/firebasejs/10.13.0/firebase-auth.js';
 import {
-  getFirestore, collection, doc, getDocs, getDoc, setDoc, deleteDoc, updateDoc, writeBatch, query, where, orderBy
+  getFirestore, collection, doc, getDocs, getDoc, setDoc, deleteDoc, deleteField, updateDoc, writeBatch, query, where, orderBy
 } from 'https://www.gstatic.com/firebasejs/10.13.0/firebase-firestore.js';
 
 // =====================================================================
@@ -415,27 +416,10 @@ async function loadAll() {
     ]);
     categories = catSnap.docs.map(d => ({ id: d.id, ...d.data() }))
       .sort((a, b) => (a.order || 0) - (b.order || 0));
-    channels = chSnap.docs.map(d => ({ id: d.id, ...d.data() }));
-
-    // Comptage live des programs par channelId : pour chaque catégorie utilisée,
-    // on récupère la sous-collection scopes/{catId}/programs, on compte par
-    // channelId, et on enrichit channels.videoCount. Ça donne la vraie valeur
-    // même si le sync n'a pas écrit videoCount dans /channels.
-    setStatus('Comptage des vidéos…', 'busy');
-    const catsUsed = new Set(channels.map(c => c.categoryId).filter(Boolean));
-    const countsByChannel = {};
-    const progSnaps = await Promise.all(
-      Array.from(catsUsed).map(catId =>
-        getDocs(collection(db, 'scopes', catId, 'programs')).then(s => ({ catId, snap: s }))
-      )
-    );
-    for (const { snap } of progSnaps) {
-      snap.docs.forEach(p => {
-        const cid = p.data().channelId;
-        if (cid) countsByChannel[cid] = (countsByChannel[cid] || 0) + 1;
-      });
-    }
-    channels = channels.map(c => ({ ...c, videoCount: countsByChannel[c.channelId] || 0 }));
+    // Lecture directe du videoCount stocké dans /channels (écrit par le sync).
+    // Si tu veux recompter en live (après une purge ou un sync planté),
+    // utilise le bouton « Recompter les vidéos ».
+    channels = chSnap.docs.map(d => ({ id: d.id, videoCount: 0, ...d.data() }));
 
     setStatus(`${channels.length} chaînes, ${categories.length} catégories`, 'ok');
     render();
@@ -803,6 +787,19 @@ $('#confirm-edit-channel').addEventListener('click', async () => {
       }, { merge: true });
 
       // 3. Migrer les programs (update channelId sur place)
+      //
+      // Important : on vide aussi title, creatorName et publishedAt. Le
+      // youtubeId du program pointe vers une vidéo de l'ANCIENNE chaîne,
+      // ses métadonnées sont donc périmées vis-à-vis du nouveau
+      // channelId. Sans purge, le sync delta peut garder ces docs si
+      // leur youtubeId tombe par hasard dans le top 5 récupéré, et la
+      // sidebar continue d'afficher l'ancien creatorName.
+      //
+      // En pratique, le prochain sync (api/sync.js) va voir ces
+      // youtubeIds comme hors du top 5 du nouveau channel et les
+      // supprimer, puis ajouter les vraies vidéos avec les bonnes
+      // métadonnées. La purge ci-dessous est un filet : même avant le
+      // sync, l'UI ne se trompe plus sur le nom de la chaîne.
       const progsSnap = await getDocs(query(
         collection(db, 'scopes', ch.categoryId, 'programs'),
         where('channelId', '==', ch.channelId)
@@ -811,7 +808,12 @@ $('#confirm-edit-channel').addEventListener('click', async () => {
       for (let i = 0; i < progsSnap.docs.length; i += 200) {
         const batch = writeBatch(db);
         for (const d of progsSnap.docs.slice(i, i + 200)) {
-          batch.update(d.ref, { channelId: newChannelId });
+          batch.update(d.ref, {
+            channelId: newChannelId,
+            title: deleteField(),
+            creatorName: deleteField(),
+            publishedAt: deleteField(),
+          });
           migrated++;
         }
         await batch.commit();
@@ -1044,6 +1046,57 @@ $('#fix-dates-btn').addEventListener('click', async () => {
   setStatus(`Rattrapage terminé : ${updated} chaîne(s) corrigée(s), ${stillEmpty} sans vidéo trouvée.`, 'ok');
   alert(`Terminé.\n${updated} chaîne(s) corrigée(s).\n${stillEmpty} restent sans date (chaînes vides ou supprimées).`);
   await loadAll();
+});
+
+// ---------- Recompter les vidéos (scan complet à la demande) ----------
+// L'admin lit normalement videoCount depuis /channels (écrit par le sync).
+// Ce bouton fait un scan complet de scopes/{catId}/programs pour les
+// catégories utilisées, met à jour le tableau en mémoire et persiste
+// videoCount dans /channels. À lancer après une purge ou si le sync a
+// laissé des comptes décalés. Attention : lit tous les docs des scopes,
+// coûteux côté quota Firestore.
+$('#recompute-counts-btn').addEventListener('click', async () => {
+  const catsUsed = Array.from(new Set(channels.map(c => c.categoryId).filter(Boolean)));
+  if (catsUsed.length === 0) return alert('Aucune catégorie utilisée. Rien à recompter.');
+  if (!confirm(`Scan complet de ${catsUsed.length} scope(s) ? Lit tous les programs Firestore, peut consommer plusieurs milliers de reads.`)) return;
+
+  setStatus('Recomptage en cours…', 'busy');
+  try {
+    const countsByChannel = {};
+    const progSnaps = await Promise.all(
+      catsUsed.map(catId =>
+        getDocs(collection(db, 'scopes', catId, 'programs')).then(s => ({ catId, snap: s }))
+      )
+    );
+    for (const { snap } of progSnaps) {
+      snap.docs.forEach(p => {
+        const cid = p.data().channelId;
+        if (cid) countsByChannel[cid] = (countsByChannel[cid] || 0) + 1;
+      });
+    }
+    channels = channels.map(c => ({ ...c, videoCount: countsByChannel[c.channelId] || 0 }));
+
+    // Persiste dans /channels pour que les chargements suivants soient gratuits.
+    const ids = Object.keys(countsByChannel);
+    const now = Date.now();
+    for (let i = 0; i < channels.length; i += 400) {
+      const batch = writeBatch(db);
+      for (const c of channels.slice(i, i + 400)) {
+        batch.set(
+          doc(db, 'channels', c.channelId),
+          { videoCount: c.videoCount || 0, updatedAt: now },
+          { merge: true }
+        );
+      }
+      await batch.commit();
+    }
+
+    setStatus(`Recomptage terminé. ${ids.length} chaîne(s) avec vidéos sur ${channels.length}.`, 'ok');
+    render();
+  } catch (e) {
+    setStatus('Erreur recomptage : ' + e.message, 'err');
+    console.error(e);
+  }
 });
 
 // ---------- Générer la newsletter (admin) ----------

@@ -1,7 +1,7 @@
 // =====================================================================
 // scripts/cap-programs-per-channel.js
 // =====================================================================
-// Nettoyage de scopes/{cult_xxx}/programs en trois passes :
+// Nettoyage de scopes/{scopeId}/programs en trois passes :
 //
 //   1. Orphelins de scope : programs dont le channelId n'est plus
 //      assigné à ce scope dans /channels (cas typique : chaîne déplacée
@@ -19,15 +19,23 @@
 // remis dans toKeep, peu importe les caps. Aligné sur la protection
 // implémentée dans api/sync-culture.js.
 //
-// Sans argument : DRY RUN. Affiche ce qui serait supprimé, sans toucher.
-// Avec --apply : exécute les suppressions par batch de 400.
+// Sans argument : DRY RUN sur mode=culture. Affiche ce qui serait
+// supprimé, sans toucher. Avec --apply : exécute les suppressions par
+// batch de 400.
+//
+// Le flag --mode pilote la cible. Valeurs : culture (défaut), tubiscope,
+// both. Permet de raboter les scopes éditeur Tubiscope, dont le sync
+// applique aussi un TOP_N = 5 mais qui peuvent accumuler du legacy.
 //
 // Usage :
-//   node scripts/cap-programs-per-channel.js               # dry run
-//   node scripts/cap-programs-per-channel.js --apply       # exécution
+//   node scripts/cap-programs-per-channel.js                       # dry run, culture
+//   node scripts/cap-programs-per-channel.js --apply               # exécution, culture
+//   node scripts/cap-programs-per-channel.js --mode=tubiscope      # dry run, tubiscope
+//   node scripts/cap-programs-per-channel.js --mode=tubiscope --apply
+//   node scripts/cap-programs-per-channel.js --mode=both --apply
 //   node scripts/cap-programs-per-channel.js --apply --no-scope-cap
 //
-// Aligné sur api/sync-culture.js : MAX_PER_CHANNEL = 5,
+// Aligné sur api/sync.js / api/sync-culture.js : MAX_PER_CHANNEL = 5,
 // MAX_PER_SCOPE = CULTURE_VIDEOS_PER_THEME = 25,
 // WATCH_LATER_PROTECTION_MS = 30 jours.
 // =====================================================================
@@ -48,9 +56,23 @@ const serviceAccount = JSON.parse(
 initializeApp({ credential: cert(serviceAccount) });
 const db = getFirestore();
 
-const args = new Set(process.argv.slice(2));
+const rawArgs = process.argv.slice(2);
+const args = new Set(rawArgs);
 const APPLY = args.has('--apply');
 const SCOPE_CAP = !args.has('--no-scope-cap');
+
+// --mode=culture | tubiscope | both (par défaut : culture, pour
+// conserver le comportement historique du script).
+const modeArg = rawArgs.find((a) => a.startsWith('--mode='));
+const modeRaw = modeArg ? modeArg.split('=')[1] : 'culture';
+const VALID_MODES = ['culture', 'tubiscope', 'both'];
+if (!VALID_MODES.includes(modeRaw)) {
+  console.error(
+    `--mode invalide : ${modeRaw}. Valeurs autorisées : ${VALID_MODES.join(', ')}.`
+  );
+  process.exit(1);
+}
+const MODES_TO_PROCESS = modeRaw === 'both' ? ['culture', 'tubiscope'] : [modeRaw];
 
 const MAX_PER_CHANNEL = 5;
 const MAX_PER_SCOPE = 25;
@@ -81,28 +103,34 @@ async function main() {
   console.log('');
   console.log('====================================================');
   console.log(`  Cap programs par chaîne (max ${MAX_PER_CHANNEL}/chaîne, ${MAX_PER_SCOPE}/scope)`);
-  console.log(`  Mode : ${APPLY ? 'APPLY (suppressions réelles)' : 'DRY RUN'}`);
+  console.log(`  Cible(s) : ${MODES_TO_PROCESS.join(', ')}`);
+  console.log(`  Mode exécution : ${APPLY ? 'APPLY (suppressions réelles)' : 'DRY RUN'}`);
   console.log('====================================================');
   console.log('');
 
-  // 1. Récupère les chaînes Culture. On construit une map { catId -> Set<channelId> }
-  //    pour identifier les programs orphelins (channelId pas attendu dans le scope).
-  const chSnap = await db
-    .collection('channels')
-    .where('mode', '==', 'culture')
-    .get();
+  // 1. Récupère les chaînes pour les modes ciblés. On construit une map
+  //    { catId -> Set<channelId> } pour identifier les programs orphelins
+  //    (channelId pas attendu dans le scope). On filtre côté Firestore par
+  //    mode pour chaque cible et on fusionne. Les catégories culture (cult_*)
+  //    et tubiscope ont des IDs disjoints, pas de conflit.
   const catsUsed = new Set();
   const expectedByCat = new Map(); // catId -> Set<channelId>
-  chSnap.docs.forEach((d) => {
-    const c = d.data();
-    if (!c.categoryId || !c.channelId) return;
-    catsUsed.add(c.categoryId);
-    if (!expectedByCat.has(c.categoryId)) expectedByCat.set(c.categoryId, new Set());
-    expectedByCat.get(c.categoryId).add(c.channelId);
-  });
+  for (const m of MODES_TO_PROCESS) {
+    const chSnap = await db
+      .collection('channels')
+      .where('mode', '==', m)
+      .get();
+    chSnap.docs.forEach((d) => {
+      const c = d.data();
+      if (!c.categoryId || !c.channelId) return;
+      catsUsed.add(c.categoryId);
+      if (!expectedByCat.has(c.categoryId)) expectedByCat.set(c.categoryId, new Set());
+      expectedByCat.get(c.categoryId).add(c.channelId);
+    });
+  }
 
   if (catsUsed.size === 0) {
-    console.log('Aucune catégorie culture utilisée. Rien à faire.');
+    console.log(`Aucune catégorie utilisée pour ${MODES_TO_PROCESS.join(', ')}. Rien à faire.`);
     process.exit(0);
   }
 
