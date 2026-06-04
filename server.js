@@ -2,6 +2,7 @@ import express from 'express';
 import cors from 'cors';
 import rateLimit from 'express-rate-limit';
 import path from 'path';
+import crypto from 'crypto';
 import { fileURLToPath } from 'url';
 import cron from 'node-cron';
 import 'dotenv/config';
@@ -37,6 +38,31 @@ const PORT = process.env.PORT || 3000;
 // Indique à Express de faire confiance au premier proxy (Nginx, Render, Railway…)
 // afin que express-rate-limit lise la vraie IP depuis X-Forwarded-For.
 app.set('trust proxy', 1);
+
+// ── Garde-fou des endpoints de synchronisation ────────────────────────────────
+// /api/sync et /api/sync-culture écrivent dans Firestore via le service account
+// (bypass des rules) et consomment le quota YouTube. Sans protection, n'importe
+// qui peut les marteler. On exige donc un secret partagé dans l'en-tête
+// `x-cron-secret`, comparé en temps constant à process.env.SYNC_SECRET.
+//
+// Le cron interne appelle les handlers en direct (pas via cette route HTTP),
+// il n'est donc pas soumis à ce contrôle.
+function requireSyncSecret(req, res, next) {
+  const expected = process.env.SYNC_SECRET || '';
+  const provided = req.get('x-cron-secret') || '';
+
+  // Fail-closed : si le secret n'est pas configuré, on refuse tout appel HTTP.
+  if (!expected) {
+    return res.status(503).json({ success: false, error: 'Sync désactivé : SYNC_SECRET non configuré.' });
+  }
+
+  const a = Buffer.from(provided);
+  const b = Buffer.from(expected);
+  if (a.length !== b.length || !crypto.timingSafeEqual(a, b)) {
+    return res.status(401).json({ success: false, error: 'Non autorisé.' });
+  }
+  next();
+}
 
 // ── CORS ─────────────────────────────────────────────────────────────────────
 // Whitelist explicite. ALLOWED_ORIGINS en production (ex: "https://tubiscope.fr").
@@ -142,8 +168,8 @@ app.post('/api/hydrate', hydrateLimiter, async (req, res) => {
 });
 // ----------------------------------------------
 
-app.get('/api/sync', syncHandler);
-app.get('/api/sync-culture', syncCultureHandler);
+app.get('/api/sync', requireSyncSecret, syncHandler);
+app.get('/api/sync-culture', requireSyncSecret, syncCultureHandler);
 
 // Liste des chaînes Culture servie depuis un cache mémoire (TTL 1h).
 // Évite que chaque ouverture de Culture côté client lise /channels Firestore.
