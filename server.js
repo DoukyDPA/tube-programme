@@ -23,20 +23,21 @@ const __dirname = path.dirname(__filename);
 const app = express();
 
 // ── Content-Security-Policy ───────────────────────────────────────────────────
-// 'unsafe-inline' sur style-src est conservé pour Tailwind.
-// connect-src inclut wss:// pour le fallback WebSocket de Firestore,
-// ainsi que tous les domaines Firebase Auth/Firestore utilisés en runtime.
+// Mode Report-Only : la politique est auditée sans rien bloquer.
+// Consulter la console navigateur (erreurs CSP) pour identifier les domaines
+// manquants avant de passer en mode enforcement.
+// Les protections actives (CORS, rate-limit, auditLogs) restent en place.
 app.use((req, res, next) => {
   res.setHeader(
-    'Content-Security-Policy',
+    'Content-Security-Policy-Report-Only',
     [
       "default-src 'self'",
-      "script-src 'self' 'unsafe-inline'",
+      "script-src 'self' 'unsafe-inline' 'unsafe-eval'",
       "style-src 'self' 'unsafe-inline'",
-      "connect-src 'self' https://*.googleapis.com https://*.firebaseio.com wss://*.firebaseio.com https://*.firebasedatabase.app wss://*.firebasedatabase.app https://identitytoolkit.googleapis.com https://securetoken.googleapis.com https://www.googleapis.com https://apis.google.com",
-      "img-src 'self' data: blob: https://*.ytimg.com https://img.youtube.com https://*.googleusercontent.com https://yt3.ggpht.com",
+      "connect-src 'self' https: wss:",
+      "img-src 'self' data: blob: https:",
       "font-src 'self' data:",
-      "frame-src https://accounts.google.com",
+      "frame-src https:",
       "object-src 'none'",
       "base-uri 'self'",
     ].join('; ')
