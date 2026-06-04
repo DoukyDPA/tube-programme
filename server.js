@@ -23,26 +23,14 @@ const __dirname = path.dirname(__filename);
 const app = express();
 
 // ── Content-Security-Policy ───────────────────────────────────────────────────
-// connect-src inclut img.youtube.com et *.ytimg.com : le Service Worker
-// Workbox charge les thumbnails YouTube via fetch(), soumis à connect-src.
-// wss: couvre le fallback WebSocket de Firestore/Firebase Auth.
-app.use((req, res, next) => {
-  res.setHeader(
-    'Content-Security-Policy',
-    [
-      "default-src 'self'",
-      "script-src 'self' 'unsafe-inline' 'unsafe-eval'",
-      "style-src 'self' 'unsafe-inline'",
-      "connect-src 'self' https://*.googleapis.com https://*.firebaseio.com wss://*.firebaseio.com https://identitytoolkit.googleapis.com https://securetoken.googleapis.com https://apis.google.com https://img.youtube.com https://*.ytimg.com",
-      "img-src 'self' data: blob: https://*.ytimg.com https://img.youtube.com https://*.googleusercontent.com https://yt3.ggpht.com",
-      "font-src 'self' data:",
-      "frame-src https://accounts.google.com https://www.youtube.com https://youtube.com",
-      "object-src 'none'",
-      "base-uri 'self'",
-    ].join('; ')
-  );
-  next();
-});
+// La CSP est désormais livrée via une balise <meta http-equiv> dans index.html
+// et admin-channels.html, et non plus via cet en-tête HTTP.
+// Raison : l'app est une PWA. Le service worker précache la page et fige les
+// en-têtes HTTP de la réponse mise en cache. Une CSP en en-tête restait donc
+// gravée dans le cache du SW et ne se mettait jamais à jour (le hash de la page
+// ne change pas quand seul un en-tête change). En meta, la CSP fait partie du
+// contenu : toute modif change le hash, le SW recharge et la propage.
+// Voir index.html et public/admin-channels.html pour la politique active.
 
 const PORT = process.env.PORT || 3000;
 
