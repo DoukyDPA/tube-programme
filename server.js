@@ -23,19 +23,20 @@ const __dirname = path.dirname(__filename);
 const app = express();
 
 // ── Content-Security-Policy ───────────────────────────────────────────────────
-// Politique restrictive : on autorise uniquement les origines nécessaires.
-// 'unsafe-inline' sur style-src est conservé pour Tailwind (purge runtime).
+// 'unsafe-inline' sur style-src est conservé pour Tailwind.
+// connect-src inclut wss:// pour le fallback WebSocket de Firestore,
+// ainsi que tous les domaines Firebase Auth/Firestore utilisés en runtime.
 app.use((req, res, next) => {
   res.setHeader(
     'Content-Security-Policy',
     [
       "default-src 'self'",
-      "script-src 'self'",
+      "script-src 'self' 'unsafe-inline'",
       "style-src 'self' 'unsafe-inline'",
-      "connect-src 'self' https://*.googleapis.com https://*.firebaseio.com https://identitytoolkit.googleapis.com https://securetoken.googleapis.com",
-      "img-src 'self' data: https://*.ytimg.com https://img.youtube.com https://*.googleusercontent.com https://yt3.ggpht.com",
+      "connect-src 'self' https://*.googleapis.com https://*.firebaseio.com wss://*.firebaseio.com https://*.firebasedatabase.app wss://*.firebasedatabase.app https://identitytoolkit.googleapis.com https://securetoken.googleapis.com https://www.googleapis.com https://apis.google.com",
+      "img-src 'self' data: blob: https://*.ytimg.com https://img.youtube.com https://*.googleusercontent.com https://yt3.ggpht.com",
       "font-src 'self' data:",
-      "frame-src 'none'",
+      "frame-src https://accounts.google.com",
       "object-src 'none'",
       "base-uri 'self'",
     ].join('; ')
@@ -53,7 +54,14 @@ app.set('trust proxy', 1);
 // Whitelist explicite. ALLOWED_ORIGINS en production (ex: "https://tubiscope.fr").
 const allowedOrigins = process.env.ALLOWED_ORIGINS
   ? process.env.ALLOWED_ORIGINS.split(',').map(o => o.trim())
-  : ['http://localhost:5173', 'http://localhost:3000'];
+  : [
+      'http://localhost:5173',
+      'http://localhost:3000',
+      'https://tubiscope.fr',
+      'https://www.tubiscope.fr',
+      'https://tubiscope.com',
+      'https://www.tubiscope.com',
+    ];
 
 app.use(cors({
   origin: (origin, cb) => {
