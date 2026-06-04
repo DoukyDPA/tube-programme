@@ -45,6 +45,10 @@ app.use((req, res, next) => {
 
 const PORT = process.env.PORT || 3000;
 
+// Indique à Express de faire confiance au premier proxy (Nginx, Render, Railway…)
+// afin que express-rate-limit lise la vraie IP depuis X-Forwarded-For.
+app.set('trust proxy', 1);
+
 // ── CORS ─────────────────────────────────────────────────────────────────────
 // Whitelist explicite. ALLOWED_ORIGINS en production (ex: "https://tubiscope.fr").
 const allowedOrigins = process.env.ALLOWED_ORIGINS
