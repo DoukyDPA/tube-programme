@@ -1,7 +1,7 @@
 rules_version = '2';
 
 // =====================================================================
-// Tubiscope — Règles de sécurité Firestore (v3, ajout Tubiscope Culture)
+// Tubiscope — Règles de sécurité Firestore (v4, audit DICP)
 // =====================================================================
 // Modèle de sécurité
 //
@@ -14,7 +14,8 @@ rules_version = '2';
 // 3. users/{uid}/themes/{themeId}/programs/{progId}  : vidéos d'un thème custom du user
 // 4. scopes/{scopeId}/programs/{progId}              : vidéos des scopes éditeur (admin)
 //    + scopes/cult_xxx/programs/{progId}             : vidéos Tubiscope Culture (sync serveur)
-// 5. artifacts/{appId}/public/data/programs/{progId} : ANCIENNE collection, read-only
+// 5. auditLogs/{logId}                               : logs d'audit admin (write Admin SDK only)
+//    SUPPRIMÉ : artifacts/... (ancienne collection v1, retirée définitivement)
 //
 // Identification admin : custom claim `admin = true`
 // Le sync Culture tourne avec firebase-admin (service account), il bypass
@@ -129,11 +130,13 @@ service cloud.firestore {
     }
 
     // =========================================================
-    // 5. Ancienne collection programs (read-only le temps de la migration)
+    // 5. Logs d'audit admin
     // =========================================================
-    // À supprimer une fois la migration validée et l'app stabilisée sur la v2.
-    match /artifacts/{appId}/public/data/programs/{progId} {
-      allow read: if isSignedIn();
+    // Écriture réservée au service account Firebase Admin SDK (bypass rules).
+    // Lecture réservée aux admins pour consultation via l'interface admin.
+    // Aucune écriture client autorisée (write: if false).
+    match /auditLogs/{logId} {
+      allow read:  if isAdmin();
       allow write: if false;
     }
 
@@ -185,7 +188,7 @@ service cloud.firestore {
     }
 
     // =========================================================
-    // 8. Fallback : tout le reste est interdit par défaut
+    // 9. Fallback : tout le reste est interdit par défaut
     // =========================================================
     match /{document=**} {
       allow read, write: if false;

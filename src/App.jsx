@@ -215,25 +215,19 @@ export default function App() {
       }
 
       let fetchedData = {};
-      if (YOUTUBE_API_KEY && needHydration.size > 0) {
-        const ids = Array.from(needHydration);
-        for (let i = 0; i < ids.length; i += 50) {
-          const chunk = ids.slice(i, i + 50).join(',');
-          try {
-            const res = await fetch(`https://www.googleapis.com/youtube/v3/videos?key=${YOUTUBE_API_KEY}&id=${chunk}&part=snippet`);
-            const data = await res.json();
-            if (data.items) {
-              data.items.forEach(item => {
-                fetchedData[item.id] = {
-                  title: item.snippet.title,
-                  creatorName: item.snippet.channelTitle,
-                  publishedAt: new Date(item.snippet.publishedAt).getTime(),
-                };
-              });
-            }
-          } catch (e) {
-            console.error("Erreur hydratation API YouTube:", e);
+      if (needHydration.size > 0) {
+        try {
+          const res = await fetch('/api/hydrate', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ videoIds: Array.from(needHydration) }),
+          });
+          const data = await res.json();
+          if (data.success && data.data) {
+            Object.assign(fetchedData, data.data);
           }
+        } catch (e) {
+          console.error("Erreur hydratation /api/hydrate:", e);
         }
       }
 
@@ -427,21 +421,15 @@ export default function App() {
 
       const ids = needFill.map(p => p.youtubeId);
       const meta = {};
-      for (let i = 0; i < ids.length; i += 50) {
-        const chunk = ids.slice(i, i + 50).join(',');
-        const r = await fetch(`https://www.googleapis.com/youtube/v3/videos?key=${YOUTUBE_API_KEY}&id=${chunk}&part=snippet`);
-        const d = await r.json();
-        if (d.items) {
-          for (const it of d.items) {
-            meta[it.id] = {
-              title: it.snippet?.title || '',
-              creatorName: it.snippet?.channelTitle || '',
-              publishedAt: it.snippet?.publishedAt
-                ? new Date(it.snippet.publishedAt).getTime()
-                : null,
-            };
-          }
-        }
+      // Migration routée via /api/hydrate pour ne pas exposer la clé YouTube côté client
+      const migrateRes = await fetch('/api/hydrate', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ videoIds: ids }),
+      });
+      const migrateData = await migrateRes.json();
+      if (migrateData.success && migrateData.data) {
+        Object.assign(meta, migrateData.data);
       }
 
       for (let i = 0; i < needFill.length; i += 400) {

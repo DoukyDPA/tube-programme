@@ -148,6 +148,15 @@ export async function toggleStudioHandler(req, res) {
       { merge: true }
     );
 
+    // Traçabilité : log d'audit immuable (écrit via Admin SDK, non falsifiable côté client)
+    await db.collection('auditLogs').add({
+      action: 'toggle_studio',
+      targetUid: uid,
+      performedBy: decoded.uid,
+      performedAt: Date.now(),
+      meta: { isPremium },
+    });
+
     res.json({ success: true, uid, isPremium });
   } catch (e) {
     console.error('Erreur toggleStudio:', e);
@@ -213,6 +222,15 @@ export async function deleteUserHandler(req, res) {
       // Si le compte n'existe pas côté Auth, on continue silencieusement.
       if (e.code !== 'auth/user-not-found') throw e;
     }
+
+    // Traçabilité : log d'audit immuable (écrit via Admin SDK, non falsifiable côté client)
+    await db.collection('auditLogs').add({
+      action: 'delete_user',
+      targetUid: uid,
+      performedBy: decoded.uid,
+      performedAt: Date.now(),
+      meta: { authDeleted, firestoreDocDeleted, deletedThemes, deletedPrograms },
+    });
 
     res.json({
       success: true,

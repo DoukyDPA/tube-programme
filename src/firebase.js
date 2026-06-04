@@ -17,8 +17,11 @@ const app = initializeApp(firebaseConfig);
 export const auth = getAuth(app);
 export const db = getFirestore(app);
 export const FIREBASE_APP_ID = "tube-prog-v0";
+
+// Les clés YouTube NE sont plus exposées côté client.
+// L'hydratation des métadonnées vidéo passe désormais par /api/hydrate (serveur).
+// Les appels admin directs à l'API YouTube (ajout de chaîne, sync manuelle)
+// utilisent toujours VITE_YOUTUBE_API_KEY car ils nécessitent une clé avec
+// restriction Referer propre à l'interface admin.
 export const YOUTUBE_API_KEY = import.meta.env.VITE_YOUTUBE_API_KEY;
-// Clé dédiée à Tubiscope Culture (séparation des quotas Culture vs Studio/Gratuit).
-// Si elle n'est pas définie, on retombe sur la clé principale.
-export const YOUTUBE_API_KEY_CULTURE =
-  import.meta.env.VITE_YOUTUBE_API_KEY_CULTURE || import.meta.env.VITE_YOUTUBE_API_KEY;
+export const YOUTUBE_API_KEY_CULTURE = import.meta.env.VITE_YOUTUBE_API_KEY_CULTURE || import.meta.env.VITE_YOUTUBE_API_KEY;

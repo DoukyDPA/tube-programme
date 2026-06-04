@@ -6,7 +6,9 @@ import {
   getDoc,
   getDocs,
   setDoc,
+  updateDoc,
   deleteDoc,
+  deleteField,
   arrayUnion,
   arrayRemove,
   writeBatch,
@@ -286,28 +288,19 @@ export default function CultureApp() {
       }
 
       const fetched = {};
-      if (YOUTUBE_API_KEY_CULTURE && needHydration.size > 0) {
-        const ids = Array.from(needHydration);
-        for (let i = 0; i < ids.length; i += 50) {
-          const chunk = ids.slice(i, i + 50).join(',');
-          try {
-            const res = await fetch(
-              `https://www.googleapis.com/youtube/v3/videos?key=${YOUTUBE_API_KEY_CULTURE}&id=${chunk}&part=snippet`
-            );
-            const data = await res.json();
-            if (data.items) {
-              data.items.forEach((it) => {
-                fetched[it.id] = {
-                  title: it.snippet.title,
-                  creatorName: it.snippet.channelTitle,
-                  channelId: it.snippet.channelId,
-                  publishedAt: new Date(it.snippet.publishedAt).getTime(),
-                };
-              });
-            }
-          } catch (e) {
-            console.error('Hydratation YT échouée:', e);
+      if (needHydration.size > 0) {
+        try {
+          const res = await fetch('/api/hydrate', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ videoIds: Array.from(needHydration) }),
+          });
+          const data = await res.json();
+          if (data.success && data.data) {
+            Object.assign(fetched, data.data);
           }
+        } catch (e) {
+          console.error('Hydratation /api/hydrate échouée:', e);
         }
       }
 
@@ -355,7 +348,13 @@ export default function CultureApp() {
     JSON.stringify(userData?.watchLaterCulture || []),
   ]);
 
-  // Toggle watch later (partagé avec la version standard)
+  // Toggle watch later (partagé avec la version standard).
+  // On maintient deux champs :
+  //   - watchLaterCulture          : array<youtubeId>     (legacy, lu par l'UI)
+  //   - watchLaterCultureAddedAt   : map<youtubeId, ts>   (date d'ajout, utilisée
+  //                                                       par le sync pour la
+  //                                                       fenêtre de protection
+  //                                                       de 30 jours)
   const toggleWatchLater = async (prog) => {
     if (!user) return;
     const ref = doc(db, 'users', user.uid);
@@ -363,21 +362,19 @@ export default function CultureApp() {
     const isWl = currentWl.includes(prog.youtubeId);
     try {
       if (isWl) {
-        await setDoc(
-          ref,
-          { watchLaterCulture: arrayRemove(prog.youtubeId) },
-          { merge: true }
-        );
+        await updateDoc(ref, {
+          watchLaterCulture: arrayRemove(prog.youtubeId),
+          [`watchLaterCultureAddedAt.${prog.youtubeId}`]: deleteField(),
+        });
       } else {
         if (currentWl.length >= 10) {
           alert("Limite atteinte : 10 vidéos maximum dans 'À regarder plus tard'.");
           return;
         }
-        await setDoc(
-          ref,
-          { watchLaterCulture: arrayUnion(prog.youtubeId) },
-          { merge: true }
-        );
+        await updateDoc(ref, {
+          watchLaterCulture: arrayUnion(prog.youtubeId),
+          [`watchLaterCultureAddedAt.${prog.youtubeId}`]: Date.now(),
+        });
       }
     } catch (e) {
       alert(`Erreur : ${e.message}`);
@@ -639,24 +636,15 @@ export default function CultureApp() {
 
         const ids = needFill.map((p) => p.youtubeId);
         const meta = {};
-
-        for (let i = 0; i < ids.length; i += 50) {
-          const chunk = ids.slice(i, i + 50).join(',');
-          const r = await fetch(
-            `https://www.googleapis.com/youtube/v3/videos?key=${YOUTUBE_API_KEY_CULTURE}&id=${chunk}&part=snippet`
-          );
-          const d = await r.json();
-          if (d.items) {
-            for (const it of d.items) {
-              meta[it.id] = {
-                title: it.snippet?.title || '',
-                creatorName: it.snippet?.channelTitle || '',
-                publishedAt: it.snippet?.publishedAt
-                  ? new Date(it.snippet.publishedAt).getTime()
-                  : null,
-              };
-            }
-          }
+        // Migration routée via /api/hydrate
+        const migrateRes = await fetch('/api/hydrate', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ videoIds: ids }),
+        });
+        const migrateData = await migrateRes.json();
+        if (migrateData.success && migrateData.data) {
+          Object.assign(meta, migrateData.data);
         }
 
         // Écritures Firestore en batch

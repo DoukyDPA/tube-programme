@@ -1,9 +1,10 @@
 import express from 'express';
 import cors from 'cors';
+import rateLimit from 'express-rate-limit';
 import path from 'path';
 import { fileURLToPath } from 'url';
 import cron from 'node-cron';
-import 'dotenv/config'; 
+import 'dotenv/config';
 
 import syncHandler from './api/sync.js';
 import syncCultureHandler from './api/sync-culture.js';
@@ -21,28 +22,75 @@ const __dirname = path.dirname(__filename);
 
 const app = express();
 
+// ── Content-Security-Policy ───────────────────────────────────────────────────
+// Politique restrictive : on autorise uniquement les origines nécessaires.
+// 'unsafe-inline' sur style-src est conservé pour Tailwind (purge runtime).
 app.use((req, res, next) => {
   res.setHeader(
     'Content-Security-Policy',
-    "default-src * 'unsafe-inline' 'unsafe-eval' data: blob:;"
+    [
+      "default-src 'self'",
+      "script-src 'self'",
+      "style-src 'self' 'unsafe-inline'",
+      "connect-src 'self' https://*.googleapis.com https://*.firebaseio.com https://identitytoolkit.googleapis.com https://securetoken.googleapis.com",
+      "img-src 'self' data: https://i.ytimg.com https://img.youtube.com https://*.googleusercontent.com",
+      "font-src 'self' data:",
+      "frame-src 'none'",
+      "object-src 'none'",
+      "base-uri 'self'",
+    ].join('; ')
   );
   next();
 });
 
 const PORT = process.env.PORT || 3000;
 
-app.use(cors());
+// ── CORS ─────────────────────────────────────────────────────────────────────
+// Whitelist explicite. ALLOWED_ORIGINS en production (ex: "https://tubiscope.fr").
+const allowedOrigins = process.env.ALLOWED_ORIGINS
+  ? process.env.ALLOWED_ORIGINS.split(',').map(o => o.trim())
+  : ['http://localhost:5173', 'http://localhost:3000'];
+
+app.use(cors({
+  origin: (origin, cb) => {
+    // Requêtes sans origin (Postman, cron interne) : autorisées côté serveur
+    if (!origin || allowedOrigins.includes(origin)) return cb(null, true);
+    cb(new Error('Origin non autorisée par CORS'));
+  },
+  methods: ['GET', 'POST', 'DELETE'],
+  allowedHeaders: ['Content-Type', 'Authorization'],
+}));
+
 app.use(express.json());
 
-// --- NOUVEAU : SYSTÈME DE CACHE EN MÉMOIRE ---
-const CACHE_TTL = 24 * 60 * 60 * 1000; // Durée de vie du cache : 24 heures
+// ── Rate limiting ─────────────────────────────────────────────────────────────
+const hydrateLimiter = rateLimit({
+  windowMs: 60 * 1000,        // fenêtre de 1 minute
+  max: 30,                     // 30 requêtes/min par IP
+  standardHeaders: true,
+  legacyHeaders: false,
+  message: { success: false, error: 'Trop de requêtes, réessaie dans une minute.' },
+});
+
+// ── Regex validation YouTube ID ───────────────────────────────────────────────
+const YOUTUBE_ID_RE = /^[a-zA-Z0-9_-]{11}$/;
+
+// ── Cache mémoire YouTube ─────────────────────────────────────────────────────
+const CACHE_TTL = 24 * 60 * 60 * 1000; // 24 heures
 let youtubeCache = {}; // Format: { "videoId": { data: {...}, timestamp: 123456789 } }
 
-app.post('/api/hydrate', async (req, res) => {
+app.post('/api/hydrate', hydrateLimiter, async (req, res) => {
   try {
     const { videoIds } = req.body;
-    if (!videoIds || !Array.isArray(videoIds)) {
+    if (!videoIds || !Array.isArray(videoIds) || videoIds.length === 0) {
       return res.status(400).json({ error: 'Liste videoIds invalide' });
+    }
+    if (videoIds.length > 200) {
+      return res.status(400).json({ error: 'videoIds limité à 200 par requête' });
+    }
+    const invalidId = videoIds.find(id => typeof id !== 'string' || !YOUTUBE_ID_RE.test(id));
+    if (invalidId !== undefined) {
+      return res.status(400).json({ error: `Format de videoId invalide : "${invalidId}"` });
     }
 
     const now = Date.now();
