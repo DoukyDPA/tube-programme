@@ -15,7 +15,7 @@
 // =====================================================================
 
 import { initializeApp, getApps, cert } from 'firebase-admin/app';
-import { getFirestore } from 'firebase-admin/firestore';
+import { getFirestore, FieldValue } from 'firebase-admin/firestore';
 import { readFileSync } from 'fs';
 import { dirname, join } from 'path';
 import { fileURLToPath } from 'url';
@@ -30,6 +30,9 @@ const CULTURE_VIDEOS_PER_THEME = 25;
 // une thématique, on cap à 5 vidéos par chaîne avant de prendre le top.
 const MAX_PER_CHANNEL = 5;
 const MIN_DURATION_S = 180;
+// Une vidéo ajoutée au watch later d'au moins un user est protégée de
+// la suppression pendant cette fenêtre, à compter de la date d'ajout.
+const WATCH_LATER_PROTECTION_MS = 30 * 24 * 60 * 60 * 1000;
 
 const initAdmin = () => {
   if (getApps().length > 0) return getFirestore();
@@ -166,6 +169,32 @@ export default async function handler(req, res) {
     // Map channelId -> { lastVideoAt, videoCount } accumulé par catégorie
     const channelStats = {};
 
+    // Watch later : union des youtubeIds ajoutés il y a moins de 30 jours
+    // par n'importe quel user. Ces vidéos seront exclues de toDelete même
+    // si elles sortent du top, pour ne pas casser les listes « à regarder
+    // plus tard ».
+    const protectedThreshold = Date.now() - WATCH_LATER_PROTECTION_MS;
+    const protectedIds = new Set();
+    try {
+      const usersSnap = await db.collection('users').get();
+      for (const u of usersSnap.docs) {
+        const wlMap = u.data().watchLaterCultureAddedAt || {};
+        for (const [yid, ts] of Object.entries(wlMap)) {
+          if (typeof ts === 'number' && ts >= protectedThreshold) {
+            protectedIds.add(yid);
+          }
+        }
+      }
+      console.log(
+        `Watch later : ${protectedIds.size} youtubeId(s) protégé(s) (ajout < 30 j) sur ${usersSnap.size} user(s).`
+      );
+    } catch (e) {
+      console.warn(
+        'Lecture watchLaterCultureAddedAt échouée, protection désactivée pour ce run :',
+        e.message
+      );
+    }
+
     for (const [themeId, channels] of Object.entries(byTheme)) {
       // 2. Fetch uploads de toutes les chaînes de la thématique
       const candidates = [];
@@ -233,11 +262,23 @@ export default async function handler(req, res) {
       const toAdd = top.filter((v) => !existingIds.has(v.youtubeId));
       const toDelete = safeMode
         ? []
-        : existing.filter((p) => !topIds.has(p.youtubeId));
+        : existing.filter(
+            (p) => !topIds.has(p.youtubeId) && !protectedIds.has(p.youtubeId)
+          );
+      const protectedKept = safeMode
+        ? 0
+        : existing.filter(
+            (p) => !topIds.has(p.youtubeId) && protectedIds.has(p.youtubeId)
+          ).length;
 
       if (safeMode) {
         console.warn(
           `  ${themeId} : SAFE MODE (${failedChannels}/${channels.length} chaînes en erreur), aucune suppression.`
+        );
+      }
+      if (protectedKept > 0) {
+        console.log(
+          `  ${themeId} : ${protectedKept} vidéo(s) gardée(s) hors top par protection watch later.`
         );
       }
 
@@ -321,6 +362,19 @@ export default async function handler(req, res) {
       totalDeleted,
       report,
     };
+
+    // Traçabilité : la sync écrit dans Firestore via le service account.
+    const trigger = req && typeof req.get === 'function' ? 'api' : 'cron';
+    await db.collection('auditLogs').add({
+      action: 'sync_culture',
+      performedBy: trigger,
+      performedAt: FieldValue.serverTimestamp(),
+      meta: {
+        totalAdded,
+        totalDeleted,
+        categories: Object.keys(byTheme).length,
+      },
+    });
 
     if (res?.status) return res.status(200).json(payload);
     return payload;

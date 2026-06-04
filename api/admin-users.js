@@ -14,7 +14,7 @@
 
 import { initializeApp, getApps, cert } from 'firebase-admin/app';
 import { getAuth } from 'firebase-admin/auth';
-import { getFirestore } from 'firebase-admin/firestore';
+import { getFirestore, FieldValue } from 'firebase-admin/firestore';
 import { readFileSync } from 'fs';
 import { dirname, join } from 'path';
 import { fileURLToPath } from 'url';
@@ -153,7 +153,7 @@ export async function toggleStudioHandler(req, res) {
       action: 'toggle_studio',
       targetUid: uid,
       performedBy: decoded.uid,
-      performedAt: Date.now(),
+      performedAt: FieldValue.serverTimestamp(),
       meta: { isPremium },
     });
 
@@ -228,7 +228,7 @@ export async function deleteUserHandler(req, res) {
       action: 'delete_user',
       targetUid: uid,
       performedBy: decoded.uid,
-      performedAt: Date.now(),
+      performedAt: FieldValue.serverTimestamp(),
       meta: { authDeleted, firestoreDocDeleted, deletedThemes, deletedPrograms },
     });
 

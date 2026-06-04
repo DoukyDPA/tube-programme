@@ -17,7 +17,7 @@
 // =====================================================================
 
 import { initializeApp, getApps, cert } from 'firebase-admin/app';
-import { getFirestore } from 'firebase-admin/firestore';
+import { getFirestore, FieldValue } from 'firebase-admin/firestore';
 import { readFileSync } from 'fs';
 import { dirname, join } from 'path';
 import { fileURLToPath } from 'url';
@@ -275,6 +275,22 @@ export default async function handler(req, res) {
       totalSkipped: skippedCount,
       channels: channelReport,
     };
+
+    // Traçabilité : la sync écrit dans Firestore via le service account.
+    // performedBy = 'cron' si déclenchée par le cron interne (req sans .get),
+    // 'api' si déclenchée par un appel HTTP authentifié au secret.
+    const trigger = req && typeof req.get === 'function' ? 'api' : 'cron';
+    await db.collection('auditLogs').add({
+      action: 'sync_tubiscope',
+      performedBy: trigger,
+      performedAt: FieldValue.serverTimestamp(),
+      meta: {
+        totalAdded: addedCount,
+        totalDeleted: deletedCount,
+        totalSkipped: skippedCount,
+        channels: channelsSnap.size,
+      },
+    });
 
     if (res?.status) return res.status(200).json(payload);
     return payload;
