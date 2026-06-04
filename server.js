@@ -36,7 +36,7 @@ app.use((req, res, next) => {
       "connect-src 'self' https://*.googleapis.com https://*.firebaseio.com wss://*.firebaseio.com https://identitytoolkit.googleapis.com https://securetoken.googleapis.com https://apis.google.com https://img.youtube.com https://*.ytimg.com",
       "img-src 'self' data: blob: https://*.ytimg.com https://img.youtube.com https://*.googleusercontent.com https://yt3.ggpht.com",
       "font-src 'self' data:",
-      "frame-src https://accounts.google.com",
+      "frame-src https://accounts.google.com https://www.youtube.com https://youtube.com",
       "object-src 'none'",
       "base-uri 'self'",
     ].join('; ')
