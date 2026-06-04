@@ -23,21 +23,20 @@ const __dirname = path.dirname(__filename);
 const app = express();
 
 // ── Content-Security-Policy ───────────────────────────────────────────────────
-// Mode Report-Only : la politique est auditée sans rien bloquer.
-// Consulter la console navigateur (erreurs CSP) pour identifier les domaines
-// manquants avant de passer en mode enforcement.
-// Les protections actives (CORS, rate-limit, auditLogs) restent en place.
+// connect-src inclut img.youtube.com et *.ytimg.com : le Service Worker
+// Workbox charge les thumbnails YouTube via fetch(), soumis à connect-src.
+// wss: couvre le fallback WebSocket de Firestore/Firebase Auth.
 app.use((req, res, next) => {
   res.setHeader(
-    'Content-Security-Policy-Report-Only',
+    'Content-Security-Policy',
     [
       "default-src 'self'",
       "script-src 'self' 'unsafe-inline' 'unsafe-eval'",
       "style-src 'self' 'unsafe-inline'",
-      "connect-src 'self' https: wss:",
-      "img-src 'self' data: blob: https:",
+      "connect-src 'self' https://*.googleapis.com https://*.firebaseio.com wss://*.firebaseio.com https://identitytoolkit.googleapis.com https://securetoken.googleapis.com https://apis.google.com https://img.youtube.com https://*.ytimg.com",
+      "img-src 'self' data: blob: https://*.ytimg.com https://img.youtube.com https://*.googleusercontent.com https://yt3.ggpht.com",
       "font-src 'self' data:",
-      "frame-src https:",
+      "frame-src https://accounts.google.com",
       "object-src 'none'",
       "base-uri 'self'",
     ].join('; ')

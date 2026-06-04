@@ -42,11 +42,19 @@ export default function ProgramCard({ prog, large, small, grid, onSelect, onRemo
             // YouTube renvoie une placeholder grise 120x90 avec un statut 200
             // quand maxresdefault.jpg n'existe pas. On bascule alors sur
             // hqdefault.jpg, qui est garanti pour toutes les vidéos.
-            if (e.target.naturalWidth > 0 && e.target.naturalWidth <= 120) {
+            // data-fallback évite la boucle infinie si hqdefault est aussi
+            // une placeholder (vidéo supprimée/privée).
+            if (e.target.naturalWidth > 0 && e.target.naturalWidth <= 120 && !e.target.dataset.fallback) {
+              e.target.dataset.fallback = '1';
               e.target.src = `https://img.youtube.com/vi/${prog.youtubeId}/hqdefault.jpg`;
             }
           }}
-          onError={(e) => { e.target.onerror = null; e.target.src = `https://img.youtube.com/vi/${prog.youtubeId}/hqdefault.jpg`; }}
+          onError={(e) => {
+            if (!e.target.dataset.fallback) {
+              e.target.dataset.fallback = '1';
+              e.target.src = `https://img.youtube.com/vi/${prog.youtubeId}/hqdefault.jpg`;
+            }
+          }}
           className="w-full h-full object-cover transition-transform duration-700 group-hover:scale-105"
           alt={decodeHTML(prog.title)}
         />
