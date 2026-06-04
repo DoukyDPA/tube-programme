@@ -33,7 +33,7 @@ app.use((req, res, next) => {
       "script-src 'self'",
       "style-src 'self' 'unsafe-inline'",
       "connect-src 'self' https://*.googleapis.com https://*.firebaseio.com https://identitytoolkit.googleapis.com https://securetoken.googleapis.com",
-      "img-src 'self' data: https://i.ytimg.com https://img.youtube.com https://*.googleusercontent.com",
+      "img-src 'self' data: https://*.ytimg.com https://img.youtube.com https://*.googleusercontent.com https://yt3.ggpht.com",
       "font-src 'self' data:",
       "frame-src 'none'",
       "object-src 'none'",
