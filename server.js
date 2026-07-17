@@ -9,6 +9,7 @@ import 'dotenv/config';
 
 import syncHandler from './api/sync.js';
 import syncCultureHandler from './api/sync-culture.js';
+import syncPersoHandler from './api/sync-perso.js';
 import channelsCultureHandler from './api/channels-culture.js';
 import channelsTubiscopeHandler from './api/channels-tubiscope.js';
 import {
@@ -170,6 +171,7 @@ app.post('/api/hydrate', hydrateLimiter, async (req, res) => {
 
 app.get('/api/sync', requireSyncSecret, syncHandler);
 app.get('/api/sync-culture', requireSyncSecret, syncCultureHandler);
+app.get('/api/sync-perso', requireSyncSecret, syncPersoHandler);
 
 // Liste des chaînes Culture servie depuis un cache mémoire (TTL 1h).
 // Évite que chaque ouverture de Culture côté client lise /channels Firestore.
@@ -215,9 +217,21 @@ cron.schedule('0 8 * * *', async () => {
   } catch (err) {
     console.error('Erreur lors du CRON sync-culture:', err);
   }
+
+  // Sync des thèmes perso en dernier, dans la même fenêtre nocturne
+  console.log('⏰ CRON : Synchronisation YouTube (thèmes perso)');
+  try {
+    const req = {};
+    const res = {
+      status: (code) => ({ json: (data) => console.log(`CRON sync-perso [${code}]:`, data) })
+    };
+    await syncPersoHandler(req, res);
+  } catch (err) {
+    console.error('Erreur lors du CRON sync-perso:', err);
+  }
 }, { timezone: 'Europe/Paris' });
 
-console.log("⏰ CRON programmé : 08:00 Europe/Paris (sync + sync-culture).");
+console.log("⏰ CRON programmé : 08:00 Europe/Paris (sync + sync-culture + sync-perso).");
 
 app.use(express.static(path.join(__dirname, 'dist')));
 
