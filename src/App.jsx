@@ -326,7 +326,7 @@ export default function App() {
         const cid = channel.id;
         const playlistId = cid.replace(/^UC/, 'UU');
 
-        const pRes = await fetch(`https://www.googleapis.com/youtube/v3/playlistItems?key=${YOUTUBE_API_KEY}&playlistId=${playlistId}&part=snippet,contentDetails&maxResults=5`);
+        const pRes = await fetch(`https://www.googleapis.com/youtube/v3/playlistItems?key=${YOUTUBE_API_KEY}&playlistId=${playlistId}&part=snippet,contentDetails&maxResults=50`);
         const pData = await pRes.json();
         if (!pData.items) continue;
 
@@ -336,8 +336,14 @@ export default function App() {
         const detailsRes = await fetch(`https://www.googleapis.com/youtube/v3/videos?key=${YOUTUBE_API_KEY}&id=${videoIds}&part=contentDetails,snippet`);
         const detailsData = await detailsRes.json();
 
+        // Aligné sur api/sync.js : on regarde 50 mises en ligne en arrière
+        // pour trouver 5 formats longs, même quand la chaîne enchaîne les
+        // shorts (LEGEND publie ~10 shorts par jour pour 1 entretien).
+        // Avec maxResults=5, le top était souvent vide et on effaçait
+        // toutes les vidéos de la chaîne.
         const top5 = [];
         for (const v of pData.items) {
+          if (top5.length >= 5) break;
           const vidId = v.contentDetails.videoId;
           const detail = detailsData.items?.find(d => d.id === vidId);
           if (detail && parseDuration(detail.contentDetails.duration) >= 180) {
