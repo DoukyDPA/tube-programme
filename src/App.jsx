@@ -12,7 +12,7 @@ import Guide from './components/Guide';
 import Legal from './components/Legal';
 import PWAPrompt from './components/PWAPrompt';
 import AccountModal from './components/AccountModal';
-import DiscoverBanner from './components/DiscoverBanner';
+import DiscoverBanner, { ModeSwitchCard } from './components/DiscoverBanner';
 import { MODE_STANDARD } from './data/appMode';
 
 import { Sparkles, Home, Settings, Loader2, RefreshCw, LogOut, Cpu, BookOpen, Trophy, Mic2, Clapperboard, Info, UserCircle, ChevronDown } from 'lucide-react';
@@ -709,6 +709,8 @@ export default function App() {
           <button onClick={() => setActiveTab('guide')} className={`w-full flex items-center gap-3 px-4 py-3 rounded-xl transition-all ${activeTab === 'guide' ? 'bg-indigo-600/10 text-indigo-400 font-bold' : 'text-slate-400 hover:text-white hover:bg-slate-800/50'}`}>
             <Info size={18} /> Guide & légal
           </button>
+
+          <ModeSwitchCard mode={MODE_STANDARD} />
         </nav>
 
         <div className="p-6 mt-auto border-t border-slate-800/50 space-y-3">

@@ -1,6 +1,8 @@
 import React, { useState } from 'react';
+import { ExternalLink } from 'lucide-react';
 import { auth } from '../firebase';
 import { signInWithEmailAndPassword, createUserWithEmailAndPassword } from 'firebase/auth';
+import { detectAppMode, otherModeUrl, MODE_CULTURE } from '../data/appMode';
 
 const AUTH_ERRORS = {
   'auth/invalid-credential': "Email ou mot de passe incorrect.",
@@ -23,6 +25,12 @@ const AUTH_ERRORS = {
 //               c'est ce que le visiteur venait chercher.
 export default function Auth({ onClose }) {
   const [isLogin, setIsLogin] = useState(!onClose);
+
+  // Sur tubiscope.com, ce formulaire est la première chose que voit un
+  // visiteur. Lui proposer d'aller voir Tubiscope Culture, qui se
+  // consulte sans compte, vaut mieux que de le laisser devant un mur.
+  const mode = detectAppMode();
+  const showCultureExit = !onClose && mode !== MODE_CULTURE;
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
   const [error, setError] = useState('');
@@ -81,6 +89,23 @@ export default function Auth({ onClose }) {
           >
             Continuer sans compte
           </button>
+        )}
+
+        {showCultureExit && (
+          <div className="mt-8 pt-6 border-t border-slate-800">
+            <p className="text-sm text-slate-400 mb-3 leading-relaxed">
+              Pas envie de créer un compte tout de suite ? Tubiscope Culture se
+              visite librement : 120 chaînes culturelles choisies, rangées en
+              11 thématiques.
+            </p>
+            <a
+              href={otherModeUrl(mode)}
+              className="w-full inline-flex items-center justify-center gap-2 bg-fuchsia-600/15 hover:bg-fuchsia-600/25 border border-fuchsia-500/30 text-fuchsia-200 py-3 rounded-xl text-sm font-bold transition-colors"
+            >
+              Voir Tubiscope Culture
+              <ExternalLink size={14} />
+            </a>
+          </div>
         )}
       </div>
     </div>

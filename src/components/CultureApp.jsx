@@ -47,7 +47,7 @@ import ProgramRow from './ProgramRow';
 import ProgramGrid from './ProgramGrid';
 import VideoModal from './VideoModal';
 import CultureThemePicker from './CultureThemePicker';
-import DiscoverBanner from './DiscoverBanner';
+import DiscoverBanner, { ModeSwitchCard } from './DiscoverBanner';
 import AccountModal from './AccountModal';
 import Guide from './Guide';
 import Legal from './Legal';
@@ -1167,6 +1167,8 @@ export default function CultureApp() {
           >
             <Info size={18} /> Guide & légal
           </button>
+
+          <ModeSwitchCard mode={MODE_CULTURE} />
         </nav>
 
         <div className="p-6 mt-auto border-t border-slate-800/50 space-y-3">
