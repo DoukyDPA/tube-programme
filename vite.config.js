@@ -43,6 +43,10 @@ export default defineConfig({
       workbox: {
         // Cache des bundles JS/CSS/HTML générés par Vite
         globPatterns: ['**/*.{js,css,html,png,svg,woff2}'],
+        // Purge les précaches des versions précédentes. Sans ça, un
+        // ancien cache peut survivre à une mise à jour et resservir du
+        // code périmé pendant des jours.
+        cleanupOutdatedCaches: true,
         // Plafond raisonnable, on cache pas les gros assets accidentels
         maximumFileSizeToCacheInBytes: 3 * 1024 * 1024,
         // Stratégie pour les vignettes YouTube : cache puis réseau
