@@ -73,7 +73,7 @@ export default defineConfig({
         // Permet à l'app d'être servie depuis le cache si offline
         navigateFallback: '/index.html',
         // Skip les routes Firestore (toujours réseau)
-        navigateFallbackDenylist: [/^\/api/, /^\/__/]
+        navigateFallbackDenylist: [/^\/api/, /^\/__/, /^\/a-propos/]
       },
       devOptions: {
         // Désactivé en dev pour pas embêter les tests locaux

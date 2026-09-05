@@ -27,7 +27,7 @@ const AUTH_ERRORS = {
 export default function Auth({ onClose }) {
   const [isLogin, setIsLogin] = useState(!onClose);
 
-  // Sur tubiscope.com, ce formulaire est la première chose que voit un
+  // À l'accueil, ce formulaire est la première chose que voit un
   // visiteur. Lui proposer d'aller voir Tubiscope Culture, qui se
   // consulte sans compte, vaut mieux que de le laisser devant un mur.
   const mode = detectAppMode();

@@ -1,5 +1,6 @@
 import React, { useState } from 'react';
-import { X, Share2, Check, Copy } from 'lucide-react';
+import { detectAppMode, modePath } from '../data/appMode';
+import { X, Share2, Check, Copy, ExternalLink } from 'lucide-react';
 import useBackButtonClose from '../hooks/useBackButtonClose';
 
 export default function VideoModal({ prog, onClose }) {
@@ -14,6 +15,8 @@ export default function VideoModal({ prog, onClose }) {
 
   if (!prog) return null;
 
+  const youtubeUrl = `https://www.youtube.com/watch?v=${prog.youtubeId}`;
+
   // -----------------------------------------------------------------
   // Construit l'URL à partager : domaine actuel + paramètres UTM pour
   // mesurer les conversions amenées par le partage utilisateur. Le
@@ -24,13 +27,15 @@ export default function VideoModal({ prog, onClose }) {
     const origin =
       typeof window !== 'undefined'
         ? window.location.origin
-        : 'https://tubiscope.fr';
+        : 'https://tubiscope.com';
     const params = new URLSearchParams({
       utm_source: 'share',
       utm_medium: 'user',
       v: prog.youtubeId,
     });
-    return `${origin}/?${params.toString()}`;
+    // Le lien partagé ramène sur la version d'où part le partage :
+    // /culture pour Tubiscope Culture, l'accueil sinon.
+    return `${origin}${modePath(detectAppMode())}?${params.toString()}`;
   };
 
   const handleShare = async () => {
@@ -80,11 +85,39 @@ export default function VideoModal({ prog, onClose }) {
       </button>
 
       <div className="w-full h-[30vh] md:h-[80vh] md:w-[70vw] bg-black md:rounded-2xl overflow-hidden shadow-2xl flex-shrink-0">
-        <iframe
-          width="100%" height="100%"
-          src={`https://www.youtube.com/embed/${prog.youtubeId}?autoplay=1`}
-          frameBorder="0" allowFullScreen title="YouTube"
-        />
+        {prog.embeddable === false ? (
+          /* L'ayant droit (France TV, Arte...) interdit la lecture hors
+             youtube.com : on affiche la miniature et un lien direct au
+             lieu d'un lecteur qui afficherait une erreur trompeuse. */
+          <a
+            href={youtubeUrl}
+            target="_blank"
+            rel="noopener noreferrer"
+            className="relative block w-full h-full group"
+            title="Regarder sur YouTube"
+          >
+            <img
+              src={`https://img.youtube.com/vi/${prog.youtubeId}/hqdefault.jpg`}
+              alt={prog.title}
+              className="w-full h-full object-cover opacity-70 group-hover:opacity-90 transition-opacity"
+            />
+            <div className="absolute inset-0 flex flex-col items-center justify-center gap-3 p-6 text-center">
+              <span className="inline-flex items-center gap-2 px-5 py-3 bg-red-600 group-hover:bg-red-500 text-white rounded-full font-bold shadow-xl transition-colors">
+                <ExternalLink size={18} />
+                Regarder sur YouTube
+              </span>
+              <span className="text-xs text-slate-200 max-w-md drop-shadow">
+                Cette chaîne n'autorise la lecture que sur YouTube.
+              </span>
+            </div>
+          </a>
+        ) : (
+          <iframe
+            width="100%" height="100%"
+            src={`https://www.youtube.com/embed/${prog.youtubeId}?autoplay=1`}
+            frameBorder="0" allowFullScreen title="YouTube"
+          />
+        )}
       </div>
 
       <div className="w-full flex-1 p-6 md:p-10 text-left overflow-y-auto">
@@ -96,7 +129,7 @@ export default function VideoModal({ prog, onClose }) {
         {/* Actions : YouTube + Partager */}
         <div className="flex flex-wrap items-center gap-2">
           <a
-            href={`https://www.youtube.com/watch?v=${prog.youtubeId}`}
+            href={youtubeUrl}
             target="_blank"
             rel="noopener noreferrer"
             className="inline-flex items-center gap-2 px-4 py-2 bg-slate-800 hover:bg-slate-700 text-slate-200 rounded-lg text-sm font-semibold transition-colors"

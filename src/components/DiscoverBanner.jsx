@@ -6,11 +6,12 @@ import { usePublicStats } from '../hooks/usePublicStats';
 // =====================================================================
 // Passerelle entre les deux Tubiscope
 // =====================================================================
-// tubiscope.fr sert Tubiscope Culture, la sélection éditoriale, lisible
-// sans compte. tubiscope.com sert l'espace personnel, où chacun choisit
-// ses propres chaînes. Deux domaines, donc deux applications aux yeux du
-// navigateur : le passage de l'un à l'autre doit être explicite, sinon
-// personne ne découvre l'autre moitié du projet.
+// L'accueil sert l'espace personnel, où chacun choisit ses propres
+// chaînes. /culture sert Tubiscope Culture, la sélection éditoriale,
+// lisible sans compte. Même origine, même compte, même application
+// installée : le passage de l'un à l'autre est une simple navigation.
+// Il doit rester explicite, sinon personne ne découvre l'autre moitié du
+// projet.
 //
 // Deux surfaces, une par contexte :
 //   - ModeSwitchCard : carte permanente dans la barre latérale (écran
@@ -63,8 +64,6 @@ export function ModeSwitchCard({ mode }) {
   return (
     <a
       href={target}
-      target="_blank"
-      rel="noopener noreferrer"
       className={`hidden md:block mx-4 mt-6 p-4 rounded-2xl bg-gradient-to-br border transition-colors ${accent.box}`}
     >
       <div className="flex items-center gap-2.5 mb-2">
@@ -117,8 +116,6 @@ export default function DiscoverBanner({ mode }) {
         <span className="text-sm font-bold text-white flex-1 min-w-0 truncate">{short}</span>
         <a
           href={target}
-          target="_blank"
-          rel="noopener noreferrer"
           className="inline-flex items-center gap-1.5 bg-white/10 hover:bg-white/20 text-white text-xs font-bold px-3 py-1.5 rounded-lg transition-colors shrink-0"
         >
           {cta}

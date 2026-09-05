@@ -119,16 +119,14 @@ export default function Guide({ onOpenLegal }) {
           </a>
         </div>
         <p className="text-sm text-slate-400 leading-relaxed">
-          Rendez-vous sur{' '}
           <a
-            href="https://tubiscope.fr"
-            target="_blank"
-            rel="noopener noreferrer"
+            href="/culture"
             className="text-fuchsia-300 font-semibold hover:underline"
           >
-            tubiscope.fr
+            Ouvrir Tubiscope Culture
           </a>{' '}
-          pour explorer Tubiscope Culture. Gratuit, sans abonnement requis.
+          : gratuit, sans compte, avec le même identifiant que votre espace
+          personnel si vous en créez un.
         </p>
       </div>
 

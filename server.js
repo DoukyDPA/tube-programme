@@ -46,6 +46,37 @@ const PORT = process.env.PORT || 3000;
 // afin que express-rate-limit lise la vraie IP depuis X-Forwarded-For.
 app.set('trust proxy', 1);
 
+// ── Domaine canonique ────────────────────────────────────────────────
+// tubiscope.com et tubiscope.fr servent la même application et la même
+// base. Mais pour un navigateur, ce sont deux origines, donc deux
+// stockages : une session Firebase ouverte sur l'un ne vaut rien sur
+// l'autre, et le même visiteur doit s'inscrire deux fois. On garde donc
+// une seule origine réelle, et tubiscope.fr devient ce qu'il a toujours
+// été dans l'idée : un raccourci vers la partie Culture.
+//
+// Le code 302 est délibéré. Un 301 se grave dans le cache des
+// navigateurs et se reprend très mal si le domaine principal change
+// d'avis. À passer en 301 quand le choix sera arrêté.
+const CANONICAL_HOST = process.env.CANONICAL_HOST || 'tubiscope.com';
+const LEGACY_CULTURE_HOST = process.env.LEGACY_CULTURE_HOST || 'tubiscope.fr';
+const CANONICAL_REDIRECT_CODE = Number(process.env.CANONICAL_REDIRECT_CODE || 302);
+const CULTURE_PATH = '/culture';
+
+app.use((req, res, next) => {
+  const host = (req.hostname || '').toLowerCase();
+  if (!host.endsWith(LEGACY_CULTURE_HOST)) return next();
+
+  // Les appels d'API restent servis sur place : une application déjà
+  // ouverte, ou un service worker installé avant la bascule, continue de
+  // fonctionner sans rien casser.
+  if (req.path.startsWith('/api/')) return next();
+
+  const target = req.path === '/' ? CULTURE_PATH : req.path;
+  const qsIndex = req.originalUrl.indexOf('?');
+  const qs = qsIndex >= 0 ? req.originalUrl.slice(qsIndex) : '';
+  return res.redirect(CANONICAL_REDIRECT_CODE, `https://${CANONICAL_HOST}${target}${qs}`);
+});
+
 // ── Garde-fou des endpoints de synchronisation ────────────────────────────────
 // /api/sync et /api/sync-culture écrivent dans Firestore via le service account
 // (bypass des rules) et consomment le quota YouTube. Sans protection, n'importe
