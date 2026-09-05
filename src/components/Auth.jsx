@@ -3,6 +3,7 @@ import { ExternalLink } from 'lucide-react';
 import { auth } from '../firebase';
 import { signInWithEmailAndPassword, createUserWithEmailAndPassword } from 'firebase/auth';
 import { detectAppMode, otherModeUrl, MODE_CULTURE } from '../data/appMode';
+import { usePublicStats } from '../hooks/usePublicStats';
 
 const AUTH_ERRORS = {
   'auth/invalid-credential': "Email ou mot de passe incorrect.",
@@ -31,6 +32,7 @@ export default function Auth({ onClose }) {
   // consulte sans compte, vaut mieux que de le laisser devant un mur.
   const mode = detectAppMode();
   const showCultureExit = !onClose && mode !== MODE_CULTURE;
+  const stats = usePublicStats();
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
   const [error, setError] = useState('');
@@ -95,8 +97,8 @@ export default function Auth({ onClose }) {
           <div className="mt-8 pt-6 border-t border-slate-800">
             <p className="text-sm text-slate-400 mb-3 leading-relaxed">
               Pas envie de créer un compte tout de suite ? Tubiscope Culture se
-              visite librement : 120 chaînes culturelles choisies, rangées en
-              11 thématiques.
+              visite librement : {stats.culture.channels} chaînes culturelles
+              choisies, rangées en {stats.culture.themes} thématiques.
             </p>
             <a
               href={otherModeUrl(mode)}

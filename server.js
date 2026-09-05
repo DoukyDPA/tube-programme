@@ -2,6 +2,7 @@ import express from 'express';
 import cors from 'cors';
 import rateLimit from 'express-rate-limit';
 import path from 'path';
+import { readFileSync } from 'fs';
 import crypto from 'crypto';
 import { fileURLToPath } from 'url';
 import cron from 'node-cron';
@@ -18,7 +19,11 @@ import {
   deleteUserHandler,
 } from './api/admin-users.js';
 import generateNewsletterHandler from './api/generate-newsletter.js';
-import publicSnapshotHandler, { invalidateSnapshot } from './api/public-snapshot.js';
+import publicSnapshotHandler, {
+  invalidateSnapshot,
+  statsHandler,
+  getPublicStats,
+} from './api/public-snapshot.js';
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
@@ -190,6 +195,11 @@ app.get('/api/sync-perso', requireSyncSecret, syncPersoHandler);
 // et les utilisateurs non-admin, à la place des listeners Firestore.
 app.get('/api/snapshot', publicSnapshotHandler);
 
+// Nombre de chaînes et de thématiques par mode. Ces chiffres sont cités
+// dans plusieurs écrans, ils changent à chaque ajout ou retrait de
+// chaîne : l'interface les lit ici plutôt que de les écrire en dur.
+app.get('/api/stats', statsHandler);
+
 // Liste des chaînes Culture servie depuis un cache mémoire (TTL 1h).
 // Évite que chaque ouverture de Culture côté client lise /channels Firestore.
 app.get('/api/channels/culture', channelsCultureHandler);
@@ -256,15 +266,41 @@ cron.schedule('0 8 * * *', async () => {
 
 console.log("⏰ CRON programmé : 08:00 Europe/Paris (sync + sync-culture + sync-perso).");
 
-app.use(express.static(path.join(__dirname, 'dist')));
-
 // Page publique « D'où vient Tubiscope » : origine du projet, principes
 // et charte éditoriale. Servie sur une vraie URL, sans JavaScript, pour
 // rester partageable par lien et lisible par les moteurs. Le fichier
 // vient de public/, que le build Vite recopie dans dist/.
-app.get('/a-propos', (req, res) => {
-  res.sendFile(path.join(__dirname, 'dist', 'a-propos.html'));
+//
+// Les chiffres de la page (nombre de chaînes et de thématiques) sont des
+// gabarits remplis ici, au moment de servir. Pas de JavaScript côté
+// client, donc pas d'exception à ajouter à la CSP de la page, et pas de
+// chiffre périmé dans un fichier statique.
+let aProposTemplate = null;
+
+function renderAPropos(stats) {
+  if (aProposTemplate === null) {
+    aProposTemplate = readFileSync(path.join(__dirname, 'dist', 'a-propos.html'), 'utf8');
+  }
+  return aProposTemplate
+    .replaceAll('{{CULTURE_CHANNELS}}', String(stats.culture.channels))
+    .replaceAll('{{CULTURE_THEMES}}', String(stats.culture.themes));
+}
+
+app.get('/a-propos.html', (req, res) => res.redirect(301, '/a-propos'));
+
+app.get('/a-propos', async (req, res) => {
+  try {
+    const stats = await getPublicStats();
+    res.set('Content-Type', 'text/html; charset=utf-8');
+    res.set('Cache-Control', 'public, max-age=900');
+    return res.status(200).send(renderAPropos(stats));
+  } catch (err) {
+    console.warn('/a-propos : rendu échoué, envoi du fichier brut.', err.message);
+    return res.sendFile(path.join(__dirname, 'dist', 'a-propos.html'));
+  }
 });
+
+app.use(express.static(path.join(__dirname, 'dist')));
 
 app.get('*', (req, res) => {
   res.sendFile(path.join(__dirname, 'dist', 'index.html'));

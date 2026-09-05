@@ -1,4 +1,5 @@
 import React from 'react';
+import { usePublicStats } from '../hooks/usePublicStats';
 import {
   BookOpen,
   Sparkles,
@@ -10,6 +11,10 @@ import {
 } from 'lucide-react';
 
 export default function Guide({ onOpenLegal }) {
+  // Nombre de chaînes et de thématiques Culture, lus sur /api/stats.
+  // Ils bougent à chaque édition depuis l'admin.
+  const { culture } = usePublicStats();
+
   return (
     <div className="max-w-4xl mx-auto p-4 md:p-8 space-y-8 animate-in fade-in duration-500">
 
@@ -88,7 +93,7 @@ export default function Guide({ onOpenLegal }) {
         </div>
         <p className="text-slate-300 text-sm mb-4 leading-relaxed">
           Tubiscope Culture est la version consacrée à la connaissance et à la
-          transmission. Vous choisissez jusqu'à 7 thématiques parmi 11
+          transmission. Vous choisissez jusqu'à 7 thématiques parmi {culture.themes}
           (Histoire, Sciences, Lettres, Arts, Philosophie, Technologie, etc.)
           et vous recevez les dernières vidéos longues des chaînes retenues
           dans chacune. La lecture ne demande pas de compte.
@@ -103,7 +108,8 @@ export default function Guide({ onOpenLegal }) {
             tard, beaucoup s'étaient arrêtées, d'autres avaient changé de sujet.
             J'ai repris la sélection chaîne par chaîne et branché une mise à
             jour quotidienne : Tubiscope Culture compte aujourd'hui
-            <b> 120 chaînes vivantes</b> dans 11 thématiques.
+            <b> {culture.channels} chaînes vivantes</b> dans {culture.themes}{' '}
+            thématiques.
           </p>
           <a
             href="/a-propos"

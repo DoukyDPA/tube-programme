@@ -19,6 +19,11 @@
 //   { success: true, mode, generatedAt, categories: [...],
 //     programs: { [scopeId]: [ {...} ] }, cached: bool, stale?: bool }
 //
+// Ce module sert aussi /api/stats : le nombre de chaînes et de
+// thématiques par mode. Ces chiffres apparaissent dans plusieurs textes
+// de l'interface et sur la page /a-propos. Ils bougent à chaque ajout ou
+// retrait de chaîne, ils ne doivent donc jamais être écrits en dur.
+//
 // Même contrat que api/channels-culture.js : stale-while-error, cache
 // mémoire, TTL. Le cache est aussi invalidé explicitement à la fin du
 // cron de 8h (cf. server.js) pour que les nouveautés sortent tout de
@@ -135,6 +140,54 @@ async function fetchFromFirestore(mode) {
 export function invalidateSnapshot(mode) {
   if (mode) caches.delete(mode);
   else caches.clear();
+  statsCache = null;
+}
+
+// =====================================================================
+// Statistiques publiques
+// =====================================================================
+// Repli si Firestore ne répond pas et qu'aucun cache n'existe encore.
+// Valeurs constatées le 5 septembre 2026, à ne pas prendre pour la
+// vérité : elles ne servent qu'à ne jamais afficher un trou dans une
+// phrase.
+const STATS_FALLBACK = {
+  culture: { channels: 120, themes: 11 },
+  tubiscope: { channels: 26, themes: 5 },
+};
+
+let statsCache = null; // { data, timestamp }
+
+async function fetchStats() {
+  const db = initAdmin();
+  const out = {};
+  for (const mode of MODES) {
+    const [chSnap, catSnap] = await Promise.all([
+      db.collection('channels').where('mode', '==', mode).get(),
+      db.collection('categories').where('mode', '==', mode).get(),
+    ]);
+    out[mode] = { channels: chSnap.size, themes: catSnap.size };
+  }
+  return out;
+}
+
+// Utilisable côté serveur (rendu de /a-propos) comme côté HTTP.
+export async function getPublicStats() {
+  const now = Date.now();
+  if (statsCache && now - statsCache.timestamp < CACHE_TTL_MS) return statsCache.data;
+  try {
+    const data = await fetchStats();
+    statsCache = { data, timestamp: now };
+    return data;
+  } catch (err) {
+    console.warn('public-stats : lecture Firestore échouée.', err.message);
+    return statsCache?.data || STATS_FALLBACK;
+  }
+}
+
+export async function statsHandler(req, res) {
+  const data = await getPublicStats();
+  res.set('Cache-Control', 'public, max-age=900');
+  return res.status(200).json({ success: true, ...data });
 }
 
 export default async function handler(req, res) {

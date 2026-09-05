@@ -1,6 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import { Sparkles, X, ExternalLink, Landmark, SlidersHorizontal } from 'lucide-react';
 import { MODE_CULTURE, otherModeUrl } from '../data/appMode';
+import { usePublicStats } from '../hooks/usePublicStats';
 
 // =====================================================================
 // Passerelle entre les deux Tubiscope
@@ -22,9 +23,11 @@ import { MODE_CULTURE, otherModeUrl } from '../data/appMode';
 // découvre.
 // =====================================================================
 
-// Contenu commun aux deux surfaces.
-function copyFor(mode) {
+// Contenu commun aux deux surfaces. Les chiffres viennent de /api/stats,
+// jamais du code : ils changent dès qu'une chaîne entre ou sort.
+function copyFor(mode, stats) {
   const isOnCulture = mode === MODE_CULTURE;
+  const { channels, themes } = stats.culture;
   return {
     target: otherModeUrl(mode),
     isOnCulture,
@@ -32,14 +35,15 @@ function copyFor(mode) {
     short: isOnCulture ? 'Vos chaînes à vous' : 'La sélection culture',
     desc: isOnCulture
       ? 'Suivez vos propres chaînes YouTube, rangées dans vos thématiques.'
-      : '120 chaînes culturelles choisies, en 11 thématiques. Sans compte.',
+      : `${channels} chaînes culturelles choisies, en ${themes} thématiques. Sans compte.`,
     cta: isOnCulture ? 'Ouvrir Tubiscope' : 'Voir Tubiscope Culture',
   };
 }
 
 // Carte permanente pour la barre latérale, écrans larges.
 export function ModeSwitchCard({ mode }) {
-  const { target, isOnCulture, title, desc, cta } = copyFor(mode);
+  const stats = usePublicStats();
+  const { target, isOnCulture, title, desc, cta } = copyFor(mode, stats);
   const Icon = isOnCulture ? SlidersHorizontal : Landmark;
 
   // La couleur annonce la destination : indigo pour Tubiscope, fuchsia
@@ -81,6 +85,7 @@ export function ModeSwitchCard({ mode }) {
 // Bandeau mobile. La barre latérale n'existe pas sous md, c'est donc la
 // seule passerelle visible sur téléphone.
 export default function DiscoverBanner({ mode }) {
+  const stats = usePublicStats();
   const [hidden, setHidden] = useState(false);
 
   useEffect(() => {
@@ -103,7 +108,7 @@ export default function DiscoverBanner({ mode }) {
 
   if (hidden) return null;
 
-  const { target, short, cta } = copyFor(mode);
+  const { target, short, cta } = copyFor(mode, stats);
 
   return (
     <div className="md:hidden bg-gradient-to-r from-indigo-600/15 via-fuchsia-600/15 to-emerald-600/15 border-b border-indigo-500/20">
