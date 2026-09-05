@@ -1,5 +1,6 @@
 import React from 'react';
 import { usePublicStats } from '../hooks/usePublicStats';
+import { buildSignature } from '../data/build';
 import {
   BookOpen,
   Sparkles,
@@ -93,8 +94,9 @@ export default function Guide({ onOpenLegal }) {
         </div>
         <p className="text-slate-300 text-sm mb-4 leading-relaxed">
           Tubiscope Culture est la version consacrée à la connaissance et à la
-          transmission. Vous choisissez jusqu'à 7 thématiques parmi {culture.themes}
-          (Histoire, Sciences, Lettres, Arts, Philosophie, Technologie, etc.)
+          transmission. Vous choisissez jusqu'à 7 thématiques parmi{' '}
+          {culture.themes} (Histoire, Sciences, Lettres, Arts, Philosophie,
+          Technologie, etc.)
           et vous recevez les dernières vidéos longues des chaînes retenues
           dans chacune. La lecture ne demande pas de compte.
         </p>
@@ -161,6 +163,12 @@ export default function Guide({ onOpenLegal }) {
         </div>
       </div>
 
+      {/* Version */}
+      {/* Ligne d'identification à demander à quelqu'un qui signale un
+          problème : elle dit quelle version tourne réellement, et sur
+          quel domaine. Une application installée peut rester longtemps
+          sur du code ancien sans que rien ne l'indique. */}
+
       {/* Rappel API YouTube */}
       <div className="bg-slate-900/30 border border-slate-800/30 rounded-2xl p-6 md:p-8">
         <div className="flex items-center gap-3 mb-4">
@@ -178,6 +186,10 @@ export default function Guide({ onOpenLegal }) {
           </a>.
         </p>
       </div>
+
+      <p className="text-center text-[11px] text-slate-600 pb-2 select-all">
+        {buildSignature()}
+      </p>
 
     </div>
   );

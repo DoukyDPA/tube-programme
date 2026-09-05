@@ -3,6 +3,7 @@ import ReactDOM from 'react-dom/client'
 import App from './App.jsx'
 import CultureApp from './components/CultureApp.jsx'
 import { detectAppMode, MODE_CULTURE } from './data/appMode.js'
+import { BUILD_ID, BUILD_TIME, buildSignature } from './data/build.js'
 import './index.css'
 import { setupServiceWorker } from './registerSW.js'
 
@@ -27,6 +28,12 @@ if (typeof window !== 'undefined') {
     const path = window.location.pathname === '/' ? '/culture' : window.location.pathname;
     window.location.replace(`${CANONICAL_ORIGIN}${path}${window.location.search}`);
   }
+}
+
+// Lisible depuis la console du navigateur, quand quelqu'un signale un
+// problème et qu'on ne sait pas quelle version il fait tourner.
+if (typeof window !== 'undefined') {
+  window.__TUBISCOPE__ = { build: BUILD_ID, builtAt: BUILD_TIME, signature: buildSignature() };
 }
 
 const mode = detectAppMode();
