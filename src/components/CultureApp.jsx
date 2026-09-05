@@ -607,7 +607,17 @@ export default function CultureApp() {
 
         // Côté Firestore : si des doublons existent déjà (ancien sync sans
         // dédup), on garde un seul doc par youtubeId et on supprime les autres.
-        const existing = themePrograms[theme.id] || [];
+        //
+        // On relit la collection au lieu de se fier à themePrograms : cet
+        // état local ne contient que les thématiques auxquelles l'admin
+        // est abonné. Pour toutes les autres il valait [], donc l'existant
+        // paraissait vide et les 25 vidéos étaient réécrites à chaque
+        // actualisation. C'est ce qui a produit 231 doublons en base
+        // (cult_tech, cult_bio, cult_enfants, cult_audiovisuel).
+        const existingSnap = await getDocs(
+          collection(db, 'scopes', theme.id, 'programs')
+        );
+        const existing = existingSnap.docs.map((d) => ({ id: d.id, ...d.data() }));
         const existingByYid = new Map();
         const oldDuplicates = [];
         for (const p of existing) {
