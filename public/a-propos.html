@@ -1,0 +1,267 @@
+<!doctype html>
+<html lang="fr">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <meta http-equiv="Content-Security-Policy" content="default-src 'self'; style-src 'self' 'unsafe-inline'; img-src 'self' data:; script-src 'none'; object-src 'none'; base-uri 'self'" />
+
+    <title>D’où vient Tubiscope</title>
+    <meta name="description" content="Tubiscope est né d’une liste de 350 chaînes YouTube publiée par le ministère de la Culture en 2018. Voici ce qu’elle est devenue, et les règles qui décident de ce qu’on y trouve." />
+
+    <meta property="og:type" content="website" />
+    <meta property="og:site_name" content="Tubiscope" />
+    <meta property="og:title" content="D’où vient Tubiscope" />
+    <meta property="og:description" content="Pas de shorts, pas d’algorithme, pas de texte récité par une IA. Une grille de programmes pour la partie de YouTube qui vaut le détour." />
+    <meta property="og:url" content="https://tubiscope.fr/a-propos" />
+    <meta property="og:image" content="https://tubiscope.fr/icon-512.png" />
+    <meta name="twitter:card" content="summary" />
+
+    <link rel="icon" type="image/png" href="/icon-192.png" />
+
+    <style>
+      :root {
+        --fond: #0a0f1c;
+        --carte: #0f172a;
+        --bord: #1e293b;
+        --texte: #cbd5e1;
+        --titre: #f8fafc;
+        --gris: #94a3b8;
+        --accent: #e879f9;
+        --accent-sombre: #a21caf;
+      }
+      * { box-sizing: border-box; }
+      body {
+        margin: 0;
+        background: var(--fond);
+        color: var(--texte);
+        font-family: Inter, -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
+        font-size: 17px;
+        line-height: 1.7;
+        -webkit-font-smoothing: antialiased;
+      }
+      .page { max-width: 720px; margin: 0 auto; padding: 32px 20px 80px; }
+
+      header.marque {
+        display: flex;
+        align-items: center;
+        gap: 12px;
+        padding-bottom: 32px;
+        border-bottom: 1px solid var(--bord);
+        margin-bottom: 40px;
+      }
+      .pastille {
+        width: 40px; height: 40px; border-radius: 12px;
+        background: linear-gradient(135deg, var(--accent) 0%, #4338ca 100%);
+        display: flex; align-items: center; justify-content: center;
+        flex-shrink: 0;
+      }
+      .pastille svg { width: 24px; height: 24px; }
+      .marque a { color: var(--titre); text-decoration: none; font-weight: 800; font-size: 20px; letter-spacing: -0.02em; }
+      .marque span { color: var(--accent); }
+      .marque .sous { display: block; font-size: 10px; letter-spacing: 0.18em; text-transform: uppercase; color: var(--gris); font-weight: 700; }
+
+      h1 { color: var(--titre); font-size: 40px; line-height: 1.15; letter-spacing: -0.03em; margin: 0 0 28px; font-weight: 900; }
+      h2 { color: var(--titre); font-size: 24px; line-height: 1.25; letter-spacing: -0.02em; margin: 48px 0 16px; font-weight: 800; }
+      p { margin: 0 0 20px; }
+      a { color: var(--accent); }
+      strong { color: var(--titre); font-weight: 700; }
+
+      .chapo { font-size: 19px; color: var(--gris); }
+
+      .encart {
+        background: var(--carte);
+        border: 1px solid var(--bord);
+        border-radius: 20px;
+        padding: 24px 28px;
+        margin: 32px 0;
+      }
+      .encart p:last-child { margin-bottom: 0; }
+
+      ul { padding-left: 22px; margin: 0 0 20px; }
+      li { margin-bottom: 10px; }
+      li::marker { color: var(--accent-sombre); }
+
+      .refus { border-left: 2px solid var(--accent-sombre); padding-left: 20px; margin: 28px 0; }
+      .refus p { margin-bottom: 16px; }
+      .refus p:last-child { margin-bottom: 0; }
+
+      footer {
+        margin-top: 64px; padding-top: 28px;
+        border-top: 1px solid var(--bord);
+        font-size: 15px; color: var(--gris);
+      }
+      .retour {
+        display: inline-block; margin-top: 12px;
+        background: var(--accent-sombre); color: #fff;
+        padding: 12px 22px; border-radius: 14px;
+        font-weight: 700; text-decoration: none; font-size: 15px;
+      }
+      @media (max-width: 600px) {
+        body { font-size: 16px; }
+        h1 { font-size: 30px; }
+        h2 { font-size: 21px; }
+        .page { padding: 24px 18px 60px; }
+      }
+    </style>
+  </head>
+  <body>
+    <div class="page">
+      <header class="marque">
+        <div class="pastille">
+          <svg viewBox="0 0 24 24" fill="none" stroke="#fff" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round">
+            <circle cx="12" cy="12" r="10" />
+            <polygon points="10 8 16 12 10 16 10 8" fill="#fff" />
+          </svg>
+        </div>
+        <div>
+          <a href="/">Tubi<span>scope</span></a>
+          <span class="sous">Culture</span>
+        </div>
+      </header>
+
+      <h1>D’où vient Tubiscope</h1>
+
+      <p class="chapo">
+        Le 9 novembre 2018, le ministère de la Culture met en ligne une liste de
+        350 chaînes YouTube. Elle s’appelle
+        <a href="https://www.culture.gouv.fr/thematiques/langue-francaise-et-langues-de-france/ressources/Ressources-pedagogiques-et-sensibilisation2/350-ressources-culturelles-et-scientifiques-francophones-en-video" target="_blank" rel="noopener">« 350 ressources culturelles et scientifiques francophones en vidéo »</a>.
+        Tubiscope part de là.
+      </p>
+
+      <p>
+        Le travail vient de Mathilde Hutin, doctorante en linguistique, qui avait
+        compilé ces chaînes pendant plusieurs années. La Délégation générale à la
+        langue française et aux langues de France l’a repris et publié, en trois
+        fichiers à télécharger, rangés par disciplines : lettres, histoire,
+        géographie, philosophie, mathématiques, physique, biologie, arts,
+        technologie. Des chaînes retenues, disait la page, pour la qualité de
+        leur contenu.
+      </p>
+
+      <p>
+        Quand j’ai voulu m’en servir, le document avait huit ans. Des chaînes
+        s’étaient arrêtées. D’autres avaient disparu, changé de nom, parfois
+        changé de sujet en cours de route. Un fichier de traitement de texte ne
+        se met pas à jour tout seul, et personne n’allait le faire à ma place.
+      </p>
+
+      <p>
+        J’ai donc repris la liste chaîne par chaîne. Écarté celles qui ne
+        publient plus, ajouté celles qui sont apparues depuis, rangé le tout
+        autrement. Puis j’ai branché une machine qui va voir chaque matin ce que
+        ces chaînes ont publié. Tubiscope Culture, aujourd’hui, c’est
+        <strong>120 chaînes vivantes réparties en 11 thématiques</strong>.
+      </p>
+
+      <h2>Pourquoi</h2>
+
+      <p>
+        Parce que je regarde YouTube d’une certaine façon, et que YouTube ne m’y
+        aide pas.
+      </p>
+
+      <div class="refus">
+        <p>
+          <strong>Pas de shorts.</strong> Toute vidéo de moins de trois minutes
+          est ignorée. Le format court a ses amateurs, je n’en suis pas.
+        </p>
+        <p>
+          <strong>Pas d’algorithme.</strong> Aucune recommandation, aucun
+          classement calculé sur ce que vous avez regardé hier. Les vidéos
+          arrivent par date de publication, dans les thématiques que vous avez
+          choisies, et rien d’autre n’entre dans le flux.
+        </p>
+        <p>
+          <strong>Une sélection, pas un robinet.</strong> Chaque chaîne présente
+          ici a été retenue par quelqu’un, pour une raison, et cette raison
+          s’explique. Elles sont plus bas.
+        </p>
+        <p>
+          <strong>Pas de texte récité par une IA.</strong> On les reconnaît au
+          bout de quinze secondes : un texte généré, une voix de synthèse, des
+          images d’illustration prises ailleurs. Elles n’ont pas leur place ici.
+        </p>
+      </div>
+
+      <h2>Ce que fait le service</h2>
+
+      <p>
+        Chaque matin à huit heures, Tubiscope demande à YouTube ce que les
+        chaînes de la sélection ont publié. Cinq vidéos au maximum par chaîne
+        dans une thématique, pour qu’une chaîne très active n’écrase pas les
+        autres, et vingt-cinq vidéos par thématique. Les vidéos bloquées en
+        France sont écartées. Celles que YouTube interdit d’intégrer sont
+        signalées, avec un lien pour les regarder sur place.
+      </p>
+
+      <p>
+        Les vidéos restent chez YouTube. Elles y sont lues, avec leur publicité,
+        et leurs auteurs sont rémunérés comme d’habitude. Tubiscope n’héberge
+        rien, ne réencode rien, ne contourne rien.
+      </p>
+
+      <div class="encart">
+        <p>
+          <strong>La lecture ne demande pas de compte.</strong> Vos thématiques
+          restent dans votre navigateur. Un compte sert à retrouver votre
+          sélection d’un appareil à l’autre et à mettre des vidéos de côté. Pas à
+          être suivi : ni traceur publicitaire, ni revente, ni profil de
+          navigation.
+        </p>
+      </div>
+
+      <h2>Comment une chaîne entre, et comment elle sort</h2>
+
+      <p>Une chaîne entre dans la sélection quand :</p>
+      <ul>
+        <li>elle parle français, ou sous-titre sérieusement ce qu’elle publie ;</li>
+        <li>son sujet tient dans l’une des thématiques, sans avoir à forcer ;</li>
+        <li>elle publie des vidéos longues, au moins de temps en temps ;</li>
+        <li>elle a publié dans les six derniers mois ;</li>
+        <li>
+          il y a quelqu’un derrière : une personne, une rédaction, une
+          institution qui écrit, montre et assume ce qu’elle raconte.
+        </li>
+      </ul>
+
+      <p>Elle en sort quand :</p>
+      <ul>
+        <li>plus rien n’est publié depuis un an ;</li>
+        <li>elle bascule entièrement vers le format court ;</li>
+        <li>
+          le contenu devient une lecture de texte généré, sans auteur
+          identifiable ;
+        </li>
+        <li>
+          le sujet cède la place à la vente : formation à placer, sponsor
+          déguisé, chaîne devenue vitrine ;
+        </li>
+        <li>ses vidéos ne sont plus regardables depuis la France.</li>
+      </ul>
+
+      <p>
+        Ces critères sont les miens, ils se discutent. Une chaîne retirée peut
+        revenir, et une chaîne absente n’est pas une chaîne jugée : c’est le plus
+        souvent une chaîne que je n’ai pas encore vue.
+      </p>
+
+      <h2>Où en est le projet</h2>
+
+      <p>
+        Tubiscope est un projet personnel, gratuit, sans société derrière. Je le
+        construis parce que je m’en sers tous les jours, et je l’ouvre parce que
+        d’autres gens regardent YouTube comme moi. Une version plus complète,
+        entièrement paramétrable, viendra sans doute plus tard. La sélection
+        Culture, elle, restera gratuite.
+      </p>
+
+      <footer>
+        <p>
+          Une chaîne à proposer, un oubli à signaler, un désaccord sur les
+          critères : écrivez-moi à <strong>[adresse de contact à compléter]</strong>.
+        </p>
+        <a class="retour" href="/">Retour à Tubiscope</a>
+      </footer>
+    </div>
+  </body>
+</html>

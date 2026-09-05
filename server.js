@@ -258,6 +258,14 @@ console.log("⏰ CRON programmé : 08:00 Europe/Paris (sync + sync-culture + syn
 
 app.use(express.static(path.join(__dirname, 'dist')));
 
+// Page publique « D'où vient Tubiscope » : origine du projet, principes
+// et charte éditoriale. Servie sur une vraie URL, sans JavaScript, pour
+// rester partageable par lien et lisible par les moteurs. Le fichier
+// vient de public/, que le build Vite recopie dans dist/.
+app.get('/a-propos', (req, res) => {
+  res.sendFile(path.join(__dirname, 'dist', 'a-propos.html'));
+});
+
 app.get('*', (req, res) => {
   res.sendFile(path.join(__dirname, 'dist', 'index.html'));
 });

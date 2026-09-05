@@ -87,24 +87,30 @@ export default function Guide({ onOpenLegal }) {
           <h3 className="text-xl font-bold text-white">Tubiscope Culture</h3>
         </div>
         <p className="text-slate-300 text-sm mb-4 leading-relaxed">
-          Tubiscope Culture est une version dédiée à la connaissance et à la
-          transmission culturelle. Vous choisissez jusqu'à 7 thématiques parmi
-          19 (Histoire, Sciences, Lettres, Arts, Économie, Philosophie, etc.)
-          et nous vous proposons les dernières vidéos longues des chaînes
-          curatées dans chaque domaine.
+          Tubiscope Culture est la version consacrée à la connaissance et à la
+          transmission. Vous choisissez jusqu'à 7 thématiques parmi 11
+          (Histoire, Sciences, Lettres, Arts, Philosophie, Technologie, etc.)
+          et vous recevez les dernières vidéos longues des chaînes retenues
+          dans chacune. La lecture ne demande pas de compte.
         </p>
         <div className="bg-slate-900/60 border border-slate-800 rounded-xl p-4 mb-4">
           <p className="text-xs text-fuchsia-300 font-bold uppercase tracking-widest mb-2">
             Origine
           </p>
           <p className="text-sm text-slate-300 leading-relaxed">
-            Le projet s'appuie sur une sélection de <b>350 chaînes YouTube
-            culturelles</b> publiée en 2018 par le <b>ministère de la Culture</b>.
-            Cette base a été nettoyée des chaînes éteintes ou peu actives, puis
-            réactualisée. Tubiscope Culture compte aujourd'hui environ
-            <b> 200 chaînes vivantes</b>, réparties dans les 19 thématiques,
-            et la sélection continue d'évoluer.
+            Tout est parti d'une liste de <b>350 chaînes YouTube</b> publiée en
+            novembre 2018 par le <b>ministère de la Culture</b>. Huit ans plus
+            tard, beaucoup s'étaient arrêtées, d'autres avaient changé de sujet.
+            J'ai repris la sélection chaîne par chaîne et branché une mise à
+            jour quotidienne : Tubiscope Culture compte aujourd'hui
+            <b> 120 chaînes vivantes</b> dans 11 thématiques.
           </p>
+          <a
+            href="/a-propos"
+            className="inline-block mt-3 text-sm text-fuchsia-300 font-semibold hover:underline"
+          >
+            D'où vient Tubiscope, et comment une chaîne y entre →
+          </a>
         </div>
         <p className="text-sm text-slate-400 leading-relaxed">
           Rendez-vous sur{' '}
