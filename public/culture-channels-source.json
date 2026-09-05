@@ -426,10 +426,6 @@
         "handle": "CyrusNorth"
       },
       {
-        "name": "Dany Caligula",
-        "handle": "DanyCaligula"
-      },
-      {
         "name": "DeBunker des Etoiles",
         "handle": "DeBunkerdesEtoiles"
       },
@@ -1197,6 +1193,6 @@
       }
     ]
   },
-  "total": 270,
-  "generatedAt": 1779863123189
+  "total": 269,
+  "generatedAt": 1788593444410
 }

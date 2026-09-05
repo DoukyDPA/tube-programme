@@ -39,6 +39,19 @@ const initAdmin = () => {
   return getFirestore();
 };
 
+
+// Vrai si la vidéo est regardable depuis la France. YouTube renvoie
+// contentDetails.regionRestriction avec soit `blocked` (liste noire),
+// soit `allowed` (liste blanche). France TV bloque parfois ses vidéos
+// en France (droits réservés à france.tv) : inutile de les afficher.
+const playableInFrance = (det) => {
+  const rr = det?.contentDetails?.regionRestriction;
+  if (!rr) return true;
+  if (rr.blocked?.includes('FR')) return false;
+  if (rr.allowed && !rr.allowed.includes('FR')) return false;
+  return true;
+};
+
 const parseDuration = (duration) => {
   if (!duration) return 0;
   const m = duration.match(/PT(?:(\d+)H)?(?:(\d+)M)?(?:(\d+)S)?/);
@@ -85,7 +98,7 @@ async function fetchTopVideos(channelId, apiKey) {
   let detData;
   try {
     const detRes = await fetch(
-      `https://www.googleapis.com/youtube/v3/videos?key=${apiKey}&id=${videoIds}&part=contentDetails,snippet`
+      `https://www.googleapis.com/youtube/v3/videos?key=${apiKey}&id=${videoIds}&part=contentDetails,snippet,status`
     );
     detData = await detRes.json();
   } catch (e) {
@@ -106,6 +119,7 @@ async function fetchTopVideos(channelId, apiKey) {
     const det = detData.items?.find((d) => d.id === it.contentDetails.videoId);
     if (!det) continue;
     if (parseDuration(det.contentDetails.duration) < MIN_DURATION_S) continue;
+    if (!playableInFrance(det)) continue;
     const pub = new Date(
       det.snippet?.publishedAt || it.snippet.publishedAt
     ).getTime();
@@ -116,6 +130,9 @@ async function fetchTopVideos(channelId, apiKey) {
         title: det.snippet?.title || '',
         creatorName: det.snippet?.channelTitle || '',
         publishedAt: pub,
+        // false si l'ayant droit interdit la lecture hors youtube.com
+        // (France TV, Arte...). Le modal ouvre alors YouTube directement.
+        embeddable: det.status?.embeddable !== false,
       });
     }
   }
@@ -230,6 +247,7 @@ export default async function handler(req, res) {
             avgScore: 0,
             title: v.title,
             creatorName: v.creatorName,
+            embeddable: v.embeddable !== false,
           });
           added++;
         }

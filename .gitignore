@@ -33,3 +33,7 @@ vite.config.js.timestamp-*
 # Config admin générée depuis .env (clés Firebase publiques)
 public/admin-config.json
 newsletter/
+
+# Sauvegardes produites par les scripts de maintenance (dumps Firestore)
+scripts/backups/
+scripts/_to_delete/
