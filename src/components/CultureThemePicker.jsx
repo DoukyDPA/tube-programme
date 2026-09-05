@@ -15,7 +15,10 @@ import useBackButtonClose from '../hooks/useBackButtonClose';
 // S'affiche au premier accès ou via "Configurer mes thématiques" depuis le menu.
 //
 // Props :
-//   user                 : Firebase user (uid utilisé pour la sauvegarde)
+//   user                 : Firebase user, ou null pour un visiteur. Sans
+//                          compte, rien n'est écrit dans Firestore : la
+//                          sélection remonte via onSaved et l'appelant la
+//                          garde dans le navigateur.
 //   initialSelected      : ids déjà sélectionnés (array<string>)
 //   onClose()            : fermer sans sauver
 //   onSaved(themeIds)    : callback après save réussi
@@ -64,17 +67,19 @@ export default function CultureThemePicker({ user, initialSelected = [], onClose
     setError('');
     try {
       const ids = Array.from(selected);
-      await setDoc(
-        doc(db, 'users', user.uid),
-        {
-          culturePrefs: {
-            themes: ids,
-            setAt: Date.now(),
-            updatedAt: serverTimestamp(),
+      if (user) {
+        await setDoc(
+          doc(db, 'users', user.uid),
+          {
+            culturePrefs: {
+              themes: ids,
+              setAt: Date.now(),
+              updatedAt: serverTimestamp(),
+            },
           },
-        },
-        { merge: true }
-      );
+          { merge: true }
+        );
+      }
       onSaved && onSaved(ids);
     } catch (e) {
       setError(e.message);

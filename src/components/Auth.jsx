@@ -16,8 +16,13 @@ const AUTH_ERRORS = {
   'auth/operation-not-allowed': "Méthode de connexion désactivée côté Firebase.",
 };
 
-export default function Auth() {
-  const [isLogin, setIsLogin] = useState(true);
+// Props :
+//   onClose() : si fourni, le formulaire est ouvert par-dessus une page
+//               déjà consultable (mode visiteur). On affiche alors une
+//               sortie, et on ouvre sur la création de compte, puisque
+//               c'est ce que le visiteur venait chercher.
+export default function Auth({ onClose }) {
+  const [isLogin, setIsLogin] = useState(!onClose);
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
   const [error, setError] = useState('');
@@ -69,6 +74,14 @@ export default function Auth() {
         <button onClick={switchMode} className="w-full mt-6 text-slate-400 text-sm hover:text-white">
           {isLogin ? "Pas encore de compte ? S'inscrire" : "Déjà un compte ? Se connecter"}
         </button>
+        {onClose && (
+          <button
+            onClick={onClose}
+            className="w-full mt-3 text-slate-500 text-sm hover:text-white"
+          >
+            Continuer sans compte
+          </button>
+        )}
       </div>
     </div>
   );

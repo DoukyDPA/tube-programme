@@ -1,8 +1,13 @@
 // =====================================================================
 // src/hooks/useCategories.js
 // =====================================================================
-// Hook React qui charge les catégories depuis /categories (Firestore).
-// Filtré par mode ('tubiscope' ou 'culture').
+// Hook React qui charge les catégories d'un mode ('tubiscope' ou
+// 'culture'), dans cet ordre de préférence :
+//   1. le snapshot public /api/snapshot (pas d'authentification requise,
+//      et mutualisé avec le chargement des programmes) ;
+//   2. une lecture Firestore directe, si l'endpoint est injoignable et
+//      que l'utilisateur est connecté (dev sans Express, par exemple) ;
+//   3. la liste codée en dur plus bas.
 //
 // Cache mémoire au niveau module : un seul fetch par mode et par session,
 // même si le hook est utilisé dans plusieurs composants. Re-fetch
@@ -14,6 +19,7 @@
 import { useEffect, useState } from 'react';
 import { db } from '../firebase';
 import { collection, getDocs, query, where } from 'firebase/firestore';
+import { getCachedSnapshot, loadSnapshot } from './usePublicSnapshot';
 
 const cache = new Map(); // mode -> array de catégories
 const subscribers = new Map(); // mode -> Set de setState
@@ -51,19 +57,32 @@ const FALLBACK = {
   ],
 };
 
+const sortByOrder = (rows) =>
+  [...rows].sort((a, b) => (a.order || 0) - (b.order || 0));
+
 async function fetchCategories(mode) {
+  // 1. Snapshot public. Il sert déjà les programmes, la réponse est donc
+  // souvent déjà en cache : zéro requête supplémentaire.
+  try {
+    const snap = getCachedSnapshot(mode) || (await loadSnapshot(mode));
+    if (snap?.categories?.length) return sortByOrder(snap.categories);
+  } catch (e) {
+    console.warn(`useCategories: snapshot indisponible pour mode=${mode}.`, e.message);
+  }
+
+  // 2. Repli Firestore direct. Nécessite d'être connecté (cf. rules).
   try {
     const snap = await getDocs(
       query(collection(db, 'categories'), where('mode', '==', mode))
     );
-    const rows = snap.docs
-      .map((d) => ({ id: d.id, ...d.data() }))
-      .sort((a, b) => (a.order || 0) - (b.order || 0));
-    return rows.length > 0 ? rows : FALLBACK[mode] || [];
+    const rows = snap.docs.map((d) => ({ id: d.id, ...d.data() }));
+    if (rows.length > 0) return sortByOrder(rows);
   } catch (e) {
-    console.warn(`useCategories: fetch échoué pour mode=${mode}, fallback hardcodé.`, e.message);
-    return FALLBACK[mode] || [];
+    console.warn(`useCategories: fetch Firestore échoué pour mode=${mode}.`, e.message);
   }
+
+  // 3. Dernier recours : la liste codée en dur.
+  return FALLBACK[mode] || [];
 }
 
 function notify(mode, data) {

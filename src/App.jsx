@@ -17,6 +17,7 @@ import { MODE_STANDARD } from './data/appMode';
 
 import { Sparkles, Home, Settings, Loader2, RefreshCw, LogOut, Cpu, BookOpen, Trophy, Mic2, Clapperboard, Info, UserCircle, ChevronDown } from 'lucide-react';
 import { useCategories } from './hooks/useCategories';
+import { usePublicPrograms } from './hooks/usePublicSnapshot';
 import { getCategoryIcon } from './data/categoryIcons';
 import { capProgramsPerChannel } from './utils/programs';
 
@@ -51,6 +52,19 @@ const getIconForCustomTheme = (iconId) => {
     case 'interviews': return <Mic2 size={18}/>;
     default: return <Sparkles size={18}/>;
   }
+};
+
+
+// Vrai si la vidéo est regardable depuis la France. YouTube renvoie
+// contentDetails.regionRestriction avec soit `blocked` (liste noire),
+// soit `allowed` (liste blanche). France TV bloque parfois ses vidéos
+// en France (droits réservés à france.tv) : inutile de les afficher.
+const playableInFrance = (det) => {
+  const rr = det?.contentDetails?.regionRestriction;
+  if (!rr) return true;
+  if (rr.blocked?.includes('FR')) return false;
+  if (rr.allowed && !rr.allowed.includes('FR')) return false;
+  return true;
 };
 
 const parseDuration = (duration) => {
@@ -121,10 +135,27 @@ export default function App() {
     });
   }, []);
 
-  // Listener sur chaque scope éditeur. Se réinitialise si la liste des
-  // catégories change (ajout/suppression depuis l'admin).
+  // Programmes des scopes éditeur.
+  // Non-admin : snapshot public (/api/snapshot), un seul JSON servi
+  // depuis le cache serveur, zéro lecture Firestore. Admin : listeners
+  // live, pour voir ses éditions immédiatement.
+  // Les scopes ne changent qu'au cron de 8h : le temps réel ne servait à
+  // rien et coûtait une lecture par document et par session.
+  // Attention : le mode côté données s'appelle 'tubiscope' (champ mode
+  // des collections categories et channels), alors que MODE_STANDARD vaut
+  // 'standard' et ne sert qu'à détecter le domaine. Ne pas les confondre.
+  const { programs: snapshotPrograms } = usePublicPrograms('tubiscope', {
+    enabled: !!user && !isAdmin,
+  });
+
   useEffect(() => {
-    if (!user) return;
+    if (!user) return undefined;
+
+    if (!isAdmin) {
+      setScopePrograms(snapshotPrograms);
+      return undefined;
+    }
+
     const unsubs = SCOPE_IDS.map(scopeId => {
       const q = collection(db, 'scopes', scopeId, 'programs');
       return onSnapshot(q, (snap) => {
@@ -139,7 +170,7 @@ export default function App() {
     });
     return () => unsubs.forEach(u => u());
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [user, CATEGORIES]);
+  }, [user, isAdmin, snapshotPrograms, CATEGORIES]);
 
   // Listener sur les thèmes perso du user
   useEffect(() => {
@@ -333,7 +364,7 @@ export default function App() {
         const videoIds = pData.items.map(v => v.contentDetails.videoId).join(',');
         // On ajoute snippet pour stocker title/channelTitle/publishedAt
         // directement dans Firestore. Pas de coût quota supplémentaire.
-        const detailsRes = await fetch(`https://www.googleapis.com/youtube/v3/videos?key=${YOUTUBE_API_KEY}&id=${videoIds}&part=contentDetails,snippet`);
+        const detailsRes = await fetch(`https://www.googleapis.com/youtube/v3/videos?key=${YOUTUBE_API_KEY}&id=${videoIds}&part=contentDetails,snippet,status`);
         const detailsData = await detailsRes.json();
 
         // Aligné sur api/sync.js : on regarde 50 mises en ligne en arrière
@@ -346,7 +377,7 @@ export default function App() {
           if (top5.length >= 5) break;
           const vidId = v.contentDetails.videoId;
           const detail = detailsData.items?.find(d => d.id === vidId);
-          if (detail && parseDuration(detail.contentDetails.duration) >= 180) {
+          if (detail && parseDuration(detail.contentDetails.duration) >= 180 && playableInFrance(detail)) {
             top5.push({
               youtubeId: vidId,
               title: detail.snippet?.title || '',
@@ -354,6 +385,7 @@ export default function App() {
               publishedAt: detail.snippet?.publishedAt
                 ? new Date(detail.snippet.publishedAt).getTime()
                 : Date.now(),
+              embeddable: detail.status?.embeddable !== false,
             });
           }
         }
@@ -375,7 +407,8 @@ export default function App() {
               avgScore: 0,
               title: v.title,
               creatorName: v.creatorName,
-              publishedAt: v.publishedAt
+              publishedAt: v.publishedAt,
+              embeddable: v.embeddable !== false,
             }));
             addedCount++;
           }

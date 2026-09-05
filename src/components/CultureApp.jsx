@@ -39,6 +39,7 @@ import { CultureIcon } from '../data/cultureIcons';
 import { MODE_CULTURE } from '../data/appMode';
 import { useCategories } from '../hooks/useCategories';
 import { useCultureChannels } from '../hooks/useCultureChannels';
+import { usePublicPrograms } from '../hooks/usePublicSnapshot';
 import { capProgramsPerChannel } from '../utils/programs';
 
 import Auth from './Auth';
@@ -50,6 +51,48 @@ import DiscoverBanner from './DiscoverBanner';
 import AccountModal from './AccountModal';
 import Guide from './Guide';
 import Legal from './Legal';
+
+// =====================================================================
+// Mode visiteur
+// =====================================================================
+// Tubiscope Culture se consulte sans compte. Les thématiques d'un
+// visiteur vivent dans son navigateur (localStorage), pas dans
+// Firestore : rien à écrire, rien à lire, aucune donnée personnelle
+// collectée tant qu'il ne crée pas de compte.
+//
+// Le compte reste nécessaire pour ce qui suit l'utilisateur d'un
+// appareil à l'autre : la liste « à regarder plus tard » et la
+// synchronisation des thématiques.
+const GUEST_THEMES_KEY = 'tubiscope:culture:guestThemes';
+
+// Sélection proposée à l'arrivée, avant tout choix. Filtrée ensuite sur
+// les thématiques réellement actives en base.
+const GUEST_DEFAULT_THEMES = [
+  'cult_histoire',
+  'cult_sciences',
+  'cult_bio',
+  'cult_art',
+  'cult_audiovisuel',
+  'cult_tech',
+];
+
+function readGuestThemes() {
+  try {
+    const raw = window.localStorage.getItem(GUEST_THEMES_KEY);
+    const parsed = JSON.parse(raw || '[]');
+    return Array.isArray(parsed) ? parsed.filter((id) => typeof id === 'string') : [];
+  } catch {
+    return [];
+  }
+}
+
+function writeGuestThemes(ids) {
+  try {
+    window.localStorage.setItem(GUEST_THEMES_KEY, JSON.stringify(ids));
+  } catch {
+    /* navigation privée, quota plein : on continue sans persister */
+  }
+}
 
 // Logo Tubiscope avec sous-titre "Culture"
 const CultureLogo = () => (
@@ -141,6 +184,10 @@ export default function CultureApp() {
   const [selectedProg, setSelectedProg] = useState(null);
   const [showPicker, setShowPicker] = useState(false);
   const [showAccount, setShowAccount] = useState(false);
+  // Formulaire de connexion appelé à la demande par un visiteur.
+  const [showAuth, setShowAuth] = useState(false);
+  // Thématiques du visiteur, mémorisées dans son navigateur.
+  const [guestThemes, setGuestThemes] = useState(() => readGuestThemes());
   const [activeTab, setActiveTab] = useState('accueil');
   const [legalTab, setLegalTab] = useState(null);
 
@@ -178,7 +225,11 @@ export default function CultureApp() {
       } else {
         setIsAdmin(false);
         setUserData(null);
-        setThemePrograms({});
+        // On ne vide plus themePrograms ici : sans compte, la page reste
+        // consultable et les programmes viennent du snapshot public.
+        // L'effet ci-dessous recalcule la liste selon les thématiques
+        // visiteur. (Le vider ici écrasait le snapshot déjà chargé,
+        // l'auth se résolvant après le premier fetch.)
       }
       setLoading(false);
     });
@@ -193,8 +244,34 @@ export default function CultureApp() {
     });
   }, [user]);
 
-  const userThemeIds = userData?.culturePrefs?.themes || [];
+  // Thématiques du visiteur : celles qu'il a choisies dans ce navigateur,
+  // sinon la sélection par défaut. On filtre sur les thématiques
+  // réellement actives, une rubrique retirée en base ne doit pas rester
+  // épinglée chez quelqu'un.
+  const availableThemeIds = useMemo(
+    () => new Set(CULTURE_THEMES.map((t) => t.id)),
+    [CULTURE_THEMES]
+  );
+
+  const resolvedGuestThemes = useMemo(() => {
+    if (availableThemeIds.size === 0) return guestThemes;
+    const kept = guestThemes.filter((id) => availableThemeIds.has(id));
+    if (kept.length > 0) return kept;
+    return GUEST_DEFAULT_THEMES.filter((id) => availableThemeIds.has(id));
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [JSON.stringify(guestThemes), availableThemeIds]);
+
+  const userThemeIds = user
+    ? userData?.culturePrefs?.themes || []
+    : resolvedGuestThemes;
   const hasConfigured = userThemeIds.length > 0;
+
+  // Enregistre une sélection, dans Firestore pour un compte, dans le
+  // navigateur pour un visiteur.
+  const saveGuestThemes = (ids) => {
+    setGuestThemes(ids);
+    writeGuestThemes(ids);
+  };
 
   // Thématiques effectivement écoutées : celles choisies + celles en preview.
   // Mémoïsé pour éviter de rebrancher le listener à chaque rendu.
@@ -205,12 +282,33 @@ export default function CultureApp() {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [JSON.stringify(userThemeIds), JSON.stringify(previewThemeIds)]);
 
-  // -- Listener sur les programmes de chaque thématique écoutée --
+  // -- Programmes des thématiques écoutées --
+  // Deux sources selon le profil :
+  //   - visiteur et utilisateur connecté : le snapshot public
+  //     (/api/snapshot), un seul JSON, zéro lecture Firestore ;
+  //   - admin : des listeners Firestore live, pour voir ses éditions
+  //     immédiatement.
+  // Le contenu ne bouge qu'au cron de 8h, le temps réel n'a donc aucun
+  // intérêt pour les lecteurs, et il coûtait ~300 lectures par session.
+  const { programs: snapshotPrograms } = usePublicPrograms(MODE_CULTURE, {
+    enabled: !isAdmin,
+  });
+
   useEffect(() => {
-    if (!user || listenedThemeIds.length === 0) {
+    if (listenedThemeIds.length === 0) {
       setThemePrograms({});
       return;
     }
+
+    if (!isAdmin) {
+      const next = {};
+      for (const themeId of listenedThemeIds) {
+        next[themeId] = snapshotPrograms[themeId] || [];
+      }
+      setThemePrograms(next);
+      return;
+    }
+
     const unsubs = listenedThemeIds.map((themeId) => {
       const q = collection(db, 'scopes', themeId, 'programs');
       return onSnapshot(q, (snap) => {
@@ -236,7 +334,7 @@ export default function CultureApp() {
     });
     return () => unsubs.forEach((u) => u());
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [user, JSON.stringify(listenedThemeIds)]);
+  }, [isAdmin, snapshotPrograms, JSON.stringify(listenedThemeIds)]);
 
   // Liste plate des programmes pour hydratation
   const allPrograms = useMemo(
@@ -356,7 +454,11 @@ export default function CultureApp() {
   //                                                       fenêtre de protection
   //                                                       de 30 jours)
   const toggleWatchLater = async (prog) => {
-    if (!user) return;
+    // Un visiteur n'a pas de liste : on lui propose de créer un compte.
+    if (!user) {
+      setShowAuth(true);
+      return;
+    }
     const ref = doc(db, 'users', user.uid);
     const currentWl = userData?.watchLaterCulture || [];
     const isWl = currentWl.includes(prog.youtubeId);
@@ -899,8 +1001,25 @@ export default function CultureApp() {
   // CULTURE_MAX_USER_THEMES (importée plus bas pour rester local).
   // -----------------------------------------------------------------
   const addPreviewToUserThemes = async (themeId) => {
-    if (!user) return;
     const MAX = 7; // CULTURE_MAX_USER_THEMES
+
+    // Visiteur : la sélection vit dans son navigateur, pas de compte requis.
+    if (!user) {
+      if (userThemeIds.includes(themeId)) {
+        setPreviewThemeIds((prev) => prev.filter((id) => id !== themeId));
+        return;
+      }
+      if (userThemeIds.length >= MAX) {
+        alert(
+          `Vous suivez déjà ${MAX} thématiques. Retirez-en une depuis « Modifier mes thématiques » pour en ajouter une nouvelle.`
+        );
+        return;
+      }
+      saveGuestThemes([...userThemeIds, themeId]);
+      setPreviewThemeIds((prev) => prev.filter((id) => id !== themeId));
+      return;
+    }
+
     if (userThemeIds.includes(themeId)) {
       setPreviewThemeIds((prev) => prev.filter((id) => id !== themeId));
       return;
@@ -942,10 +1061,10 @@ export default function CultureApp() {
     );
   }
 
-  if (!user) return <Auth />;
-
-  // Première connexion : on force le picker
-  if (!hasConfigured) {
+  // Première connexion d'un compte : on force le choix des thématiques.
+  // Un visiteur n'est jamais bloqué par cet écran, il a toujours une
+  // sélection par défaut.
+  if (user && !hasConfigured) {
     return (
       <CultureThemePicker
         user={user}
@@ -1041,18 +1160,35 @@ export default function CultureApp() {
         </nav>
 
         <div className="p-6 mt-auto border-t border-slate-800/50 space-y-3">
-          <button
-            onClick={() => setShowAccount(true)}
-            className="w-full flex items-center gap-2 text-slate-400 hover:text-fuchsia-300 transition-colors text-sm font-semibold"
-          >
-            <UserCircle size={16} /> Votre compte
-          </button>
-          <button
-            onClick={() => signOut(auth)}
-            className="w-full flex items-center gap-2 text-slate-500 hover:text-red-400 transition-colors text-sm font-semibold"
-          >
-            <LogOut size={16} /> Déconnexion
-          </button>
+          {user ? (
+            <>
+              <button
+                onClick={() => setShowAccount(true)}
+                className="w-full flex items-center gap-2 text-slate-400 hover:text-fuchsia-300 transition-colors text-sm font-semibold"
+              >
+                <UserCircle size={16} /> Votre compte
+              </button>
+              <button
+                onClick={() => signOut(auth)}
+                className="w-full flex items-center gap-2 text-slate-500 hover:text-red-400 transition-colors text-sm font-semibold"
+              >
+                <LogOut size={16} /> Déconnexion
+              </button>
+            </>
+          ) : (
+            <>
+              <p className="text-xs text-slate-500 leading-relaxed">
+                Vous lisez Tubiscope sans compte. Vos thématiques restent dans
+                ce navigateur.
+              </p>
+              <button
+                onClick={() => setShowAuth(true)}
+                className="w-full flex items-center justify-center gap-2 bg-fuchsia-600 hover:bg-fuchsia-500 text-white px-4 py-2.5 rounded-xl text-sm font-bold transition-colors"
+              >
+                <UserCircle size={16} /> Créer un compte
+              </button>
+            </>
+          )}
         </div>
       </aside>
 
@@ -1075,19 +1211,21 @@ export default function CultureApp() {
           <span className="text-[10px] font-bold">Thèmes</span>
         </button>
         <button
-          onClick={() => setShowAccount(true)}
+          onClick={() => (user ? setShowAccount(true) : setShowAuth(true))}
           className="flex flex-col items-center gap-1 p-2 text-slate-500 hover:text-fuchsia-300 transition-colors"
         >
           <UserCircle size={22} />
-          <span className="text-[10px] font-bold">Compte</span>
+          <span className="text-[10px] font-bold">{user ? 'Compte' : 'Connexion'}</span>
         </button>
-        <button
-          onClick={() => signOut(auth)}
-          className="flex flex-col items-center gap-1 p-2 text-slate-500 hover:text-red-400 transition-colors"
-        >
-          <LogOut size={22} />
-          <span className="text-[10px] font-bold">Sortir</span>
-        </button>
+        {user && (
+          <button
+            onClick={() => signOut(auth)}
+            className="flex flex-col items-center gap-1 p-2 text-slate-500 hover:text-red-400 transition-colors"
+          >
+            <LogOut size={22} />
+            <span className="text-[10px] font-bold">Sortir</span>
+          </button>
+        )}
       </div>
 
       <main className="flex-1 overflow-y-auto h-screen pb-24 md:pb-0 relative">
@@ -1237,9 +1375,15 @@ export default function CultureApp() {
           user={user}
           initialSelected={userThemeIds}
           onClose={() => setShowPicker(false)}
-          onSaved={() => setShowPicker(false)}
+          onSaved={(ids) => {
+            // Visiteur : la sélection est mémorisée dans le navigateur.
+            // Compte : le picker a déjà écrit dans Firestore.
+            if (!user) saveGuestThemes(ids);
+            setShowPicker(false);
+          }}
         />
       )}
+      {showAuth && !user && <Auth onClose={() => setShowAuth(false)} />}
       {showAccount && (
         <AccountModal
           user={user}

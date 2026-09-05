@@ -18,6 +18,7 @@ import {
   deleteUserHandler,
 } from './api/admin-users.js';
 import generateNewsletterHandler from './api/generate-newsletter.js';
+import publicSnapshotHandler, { invalidateSnapshot } from './api/public-snapshot.js';
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
@@ -169,9 +170,25 @@ app.post('/api/hydrate', hydrateLimiter, async (req, res) => {
 });
 // ----------------------------------------------
 
-app.get('/api/sync', requireSyncSecret, syncHandler);
-app.get('/api/sync-culture', requireSyncSecret, syncCultureHandler);
+// Toute synchronisation qui touche les scopes éditeur rend le snapshot
+// public périmé : on le vide juste après, la prochaine requête le
+// reconstruira avec les nouveautés.
+const withSnapshotInvalidation = (handler, mode) => async (req, res) => {
+  try {
+    return await handler(req, res);
+  } finally {
+    invalidateSnapshot(mode);
+  }
+};
+
+app.get('/api/sync', requireSyncSecret, withSnapshotInvalidation(syncHandler, 'tubiscope'));
+app.get('/api/sync-culture', requireSyncSecret, withSnapshotInvalidation(syncCultureHandler, 'culture'));
 app.get('/api/sync-perso', requireSyncSecret, syncPersoHandler);
+
+// Snapshot public : catégories + programmes d'un mode, servis depuis un
+// cache mémoire, sans authentification. C'est ce que lisent les visiteurs
+// et les utilisateurs non-admin, à la place des listeners Firestore.
+app.get('/api/snapshot', publicSnapshotHandler);
 
 // Liste des chaînes Culture servie depuis un cache mémoire (TTL 1h).
 // Évite que chaque ouverture de Culture côté client lise /channels Firestore.
@@ -229,6 +246,12 @@ cron.schedule('0 8 * * *', async () => {
   } catch (err) {
     console.error('Erreur lors du CRON sync-perso:', err);
   }
+
+  // Les trois syncs ont écrit dans Firestore : le snapshot public servi
+  // aux visiteurs est périmé. On le vide pour que la journée démarre sur
+  // les nouveautés du matin.
+  invalidateSnapshot();
+  console.log('🧹 Snapshot public invalidé après le cron.');
 }, { timezone: 'Europe/Paris' });
 
 console.log("⏰ CRON programmé : 08:00 Europe/Paris (sync + sync-culture + sync-perso).");
