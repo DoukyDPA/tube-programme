@@ -13,6 +13,7 @@ import Legal from './components/Legal';
 import PWAPrompt from './components/PWAPrompt';
 import AccountModal from './components/AccountModal';
 import DiscoverBanner, { ModeSwitchCard } from './components/DiscoverBanner';
+import TubiscopeMark from './components/TubiscopeMark';
 import { MODE_STANDARD } from './data/appMode';
 
 import { Sparkles, Home, Settings, Loader2, RefreshCw, LogOut, Cpu, BookOpen, Trophy, Mic2, Clapperboard, Info, UserCircle, ChevronDown } from 'lucide-react';
@@ -25,15 +26,10 @@ import { capProgramsPerChannel } from './utils/programs';
 // On garde le bleu indigo de Tubiscope (par opposition au fuchsia Culture).
 const AppLogo = ({ studio = false }) => (
   <div className="flex items-center gap-3">
-    <div className="w-10 h-10 bg-gradient-to-br from-indigo-500 to-indigo-700 rounded-xl flex items-center justify-center shadow-lg shadow-indigo-500/20 shrink-0">
-      <svg viewBox="0 0 24 24" fill="none" stroke="white" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round" className="w-6 h-6">
-        <circle cx="12" cy="12" r="10" />
-        <polygon points="10 8 16 12 10 16 10 8" fill="white" />
-      </svg>
-    </div>
+    <TubiscopeMark className="w-10 h-10 text-indigo-500 shrink-0" title="Tubiscope" />
     <div className="flex flex-col leading-tight">
       <h1 className="text-xl font-black text-white tracking-tight">
-        Tubi<span className="text-indigo-500">Scope</span>
+        Tubi<span className="text-indigo-500">scope</span>
       </h1>
       {studio && (
         <span className="text-[10px] font-bold text-indigo-300/90 uppercase tracking-widest">

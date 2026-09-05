@@ -13,10 +13,10 @@
     <meta property="og:title" content="D’où vient Tubiscope" />
     <meta property="og:description" content="Pas de shorts, pas d’algorithme, pas de texte récité par une IA. Une grille de programmes pour la partie de YouTube qui vaut le détour." />
     <meta property="og:url" content="https://tubiscope.com/a-propos" />
-    <meta property="og:image" content="https://tubiscope.com/icon-512.png" />
+    <meta property="og:image" content="https://tubiscope.com/icon-culture-512.png" />
     <meta name="twitter:card" content="summary" />
 
-    <link rel="icon" type="image/png" href="/icon-192.png" />
+    <link rel="icon" type="image/png" sizes="32x32" href="/favicon-32.png" />
 
     <style>
       :root {
@@ -49,13 +49,7 @@
         border-bottom: 1px solid var(--bord);
         margin-bottom: 40px;
       }
-      .pastille {
-        width: 40px; height: 40px; border-radius: 12px;
-        background: linear-gradient(135deg, var(--accent) 0%, #4338ca 100%);
-        display: flex; align-items: center; justify-content: center;
-        flex-shrink: 0;
-      }
-      .pastille svg { width: 24px; height: 24px; }
+      .marque { width: 40px; height: 40px; flex-shrink: 0; display: block; }
       .marque a { color: var(--titre); text-decoration: none; font-weight: 800; font-size: 20px; letter-spacing: -0.02em; }
       .marque span { color: var(--accent); }
       .marque .sous { display: block; font-size: 10px; letter-spacing: 0.18em; text-transform: uppercase; color: var(--gris); font-weight: 700; }
@@ -107,12 +101,18 @@
   <body>
     <div class="page">
       <header class="marque">
-        <div class="pastille">
-          <svg viewBox="0 0 24 24" fill="none" stroke="#fff" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round">
-            <circle cx="12" cy="12" r="10" />
-            <polygon points="10 8 16 12 10 16 10 8" fill="#fff" />
-          </svg>
-        </div>
+        <svg class="marque" viewBox="0 0 512 512" aria-hidden="true">
+          <mask id="marque-mask">
+            <circle cx="256" cy="256" r="232" fill="#fff"/>
+            <rect x="240" y="0" width="32" height="200" fill="#000"/>
+            <rect x="0" y="168" width="512" height="32" fill="#000"/>
+            <rect x="0" y="284" width="206" height="32" fill="#000"/>
+            <rect x="306" y="284" width="206" height="32" fill="#000"/>
+            <rect x="174" y="284" width="32" height="228" fill="#000"/>
+            <rect x="306" y="284" width="32" height="228" fill="#000"/>
+          </mask>
+          <circle cx="256" cy="256" r="232" fill="var(--accent)" mask="url(#marque-mask)"/>
+        </svg>
         <div>
           <a href="/culture">Tubi<span>scope</span></a>
           <span class="sous">Culture</span>

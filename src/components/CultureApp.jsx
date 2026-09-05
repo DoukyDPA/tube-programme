@@ -48,6 +48,7 @@ import ProgramGrid from './ProgramGrid';
 import VideoModal from './VideoModal';
 import CultureThemePicker from './CultureThemePicker';
 import DiscoverBanner, { ModeSwitchCard } from './DiscoverBanner';
+import TubiscopeMark from './TubiscopeMark';
 import AccountModal from './AccountModal';
 import Guide from './Guide';
 import Legal from './Legal';
@@ -97,23 +98,10 @@ function writeGuestThemes(ids) {
 // Logo Tubiscope avec sous-titre "Culture"
 const CultureLogo = () => (
   <div className="flex items-center gap-3">
-    <div className="w-10 h-10 bg-gradient-to-br from-fuchsia-500 to-indigo-700 rounded-xl flex items-center justify-center shadow-lg shadow-fuchsia-500/20 shrink-0">
-      <svg
-        viewBox="0 0 24 24"
-        fill="none"
-        stroke="white"
-        strokeWidth="2.5"
-        strokeLinecap="round"
-        strokeLinejoin="round"
-        className="w-6 h-6"
-      >
-        <circle cx="12" cy="12" r="10" />
-        <polygon points="10 8 16 12 10 16 10 8" fill="white" />
-      </svg>
-    </div>
+    <TubiscopeMark className="w-10 h-10 text-fuchsia-400 shrink-0" title="Tubiscope Culture" />
     <div className="flex flex-col leading-tight">
       <h1 className="text-xl font-black text-white tracking-tight">
-        Tubi<span className="text-fuchsia-400">Scope</span>
+        Tubi<span className="text-fuchsia-400">scope</span>
       </h1>
       <span className="text-[10px] font-bold text-fuchsia-300/80 uppercase tracking-widest">
         Culture

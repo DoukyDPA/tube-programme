@@ -30,7 +30,7 @@ export default defineConfig({
     react(),
     VitePWA({
       registerType: 'autoUpdate',
-      includeAssets: ['icon-192.png', 'icon-512.png', 'logo-192.png', 'logo-512.png'],
+      includeAssets: ['icon-192.png', 'icon-512.png', 'logo-192.png', 'logo-512.png', 'favicon-32.png', 'icon-maskable-512.png'],
       manifest: {
         name: 'TubiScope',
         short_name: 'TubiScope',
@@ -55,7 +55,10 @@ export default defineConfig({
             purpose: 'any'
           },
           {
-            src: '/icon-512.png',
+            // Icône masquable dédiée : Android rogne jusqu'à un cercle de
+            // 80 % du côté. Réutiliser l'icône normale ferait couper la
+            // marque sur les bords.
+            src: '/icon-maskable-512.png',
             sizes: '512x512',
             type: 'image/png',
             purpose: 'maskable'
