@@ -290,7 +290,11 @@ export default function CultureApp() {
   //     immédiatement.
   // Le contenu ne bouge qu'au cron de 8h, le temps réel n'a donc aucun
   // intérêt pour les lecteurs, et il coûtait ~300 lectures par session.
-  const { programs: snapshotPrograms } = usePublicPrograms(MODE_CULTURE, {
+  const {
+    programs: snapshotPrograms,
+    error: snapshotError,
+    retry: retrySnapshot,
+  } = usePublicPrograms(MODE_CULTURE, {
     enabled: !isAdmin,
   });
 
@@ -1349,6 +1353,8 @@ export default function CultureApp() {
                   isAdmin={isAdmin}
                   onSync={syncCultureFromBrowser}
                   isSyncing={isSyncing}
+                  loadError={!isAdmin && !!snapshotError}
+                  onRetry={retrySnapshot}
                 />
               )}
               {unselectedThemes.length > 0 && (
@@ -1592,20 +1598,37 @@ function DiscoverRubriquesRow({ themes, onPick }) {
   );
 }
 
-// --- Empty state quand aucune vidéo n'est encore syncée ---
-function EmptyState({ onPick, isAdmin, onSync, isSyncing }) {
+// --- Empty state quand aucune vidéo n'est affichable ---
+// Deux cas très différents à ne pas confondre : il n'y a rien à montrer,
+// ou le chargement a échoué. Le second se répare en réessayant, encore
+// faut-il le dire.
+function EmptyState({ onPick, isAdmin, onSync, isSyncing, loadError, onRetry }) {
   return (
     <div className="px-4 md:px-0">
       <div className="bg-slate-900/50 border border-slate-800 rounded-2xl p-8 text-center">
         <Sparkles className="mx-auto text-fuchsia-400 mb-3" size={32} />
         <h3 className="text-lg font-bold text-white mb-2">
-          {isAdmin ? 'Pas encore de vidéos' : 'Les vidéos arrivent'}
+          {loadError
+            ? 'Les vidéos n’ont pas pu être chargées'
+            : isAdmin
+              ? 'Pas encore de vidéos'
+              : 'Les vidéos arrivent'}
         </h3>
         <p className="text-sm text-slate-400 mb-4">
-          {isAdmin
-            ? 'Lance la première synchronisation pour récupérer les vidéos de tes thématiques. Compte quelques minutes au premier passage.'
-            : 'La première synchronisation YouTube peut prendre quelques minutes. Revenez dans un instant.'}
+          {loadError
+            ? 'La connexion au serveur a échoué. Vos thématiques sont intactes, il n’y a rien à reconfigurer.'
+            : isAdmin
+              ? 'Lance la première synchronisation pour récupérer les vidéos de tes thématiques. Compte quelques minutes au premier passage.'
+              : 'La première synchronisation YouTube peut prendre quelques minutes. Revenez dans un instant.'}
         </p>
+        {loadError && (
+          <button
+            onClick={onRetry}
+            className="bg-fuchsia-600 hover:bg-fuchsia-500 text-white px-5 py-2.5 rounded-xl text-sm font-bold transition-colors mb-3"
+          >
+            Réessayer
+          </button>
+        )}
         <div className="flex flex-col md:flex-row gap-2 justify-center">
           {isAdmin && (
             <button

@@ -41,9 +41,22 @@ async function fetchStats() {
   };
 }
 
+const wait = (ms) => new Promise((r) => setTimeout(r, ms));
+
+// Deux tentatives : un échec réseau isolé ne doit pas figer les chiffres
+// sur le repli pour toute la session.
+async function fetchStatsWithRetry() {
+  try {
+    return await fetchStats();
+  } catch (err) {
+    await wait(1200);
+    return fetchStats();
+  }
+}
+
 function load() {
   if (inflight) return inflight;
-  inflight = fetchStats()
+  inflight = fetchStatsWithRetry()
     .then((data) => {
       cache = data;
       cachedAt = Date.now();
