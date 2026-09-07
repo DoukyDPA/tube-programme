@@ -585,7 +585,7 @@ export default function App() {
           <AppLogo studio={!!userData?.isPremium} />
         </div>
 
-        <nav className="flex-1 px-4 py-4 space-y-1 overflow-y-auto overflow-x-visible">
+        <nav className="flex-1 px-4 py-4 space-y-1 overflow-y-auto overflow-x-hidden scrollbar-discret">
           <button onClick={() => setActiveTab('accueil')} className={`w-full flex items-center gap-3 px-4 py-3 rounded-xl transition-all ${activeTab === 'accueil' ? 'bg-indigo-600/10 text-indigo-400 font-bold' : 'text-slate-400 hover:text-white hover:bg-slate-800/50'}`}>
             <Home size={18} /> Accueil
           </button>
@@ -605,7 +605,7 @@ export default function App() {
                     className={`flex-1 flex items-center gap-3 px-4 py-3 rounded-l-xl text-left ${isActive ? 'text-indigo-400 font-bold' : 'text-slate-400 hover:text-white'}`}
                   >
                     <span className={isActive ? 'text-indigo-400' : 'text-slate-500'}>{getCategoryIcon(cat.icon, 18)}</span>
-                    <span className="text-sm whitespace-nowrap flex-1">{cat.label}</span>
+                    <span className="text-sm flex-1 min-w-0 truncate" title={cat.label}>{cat.label}</span>
                     {count > 0 && (
                       <span className={`text-[10px] font-bold px-1.5 py-0.5 rounded-full ${isActive ? 'bg-indigo-500/20 text-indigo-300' : 'bg-slate-800 text-slate-500'}`}>
                         {count}
@@ -651,7 +651,7 @@ export default function App() {
                         className={`flex-1 flex items-center gap-3 px-4 py-3 rounded-l-xl text-left ${isActive ? 'text-emerald-400 font-bold' : 'text-slate-400 hover:text-white'}`}
                       >
                         <span className={isActive ? 'text-emerald-400' : 'text-slate-500'}>{getIconForCustomTheme(cat.icon)}</span>
-                        <span className="text-sm whitespace-nowrap flex-1">{cat.name}</span>
+                        <span className="text-sm flex-1 min-w-0 truncate" title={cat.name}>{cat.name}</span>
                         {count > 0 && (
                           <span className={`text-[10px] font-bold px-1.5 py-0.5 rounded-full ${isActive ? 'bg-emerald-500/20 text-emerald-300' : 'bg-slate-800 text-slate-500'}`}>
                             {count}

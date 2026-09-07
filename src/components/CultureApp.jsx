@@ -1112,7 +1112,7 @@ export default function CultureApp() {
   return (
     <div className="min-h-screen md:h-screen bg-[#0a0f1c] text-slate-200 flex flex-col md:flex-row font-sans overflow-hidden">
       {/* SIDEBAR PC */}
-      <aside className="hidden md:flex w-[260px] bg-slate-950/95 border-r border-slate-800/50 flex-col z-50 overflow-y-auto shadow-2xl">
+      <aside className="hidden md:flex w-[260px] bg-slate-950/95 border-r border-slate-800/50 flex-col z-50 overflow-y-auto overflow-x-hidden scrollbar-discret shadow-2xl">
         <div className="p-8">
           <CultureLogo />
         </div>
