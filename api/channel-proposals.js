@@ -83,7 +83,7 @@ function monthWindowParis(now = new Date()) {
 async function requireUser(req, res) {
   const m = (req.headers.authorization || '').match(/^Bearer\s+(.+)$/);
   if (!m) {
-    res.status(401).json({ success: false, error: 'Connecte-toi pour proposer une chaîne.' });
+    res.status(401).json({ success: false, error: 'Connectez-vous pour proposer une chaîne.' });
     return null;
   }
   try {
@@ -91,7 +91,7 @@ async function requireUser(req, res) {
     const decoded = await auth.verifyIdToken(m[1]);
     return { uid: decoded.uid, email: decoded.email || null, admin: !!decoded.admin };
   } catch (e) {
-    res.status(401).json({ success: false, error: 'Session expirée, reconnecte-toi.' });
+    res.status(401).json({ success: false, error: 'Session expirée, reconnectez-vous.' });
     return null;
   }
 }
@@ -147,10 +147,10 @@ export async function proposeChannelHandler(req, res) {
   const mode = String(req.body?.mode || '').trim();
 
   if (!rawInput || rawInput.length > 200) {
-    return res.status(400).json({ success: false, error: 'Indique le handle ou l’URL de la chaîne.' });
+    return res.status(400).json({ success: false, error: 'Indiquez le handle ou l’URL de la chaîne.' });
   }
   if (!suggestedCategoryId) {
-    return res.status(400).json({ success: false, error: 'Choisis une thématique.' });
+    return res.status(400).json({ success: false, error: 'Choisissez une thématique.' });
   }
   if (!MODES.includes(mode)) {
     return res.status(400).json({ success: false, error: `Mode inconnu : ${mode}` });
@@ -163,7 +163,7 @@ export async function proposeChannelHandler(req, res) {
     if (!quota.isPremium && quota.remaining <= 0) {
       return res.status(429).json({
         success: false,
-        error: `Tu as déjà proposé ${FREE_MONTHLY_LIMIT} chaînes ce mois-ci. Le compteur repart le 1er.`,
+        error: `Vous avez déjà proposé ${FREE_MONTHLY_LIMIT} chaînes ce mois-ci. Le compteur repart le 1er.`,
         ...quota,
       });
     }
@@ -198,6 +198,6 @@ export async function proposeChannelHandler(req, res) {
     });
   } catch (e) {
     console.error('proposition de chaîne :', e);
-    return res.status(500).json({ success: false, error: 'Enregistrement impossible, réessaie.' });
+    return res.status(500).json({ success: false, error: 'Enregistrement impossible, réessayez.' });
   }
 }

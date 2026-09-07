@@ -220,10 +220,18 @@ export default function App() {
   // déjà title/creatorName/publishedAt en base. Les nouvelles syncs stockent
   // ces champs, donc le quota tombe naturellement à zéro au fil du
   // renouvellement des vidéos.
+  //
+  // Course à éviter : cet effet est asynchrone (il attend /api/hydrate).
+  // Un premier run parti avec `programs` vide peut finir après un second
+  // run complet, et écraser les vidéos déjà affichées par sa liste vide.
+  // Le drapeau `perime` neutralise tout run dépassé.
   useEffect(() => {
+    let perime = false;
+
     const fetchYoutubeData = async () => {
       const watchLaterIds = userData?.watchLater || [];
       if (programs.length === 0 && watchLaterIds.length === 0) {
+        if (perime) return;
         setHydratedPrograms([]);
         setHydratedWatchLater([]);
         return;
@@ -270,6 +278,7 @@ export default function App() {
       });
 
       const merged = programs.map(enrich);
+      if (perime) return;
       setHydratedPrograms(merged.sort((a, b) => b.publishedAt - a.publishedAt));
 
       // Vidéos "À regarder plus tard" : on hydrate même si la source a disparu d'un scope
@@ -282,10 +291,12 @@ export default function App() {
           publishedAt: existing.publishedAt || fetchedData[id]?.publishedAt || existing.createdAt,
         };
       });
+      if (perime) return;
       setHydratedWatchLater(wlMerged);
     };
 
     fetchYoutubeData();
+    return () => { perime = true; };
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [JSON.stringify(programs.map(p => p.id)), JSON.stringify(userData?.watchLater || [])]);
 

@@ -51,7 +51,7 @@ export function ProposeChannelCard({ onOpen, accent = 'fuchsia' }) {
         <h3 className="text-lg font-bold text-white mb-1">Il manque une chaîne ?</h3>
         <p className="text-sm text-slate-400 leading-relaxed">
           La sélection se construit à la main, et une chaîne absente est le
-          plus souvent une chaîne que je n'ai pas encore vue. Dis-moi
+          plus souvent une chaîne que je n'ai pas encore vue. Dites-nous
           laquelle.
         </p>
       </div>
@@ -111,11 +111,11 @@ export default function ProposeChannelModal({
 
     const raw = handle.trim();
     if (!raw) {
-      setMsg({ type: 'error', text: 'Indique au moins le handle ou l\'URL de la chaîne.' });
+      setMsg({ type: 'error', text: 'Indiquez au moins le handle ou l\'URL de la chaîne.' });
       return;
     }
     if (!cat) {
-      setMsg({ type: 'error', text: 'Choisis une thématique.' });
+      setMsg({ type: 'error', text: 'Choisissez une thématique.' });
       return;
     }
 
@@ -153,7 +153,7 @@ export default function ProposeChannelModal({
       setReason('');
       setMsg({
         type: 'success',
-        text: 'Merci ! Ta proposition est envoyée. La rédaction de Tubiscope va l\'examiner.',
+        text: 'Merci ! Votre proposition est envoyée. La rédaction de Tubiscope va l\'examiner.',
       });
     } catch (err) {
       setMsg({
@@ -186,8 +186,8 @@ export default function ProposeChannelModal({
 
         <div className="p-6 space-y-4">
           <p className="text-sm text-slate-400 leading-relaxed">
-            Tu repères une chaîne YouTube qui a sa place ici ? Envoie-la nous.
-            Tu proposes, la rédaction choisit.
+            Vous repérez une chaîne YouTube qui a sa place ici ? Envoyez-la nous.
+            Vous proposez, la rédaction choisit.
           </p>
 
           <div className="text-xs text-slate-400 bg-slate-800/40 border border-slate-800 rounded-xl p-4 leading-relaxed">
@@ -212,8 +212,9 @@ export default function ProposeChannelModal({
             <>
               <p className="text-sm text-slate-400 leading-relaxed">
                 Il faut un compte pour proposer une chaîne : c'est ce qui nous
-                permet de revenir vers toi si la chaîne est retenue. La création
-                prend trente secondes et ne demande qu'une adresse email.
+                permet de revenir vers vous si la chaîne est retenue. La
+                création prend trente secondes et ne demande qu'une adresse
+                email.
               </p>
               <button
                 type="button"
@@ -258,12 +259,12 @@ export default function ProposeChannelModal({
                 <p className="text-xs text-slate-500">
                   {quota.remaining > 0 ? (
                     <>
-                      Il te reste{' '}
+                      Il vous reste{' '}
                       <strong className="text-slate-300">{quota.remaining}</strong>{' '}
                       proposition{quota.remaining > 1 ? 's' : ''} ce mois-ci.
                     </>
                   ) : (
-                    <>Tu as utilisé tes {quota.limit} propositions du mois. Le compteur repart le 1er.</>
+                    <>Vous avez utilisé vos {quota.limit} propositions du mois. Le compteur repart le 1er.</>
                   )}{' '}
                   Illimité en Studio.
                 </p>

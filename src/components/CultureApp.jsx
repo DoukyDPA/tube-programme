@@ -356,10 +356,21 @@ export default function CultureApp() {
   // Optimisation : on ne fetche YouTube QUE pour les vidéos qui n'ont pas
   // encore title/creatorName en base. Les syncs récentes stockent ces
   // champs directement, donc le quota baisse au fil du renouvellement.
+  //
+  // Course à éviter : cet effet est asynchrone (il attend /api/hydrate).
+  // Il part une première fois avec themePrograms vide, puis une seconde
+  // fois quand le snapshot est arrivé. Si le premier appel finit après
+  // le second, il écrit son résultat vide par-dessus les vidéos déjà
+  // affichées, et l'écran retombe sur « Les vidéos arrivent » alors que
+  // les données sont là. Le drapeau `perime` fait qu'un run dépassé ne
+  // touche plus à l'état.
   useEffect(() => {
+    let perime = false;
+
     const run = async () => {
       const watchLaterIds = userData?.watchLaterCulture || [];
       if (allPrograms.length === 0 && watchLaterIds.length === 0) {
+        if (perime) return;
         setHydrated({});
         setHydratedWatchLater([]);
         return;
@@ -412,6 +423,7 @@ export default function CultureApp() {
           .sort((a, b) => b.publishedAt - a.publishedAt)
           .slice(0, CULTURE_VIDEOS_PER_THEME);
       });
+      if (perime) return;
       setHydrated(byTheme);
 
       // Watch later
@@ -431,9 +443,11 @@ export default function CultureApp() {
             existing.publishedAt || fetched[id]?.publishedAt || existing.createdAt,
         };
       });
+      if (perime) return;
       setHydratedWatchLater(wlMerged);
     };
     run();
+    return () => { perime = true; };
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [
     JSON.stringify(allPrograms.map((p) => p.id)),
