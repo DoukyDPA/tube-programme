@@ -12,6 +12,7 @@ import Guide from './components/Guide';
 import Legal from './components/Legal';
 import PWAPrompt from './components/PWAPrompt';
 import AccountModal from './components/AccountModal';
+import ProposeChannelModal, { ProposeChannelCard } from './components/ProposeChannelModal';
 import DiscoverBanner, { ModeSwitchCard } from './components/DiscoverBanner';
 import TubiscopeMark from './components/TubiscopeMark';
 import { MODE_STANDARD } from './data/appMode';
@@ -97,6 +98,7 @@ export default function App() {
   const [isAdminOpen, setIsAdminOpen] = useState(false);
   const [legalTab, setLegalTab] = useState(null); // null = fermé, sinon 'mentions' | 'privacy' | 'terms'
   const [showAccount, setShowAccount] = useState(false);
+  const [showPropose, setShowPropose] = useState(false);
   const [selectedProg, setSelectedProg] = useState(null);
   const [isSyncing, setIsSyncing] = useState(false);
 
@@ -859,6 +861,8 @@ export default function App() {
                   />
                 );
               })}
+
+              <ProposeChannelCard accent="indigo" onOpen={() => setShowPropose(true)} />
             </>
           ) : (
             <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-6 px-4 md:px-0">
@@ -885,12 +889,14 @@ export default function App() {
       {isAdminOpen && <AdminPanel user={user} userData={userData} customThemes={customThemes} isAdmin={isAdmin} hydratedPrograms={hydratedPrograms} onClose={() => setIsAdminOpen(false)} />}
       {legalTab && <Legal initialTab={legalTab} onClose={() => setLegalTab(null)} />}
       {showAccount && (
-        <AccountModal
+        <AccountModal user={user} onClose={() => setShowAccount(false)} />
+      )}
+      {showPropose && (
+        <ProposeChannelModal
           user={user}
-          onClose={() => setShowAccount(false)}
-          isStudio={isStudio}
           mode="tubiscope"
           categories={CATEGORIES}
+          onClose={() => setShowPropose(false)}
         />
       )}
     </div>

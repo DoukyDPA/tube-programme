@@ -1,12 +1,12 @@
-import React, { useEffect, useState } from 'react';
-import { auth, db } from '../firebase';
+import React, { useState } from 'react';
+import { auth } from '../firebase';
 import {
   EmailAuthProvider,
   reauthenticateWithCredential,
   updatePassword,
   sendPasswordResetEmail,
 } from 'firebase/auth';
-import { X, Lock, Mail, Loader2, CheckCircle, AlertCircle, Send, Sparkles } from 'lucide-react';
+import { X, Lock, Mail, Loader2, CheckCircle, AlertCircle } from 'lucide-react';
 import useBackButtonClose from '../hooks/useBackButtonClose';
 
 /**
@@ -14,15 +14,12 @@ import useBackButtonClose from '../hooks/useBackButtonClose';
  * Trois sections :
  *  1. Changer le mot de passe (re-auth requise par Firebase)
  *  2. Envoyer un email de réinitialisation
- *  3. Proposer une chaîne à la rédaction
  *
- * La remontée de chaîne est ouverte à tout compte connecté : c'est un
- * travail que le membre rend au projet, pas un service qu'il reçoit.
- * Le Studio n'achète pas le droit de proposer, il lève le plafond.
- * Deux propositions par mois en gratuit, illimité en Studio, comptées
- * côté serveur (api/channel-proposals.js).
+ * La proposition de chaîne vivait ici, sous le mot de passe. Personne
+ * ne descendait jusque-là : elle a sa propre fenêtre, ProposeChannelModal,
+ * ouverte depuis l'accueil.
  */
-export default function AccountModal({ user, onClose, isStudio = false, mode = 'tubiscope', categories = [] }) {
+export default function AccountModal({ user, onClose }) {
   // Bouton Précédent du navigateur = ferme le compte.
   useBackButtonClose(true, onClose, 'account');
 
@@ -31,96 +28,6 @@ export default function AccountModal({ user, onClose, isStudio = false, mode = '
   const [confirmPwd, setConfirmPwd] = useState('');
   const [busy, setBusy] = useState(false);
   const [msg, setMsg] = useState(null); // { type: 'success' | 'error', text: string }
-
-  // Proposition de chaîne
-  const [propHandle, setPropHandle] = useState('');
-  const [propCat, setPropCat] = useState(categories[0]?.id || '');
-  const [propReason, setPropReason] = useState('');
-  const [propBusy, setPropBusy] = useState(false);
-  const [propMsg, setPropMsg] = useState(null);
-  const [quota, setQuota] = useState(null); // { isPremium, limit, used, remaining }
-
-  // Le quota est lu à l'ouverture de la modale, pour afficher ce qu'il
-  // reste avant que l'utilisateur ait rempli quoi que ce soit. Un échec
-  // ne bloque rien : le serveur retranche de toute façon au moment de
-  // l'envoi.
-  useEffect(() => {
-    let annule = false;
-    (async () => {
-      try {
-        const token = await user.getIdToken();
-        const res = await fetch('/api/propose-channel/quota', {
-          headers: { Authorization: `Bearer ${token}` },
-        });
-        const data = await res.json();
-        if (!annule && data.success) setQuota(data);
-      } catch {
-        /* silencieux */
-      }
-    })();
-    return () => { annule = true; };
-  }, [user]);
-
-  const handleProposeChannel = async (e) => {
-    e.preventDefault();
-    setPropMsg(null);
-
-    const raw = propHandle.trim();
-    if (!raw) {
-      setPropMsg({ type: 'error', text: 'Indique au moins le handle ou l\'URL de la chaîne.' });
-      return;
-    }
-    if (!propCat) {
-      setPropMsg({ type: 'error', text: 'Choisis une catégorie suggérée.' });
-      return;
-    }
-
-    setPropBusy(true);
-    try {
-      // L'écriture passe par le serveur : c'est lui qui tient le quota
-      // mensuel et qui normalise le handle. Le navigateur n'écrit plus
-      // dans /channelProposals.
-      const token = await user.getIdToken();
-      const res = await fetch('/api/propose-channel', {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-          Authorization: `Bearer ${token}`,
-        },
-        body: JSON.stringify({
-          handle: raw,
-          suggestedCategoryId: propCat,
-          reason: propReason.trim().slice(0, 500),
-          mode,
-        }),
-      });
-      const data = await res.json();
-
-      if (!res.ok || !data.success) {
-        // Le 429 (quota épuisé) renvoie aussi l'état du compteur : on le
-        // garde pour que l'encart affiche « 0 restante » tout de suite.
-        if (typeof data.remaining === 'number' || data.isPremium) setQuota(data);
-        setPropMsg({ type: 'error', text: data.error || 'Envoi impossible.' });
-        return;
-      }
-
-      setQuota(data);
-      setPropHandle('');
-      setPropReason('');
-      setPropMsg({
-        type: 'success',
-        text: 'Merci ! Ta proposition est envoyée. La rédaction de Tubiscope va l\'examiner.',
-      });
-      setTimeout(() => setPropMsg(null), 6000);
-    } catch (err) {
-      setPropMsg({
-        type: 'error',
-        text: 'Impossible d\'envoyer la proposition : ' + (err.message || 'erreur inconnue'),
-      });
-    } finally {
-      setPropBusy(false);
-    }
-  };
 
   const showMsg = (type, text) => {
     setMsg({ type, text });
@@ -279,100 +186,6 @@ export default function AccountModal({ user, onClose, isStudio = false, mode = '
             </button>
           </div>
 
-          {/* Proposer une chaîne : ouvert à tout compte connecté */}
-          <>
-            <div className="flex items-center gap-3 text-xs text-slate-600">
-                <div className="flex-1 h-px bg-slate-800" />
-                La sélection
-                <div className="flex-1 h-px bg-slate-800" />
-              </div>
-
-              <form onSubmit={handleProposeChannel} className="space-y-3">
-                <div className="flex items-center gap-2 text-sm font-semibold text-indigo-300 mb-1">
-                  <Sparkles size={14} /> Proposer une chaîne à Tubiscope
-                </div>
-                <p className="text-xs text-slate-500 mb-2 leading-relaxed">
-                  Tu repères une chaîne YouTube qui a sa place ici ? Envoie-la nous.
-                  Tu proposes, la rédaction choisit.
-                </p>
-
-                <div className="text-xs text-slate-500 bg-slate-800/40 border border-slate-800 rounded-xl p-3 leading-relaxed">
-                  Ce qu'on retient : une chaîne francophone, des vidéos de plus de
-                  trois minutes, une publication dans les trois derniers mois, un
-                  auteur identifiable. Ce qu'on écarte : les chaînes de campagne,
-                  les voix off générées par une IA, la vitrine commerciale, et tout
-                  ce que la loi interdit de publier, à commencer par les œuvres
-                  piratées.{' '}
-                  <a
-                    href="/a-propos"
-                    target="_blank"
-                    rel="noopener"
-                    className="text-indigo-300 font-semibold hover:underline"
-                  >
-                    Les critères en détail
-                  </a>
-                </div>
-
-                {quota && !quota.isPremium && (
-                  <p className="text-xs text-slate-500">
-                    {quota.remaining > 0
-                      ? <>Il te reste <strong className="text-slate-300">{quota.remaining}</strong> proposition{quota.remaining > 1 ? 's' : ''} ce mois-ci.</>
-                      : <>Tu as utilisé tes {quota.limit} propositions du mois. Le compteur repart le 1er.</>}
-                    {' '}Illimité en Studio.
-                  </p>
-                )}
-
-                <input
-                  type="text"
-                  placeholder="Handle ou URL YouTube (ex: @MonsieurPhi)"
-                  value={propHandle}
-                  onChange={(e) => setPropHandle(e.target.value)}
-                  className="w-full bg-slate-800 p-3 rounded-xl text-white text-sm outline-none focus:ring-2 focus:ring-indigo-500"
-                />
-
-                <select
-                  value={propCat}
-                  onChange={(e) => setPropCat(e.target.value)}
-                  className="w-full bg-slate-800 p-3 rounded-xl text-white text-sm outline-none focus:ring-2 focus:ring-indigo-500"
-                >
-                  <option value="">Catégorie suggérée…</option>
-                  {categories.map((c) => (
-                    <option key={c.id} value={c.id}>
-                      {c.label}
-                    </option>
-                  ))}
-                </select>
-
-                <textarea
-                  placeholder="Pourquoi cette chaîne mérite sa place (facultatif, 500 caractères max)"
-                  value={propReason}
-                  onChange={(e) => setPropReason(e.target.value.slice(0, 500))}
-                  rows={3}
-                  className="w-full bg-slate-800 p-3 rounded-xl text-white text-sm outline-none focus:ring-2 focus:ring-indigo-500 resize-none"
-                />
-
-                {propMsg && (
-                  <div className={`flex items-start gap-2 p-3 rounded-xl text-sm ${
-                    propMsg.type === 'success'
-                      ? 'bg-emerald-500/10 border border-emerald-500/30 text-emerald-300'
-                      : 'bg-red-500/10 border border-red-500/30 text-red-300'
-                  }`}>
-                    {propMsg.type === 'success'
-                      ? <CheckCircle size={16} className="shrink-0 mt-0.5" />
-                      : <AlertCircle size={16} className="shrink-0 mt-0.5" />}
-                    <span>{propMsg.text}</span>
-                  </div>
-                )}
-
-                <button
-                  type="submit"
-                  disabled={propBusy || (quota && !quota.isPremium && quota.remaining <= 0)}
-                  className="w-full py-3 bg-indigo-600 hover:bg-indigo-500 disabled:bg-slate-700 disabled:cursor-not-allowed text-white rounded-xl font-bold text-sm transition-all flex items-center justify-center gap-2"
-                >
-                  {propBusy ? <Loader2 className="animate-spin" size={18} /> : (<><Send size={14} /> Envoyer la proposition</>)}
-                </button>
-              </form>
-          </>
         </div>
       </div>
     </div>

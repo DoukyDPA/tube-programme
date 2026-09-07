@@ -50,6 +50,7 @@ import CultureThemePicker from './CultureThemePicker';
 import DiscoverBanner, { ModeSwitchCard } from './DiscoverBanner';
 import TubiscopeMark from './TubiscopeMark';
 import AccountModal from './AccountModal';
+import ProposeChannelModal, { ProposeChannelCard } from './ProposeChannelModal';
 import Guide from './Guide';
 import Legal from './Legal';
 
@@ -172,6 +173,7 @@ export default function CultureApp() {
   const [selectedProg, setSelectedProg] = useState(null);
   const [showPicker, setShowPicker] = useState(false);
   const [showAccount, setShowAccount] = useState(false);
+  const [showPropose, setShowPropose] = useState(false);
   // Formulaire de connexion appelé à la demande par un visiteur.
   const [showAuth, setShowAuth] = useState(false);
   // Thématiques du visiteur, mémorisées dans son navigateur.
@@ -1351,6 +1353,8 @@ export default function CultureApp() {
                   onPick={openThemePreview}
                 />
               )}
+
+              <ProposeChannelCard onOpen={() => setShowPropose(true)} />
             </>
           ) : (
             <ThemeDetail
@@ -1390,14 +1394,20 @@ export default function CultureApp() {
         />
       )}
       {showAuth && !user && <Auth onClose={() => setShowAuth(false)} />}
-      {showAccount && (
-        <AccountModal
+      {showPropose && (
+        <ProposeChannelModal
           user={user}
-          onClose={() => setShowAccount(false)}
-          isStudio={!!userData?.isPremium}
           mode="culture"
           categories={CULTURE_THEMES}
+          onClose={() => setShowPropose(false)}
+          onNeedAuth={() => {
+            setShowPropose(false);
+            setShowAuth(true);
+          }}
         />
+      )}
+      {showAccount && (
+        <AccountModal user={user} onClose={() => setShowAccount(false)} />
       )}
       {legalTab && <Legal initialTab={legalTab} onClose={() => setLegalTab(null)} />}
       {isSyncing && (
