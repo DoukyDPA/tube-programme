@@ -1,4 +1,34 @@
-@import url('[https://fonts.googleapis.com/css2?family=Inter:wght@400;600;800;900&display=swap](https://fonts.googleapis.com/css2?family=Inter:wght@400;600;800;900&display=swap)');
+/* Inter, auto-hébergée.
+ *
+ * L'import d'origine pointait vers Google Fonts, mais l'adresse était un
+ * lien Markdown collé dans un url() : elle n'a jamais rien chargé, et
+ * l'application tournait sur la police système de chaque appareil.
+ *
+ * Plutôt que de réparer l'import, on embarque la police. Trois raisons.
+ * La CSP de index.html n'autorise ni fonts.googleapis.com en style-src
+ * ni fonts.gstatic.com en font-src, il aurait fallu ouvrir les deux.
+ * Un appel à Google Fonts transmet l'adresse IP du visiteur à Google, ce
+ * qui contredit ce que la page « D'où vient Tubiscope » promet. Et un
+ * fichier servi depuis notre domaine arrive plus vite qu'un aller-retour
+ * vers un tiers.
+ *
+ * Les graisses sont celles que l'interface utilise vraiment : 400 pour le
+ * texte, 600 pour les intertitres, 700 pour l'immense majorité des
+ * éléments en gras, 900 pour la marque. L'ancienne liste chargeait 800,
+ * qui n'apparaît nulle part, et oubliait 700, qui apparaît cent fois :
+ * le navigateur aurait remplacé chaque font-bold par du 800.
+ *
+ * Latin et latin étendu seulement. Les fichiers complets embarquent aussi
+ * le cyrillique, le grec et le vietnamien, que le service worker
+ * précacherait sur chaque appareil sans qu'aucune page ne les affiche. */
+@import '@fontsource/inter/latin-400.css';
+@import '@fontsource/inter/latin-ext-400.css';
+@import '@fontsource/inter/latin-600.css';
+@import '@fontsource/inter/latin-ext-600.css';
+@import '@fontsource/inter/latin-700.css';
+@import '@fontsource/inter/latin-ext-700.css';
+@import '@fontsource/inter/latin-900.css';
+@import '@fontsource/inter/latin-ext-900.css';
 
 @tailwind base;
 @tailwind components;
