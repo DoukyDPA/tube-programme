@@ -14,7 +14,7 @@ import useBackButtonClose from '../hooks/useBackButtonClose';
 //   [ADRESSE_COMPLETE]   : numéro, rue, code postal, ville, pays
 // =====================================================================
 
-const EMAIL_CONTACT = 'daniel.p.angelini@gmail.com';
+const EMAIL_CONTACT = 'contact@tubiscope.com';
 const URL_SITE = 'tubiscope.up.railway.app';
 
 export default function Legal({ onClose, initialTab = 'mentions' }) {

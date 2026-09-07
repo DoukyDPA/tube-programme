@@ -889,6 +889,7 @@ export default function App() {
           user={user}
           onClose={() => setShowAccount(false)}
           isStudio={isStudio}
+          mode="tubiscope"
           categories={CATEGORIES}
         />
       )}

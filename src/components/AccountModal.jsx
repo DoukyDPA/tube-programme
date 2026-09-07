@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useEffect, useState } from 'react';
 import { auth, db } from '../firebase';
 import {
   EmailAuthProvider,
@@ -6,7 +6,6 @@ import {
   updatePassword,
   sendPasswordResetEmail,
 } from 'firebase/auth';
-import { addDoc, collection, serverTimestamp } from 'firebase/firestore';
 import { X, Lock, Mail, Loader2, CheckCircle, AlertCircle, Send, Sparkles } from 'lucide-react';
 import useBackButtonClose from '../hooks/useBackButtonClose';
 
@@ -15,9 +14,15 @@ import useBackButtonClose from '../hooks/useBackButtonClose';
  * Trois sections :
  *  1. Changer le mot de passe (re-auth requise par Firebase)
  *  2. Envoyer un email de réinitialisation
- *  3. Proposer une chaîne à la rédaction (Studio uniquement)
+ *  3. Proposer une chaîne à la rédaction
+ *
+ * La remontée de chaîne est ouverte à tout compte connecté : c'est un
+ * travail que le membre rend au projet, pas un service qu'il reçoit.
+ * Le Studio n'achète pas le droit de proposer, il lève le plafond.
+ * Deux propositions par mois en gratuit, illimité en Studio, comptées
+ * côté serveur (api/channel-proposals.js).
  */
-export default function AccountModal({ user, onClose, isStudio = false, categories = [] }) {
+export default function AccountModal({ user, onClose, isStudio = false, mode = 'tubiscope', categories = [] }) {
   // Bouton Précédent du navigateur = ferme le compte.
   useBackButtonClose(true, onClose, 'account');
 
@@ -33,6 +38,28 @@ export default function AccountModal({ user, onClose, isStudio = false, categori
   const [propReason, setPropReason] = useState('');
   const [propBusy, setPropBusy] = useState(false);
   const [propMsg, setPropMsg] = useState(null);
+  const [quota, setQuota] = useState(null); // { isPremium, limit, used, remaining }
+
+  // Le quota est lu à l'ouverture de la modale, pour afficher ce qu'il
+  // reste avant que l'utilisateur ait rempli quoi que ce soit. Un échec
+  // ne bloque rien : le serveur retranche de toute façon au moment de
+  // l'envoi.
+  useEffect(() => {
+    let annule = false;
+    (async () => {
+      try {
+        const token = await user.getIdToken();
+        const res = await fetch('/api/propose-channel/quota', {
+          headers: { Authorization: `Bearer ${token}` },
+        });
+        const data = await res.json();
+        if (!annule && data.success) setQuota(data);
+      } catch {
+        /* silencieux */
+      }
+    })();
+    return () => { annule = true; };
+  }, [user]);
 
   const handleProposeChannel = async (e) => {
     e.preventDefault();
@@ -50,24 +77,34 @@ export default function AccountModal({ user, onClose, isStudio = false, categori
 
     setPropBusy(true);
     try {
-      // Normalise un peu : on retire l'URL si elle est complète, on garde
-      // le handle ou le channelId brut. Le tri définitif est fait côté admin.
-      const cleaned = raw
-        .replace(/^https?:\/\/(www\.)?youtube\.com\//, '')
-        .replace(/^@/, '');
-
-      await addDoc(collection(db, 'channelProposals'), {
-        handle: cleaned,
-        rawInput: raw,
-        suggestedCategoryId: propCat,
-        reason: propReason.trim().slice(0, 500),
-        status: 'pending',
-        proposedBy: user.uid,
-        proposedByEmail: user.email || null,
-        createdAt: Date.now(),
-        createdAtServer: serverTimestamp(),
+      // L'écriture passe par le serveur : c'est lui qui tient le quota
+      // mensuel et qui normalise le handle. Le navigateur n'écrit plus
+      // dans /channelProposals.
+      const token = await user.getIdToken();
+      const res = await fetch('/api/propose-channel', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          Authorization: `Bearer ${token}`,
+        },
+        body: JSON.stringify({
+          handle: raw,
+          suggestedCategoryId: propCat,
+          reason: propReason.trim().slice(0, 500),
+          mode,
+        }),
       });
+      const data = await res.json();
 
+      if (!res.ok || !data.success) {
+        // Le 429 (quota épuisé) renvoie aussi l'état du compteur : on le
+        // garde pour que l'encart affiche « 0 restante » tout de suite.
+        if (typeof data.remaining === 'number' || data.isPremium) setQuota(data);
+        setPropMsg({ type: 'error', text: data.error || 'Envoi impossible.' });
+        return;
+      }
+
+      setQuota(data);
       setPropHandle('');
       setPropReason('');
       setPropMsg({
@@ -242,12 +279,11 @@ export default function AccountModal({ user, onClose, isStudio = false, categori
             </button>
           </div>
 
-          {/* Proposer une chaîne (Studio seulement) */}
-          {isStudio && (
-            <>
-              <div className="flex items-center gap-3 text-xs text-slate-600">
+          {/* Proposer une chaîne : ouvert à tout compte connecté */}
+          <>
+            <div className="flex items-center gap-3 text-xs text-slate-600">
                 <div className="flex-1 h-px bg-slate-800" />
-                Studio
+                La sélection
                 <div className="flex-1 h-px bg-slate-800" />
               </div>
 
@@ -259,6 +295,32 @@ export default function AccountModal({ user, onClose, isStudio = false, categori
                   Tu repères une chaîne YouTube qui a sa place ici ? Envoie-la nous.
                   Tu proposes, la rédaction choisit.
                 </p>
+
+                <div className="text-xs text-slate-500 bg-slate-800/40 border border-slate-800 rounded-xl p-3 leading-relaxed">
+                  Ce qu'on retient : une chaîne francophone, des vidéos de plus de
+                  trois minutes, une publication dans les trois derniers mois, un
+                  auteur identifiable. Ce qu'on écarte : les chaînes de campagne,
+                  les voix off générées par une IA, la vitrine commerciale, et tout
+                  ce que la loi interdit de publier, à commencer par les œuvres
+                  piratées.{' '}
+                  <a
+                    href="/a-propos"
+                    target="_blank"
+                    rel="noopener"
+                    className="text-indigo-300 font-semibold hover:underline"
+                  >
+                    Les critères en détail
+                  </a>
+                </div>
+
+                {quota && !quota.isPremium && (
+                  <p className="text-xs text-slate-500">
+                    {quota.remaining > 0
+                      ? <>Il te reste <strong className="text-slate-300">{quota.remaining}</strong> proposition{quota.remaining > 1 ? 's' : ''} ce mois-ci.</>
+                      : <>Tu as utilisé tes {quota.limit} propositions du mois. Le compteur repart le 1er.</>}
+                    {' '}Illimité en Studio.
+                  </p>
+                )}
 
                 <input
                   type="text"
@@ -304,14 +366,13 @@ export default function AccountModal({ user, onClose, isStudio = false, categori
 
                 <button
                   type="submit"
-                  disabled={propBusy}
+                  disabled={propBusy || (quota && !quota.isPremium && quota.remaining <= 0)}
                   className="w-full py-3 bg-indigo-600 hover:bg-indigo-500 disabled:bg-slate-700 disabled:cursor-not-allowed text-white rounded-xl font-bold text-sm transition-all flex items-center justify-center gap-2"
                 >
                   {propBusy ? <Loader2 className="animate-spin" size={18} /> : (<><Send size={14} /> Envoyer la proposition</>)}
                 </button>
               </form>
-            </>
-          )}
+          </>
         </div>
       </div>
     </div>

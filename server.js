@@ -19,6 +19,10 @@ import {
   deleteUserHandler,
 } from './api/admin-users.js';
 import generateNewsletterHandler from './api/generate-newsletter.js';
+import {
+  proposeChannelHandler,
+  quotaHandler as proposalQuotaHandler,
+} from './api/channel-proposals.js';
 import publicSnapshotHandler, {
   invalidateSnapshot,
   statsHandler,
@@ -131,6 +135,16 @@ app.use(express.json());
 const hydrateLimiter = rateLimit({
   windowMs: 60 * 1000,        // fenêtre de 1 minute
   max: 30,                     // 30 requêtes/min par IP
+  standardHeaders: true,
+  legacyHeaders: false,
+  message: { success: false, error: 'Trop de requêtes, réessaie dans une minute.' },
+});
+
+// Propositions de chaînes : le quota mensuel est la vraie limite, ce
+// limiteur ne sert qu'à absorber un doigt qui reste appuyé.
+const proposeLimiter = rateLimit({
+  windowMs: 60 * 1000,
+  max: 10,
   standardHeaders: true,
   legacyHeaders: false,
   message: { success: false, error: 'Trop de requêtes, réessaie dans une minute.' },
@@ -249,6 +263,14 @@ app.delete('/api/admin/users/:uid', deleteUserHandler);
 
 // ---------- Newsletter (admin) ----------
 app.get('/api/admin/newsletter', generateNewsletterHandler);
+
+// ---------- Propositions de chaînes (membres) ----------
+// Le quota mensuel se compte côté serveur, avec l'Admin SDK : une règle
+// Firestore ne sait pas compter des documents, et un compteur rangé
+// côté client serait remis à zéro par le client. /channelProposals est
+// donc fermée en écriture dans firestore.rules.
+app.get('/api/propose-channel/quota', proposalQuotaHandler);
+app.post('/api/propose-channel', proposeLimiter, proposeChannelHandler);
 
 // Le serveur tourne en UTC chez l'hébergeur. On force l'heure de Paris
 // pour que '0 8 * * *' signifie bien 8h heure locale (et pas 10h en été).

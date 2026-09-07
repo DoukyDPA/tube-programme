@@ -1395,6 +1395,7 @@ export default function CultureApp() {
           user={user}
           onClose={() => setShowAccount(false)}
           isStudio={!!userData?.isPremium}
+          mode="culture"
           categories={CULTURE_THEMES}
         />
       )}
